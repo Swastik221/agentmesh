@@ -185,6 +185,9 @@ importers:
       '@agentmesh/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@agentmesh/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@xyflow/react':
         specifier: ^12.11.6
         version: 12.11.6(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

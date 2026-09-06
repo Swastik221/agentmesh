@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@agentmesh/shared": "workspace:*",
+    "@agentmesh/ui": "workspace:*",
     "@xyflow/react": "^12.11.6",
     "lucide-react": "^1.41.0",
     "react": "^19.0.0",
