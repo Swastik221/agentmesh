@@ -89,3 +89,43 @@ export interface ApiErrorResponse {
   message: string;
   details?: unknown[];
 }
+
+export type ProjectBrainEntryType = 'REQUIREMENT' | 'DECISION' | 'NOTE' | 'CONSTRAINT';
+
+export interface ProjectBrainEntryDTO {
+  id: string;
+  projectId: string;
+  authorId: string;
+  type: ProjectBrainEntryType;
+  title: string;
+  content: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  author?: UserDTO;
+}
+
+export interface CreateProjectBrainEntryDTO {
+  type: ProjectBrainEntryType;
+  title: string;
+  content: string;
+  tags?: string[];
+}
+
+export interface UpdateProjectBrainEntryDTO {
+  type?: ProjectBrainEntryType;
+  title?: string;
+  content?: string;
+  tags?: string[];
+}
+
+export interface ProjectBrainListResponseDTO {
+  entries: ProjectBrainEntryDTO[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
