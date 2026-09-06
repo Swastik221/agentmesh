@@ -19,32 +19,34 @@ enum AgentStatus {
 }
 
 model User {
-  id            String          @id @default(cuid())
-  walletAddress String?         @unique
+  id            String              @id @default(cuid())
+  walletAddress String?             @unique
   displayName   String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
 
-  ownedProjects Project[]       @relation("UserOwnedProjects")
-  memberships   ProjectMember[] @relation("UserProjectMemberships")
-  ownedAgents   Agent[]         @relation("UserOwnedAgents")
+  ownedProjects Project[]           @relation("UserOwnedProjects")
+  memberships   ProjectMember[]     @relation("UserProjectMemberships")
+  ownedAgents   Agent[]             @relation("UserOwnedAgents")
   authSessions  AuthSession[]
+  brainEntries  ProjectBrainEntry[]
 
   @@map("users")
 }
 
 
 model Project {
-  id          String          @id @default(cuid())
-  name        String
-  description String?
-  ownerId     String
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id           String              @id @default(cuid())
+  name         String
+  description  String?
+  ownerId      String
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
-  owner       User            @relation("UserOwnedProjects", fields: [ownerId], references: [id], onDelete: Restrict)
-  members     ProjectMember[]
-  agents      Agent[]
+  owner        User                @relation("UserOwnedProjects", fields: [ownerId], references: [id], onDelete: Restrict)
+  members      ProjectMember[]
+  agents       Agent[]
+  brainEntries ProjectBrainEntry[]
 
   @@index([ownerId])
   @@map("projects")
@@ -121,6 +123,33 @@ model SiweNonce {
 
   @@index([expiresAt])
   @@map("siwe_nonces")
+}
+
+enum ProjectBrainEntryType {
+  REQUIREMENT
+  DECISION
+  NOTE
+  CONSTRAINT
+}
+
+model ProjectBrainEntry {
+  id        String                @id @default(cuid())
+  projectId String
+  authorId  String
+  type      ProjectBrainEntryType
+  title     String
+  content   String
+  metadata  Json?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([projectId])
+  @@index([projectId, type])
+  @@index([authorId])
+  @@map("project_brain_entries")
 }
 
 
