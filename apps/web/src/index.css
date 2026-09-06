@@ -1,14 +1,11 @@
-:root {
-  --bg-dark: #0b0f19;
-  --card-bg: rgba(17, 24, 39, 0.75);
-  --border-color: rgba(255, 255, 255, 0.1);
-  --primary-accent: #6366f1;
-  --primary-glow: rgba(99, 102, 241, 0.3);
-  --text-main: #f3f4f6;
-  --text-muted: #9ca3af;
-  --success-color: #10b981;
-  --error-color: #ef4444;
-}
+@import '@agentmesh/ui/styles.css';
+
+/*
+ * AgentMesh workspace shell.
+ *
+ * Desktop-first. Flat by constraint: no box-shadow, gradient, filter or glow
+ * anywhere in this file — separation comes from a single 1px --am-border.
+ */
 
 * {
   box-sizing: border-box;
@@ -16,99 +13,443 @@
   padding: 0;
 }
 
-body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--bg-dark);
-  color: var(--text-main);
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow-x: hidden;
-  background-image: 
-    radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
-    radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 40%);
-}
-
+html,
+body,
 #root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--am-font-sans);
+  background: var(--am-base);
+  color: var(--am-text);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------------ shell */
+
+.app-shell {
+  display: grid;
+  grid-template-rows: 56px 1fr 32px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-body {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 0;
+}
+
+/* ----------------------------------------------------------------- header */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--am-border);
+  background: var(--am-surface);
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-header__mark {
+  color: var(--am-flow);
+}
+
+.app-header__name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.app-header__identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.app-header__wallet {
+  padding-left: 14px;
+  border-left: 1px solid var(--am-border);
+}
+
+/* ---------------------------------------------------------------- sidebar */
+
+.app-sidebar {
+  border-right: 1px solid var(--am-border);
+  background: var(--am-surface);
+  padding: 12px 0;
+  overflow-y: auto;
+}
+
+.app-sidebar__list {
+  list-style: none;
+}
+
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  max-width: 900px;
-  padding: 2rem;
+  padding: 10px 12px;
+  /* The transparent left border reserves the accent's space so the row does
+     not shift horizontally when it becomes active. */
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--am-text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
 }
 
-.container {
-  background: var(--card-bg);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  padding: 3rem 2.5rem;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-  text-align: center;
+.app-nav:hover:not(:disabled) {
+  color: var(--am-text);
+  background: rgba(35, 44, 64, 0.35);
+}
+
+.app-nav--active,
+.app-nav--active:hover:not(:disabled) {
+  color: var(--am-text);
+  background: rgba(34, 211, 238, 0.08);
+  border-left-color: var(--am-flow);
+}
+
+.app-nav--active svg {
+  color: var(--am-flow);
+}
+
+.app-nav--reserved,
+.app-nav--reserved:disabled {
+  color: var(--am-text-dim);
+  cursor: not-allowed;
+}
+
+.app-nav__label {
+  flex: 1;
+}
+
+.app-nav__tag {
+  font-family: var(--am-font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--am-text-dim);
+  border: 1px solid var(--am-border);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.app-nav:focus-visible {
+  outline: 1px solid var(--am-flow);
+  outline-offset: -2px;
+}
+
+/* ------------------------------------------------------------------- main */
+
+.app-main {
   position: relative;
+  min-width: 0;
+  background: var(--am-base);
 }
 
-.title {
-  font-family: 'Outfit', sans-serif;
-  font-size: 3.5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  margin-bottom: 0.75rem;
+.app-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
 }
 
-.tagline {
-  font-size: 1.25rem;
-  color: var(--text-muted);
-  margin-bottom: 2.5rem;
-  font-weight: 400;
+.app-placeholder__title {
+  font-size: 15px;
+  font-weight: 600;
 }
 
-.status-badge {
+.app-placeholder__note {
+  font-family: var(--am-font-mono);
+  font-size: 11px;
+  color: var(--am-text-dim);
+}
+
+/* -------------------------------------------------------------- statusbar */
+
+.app-status {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 16px;
+  border-top: 1px solid var(--am-border);
+  background: var(--am-surface);
+  font-family: var(--am-font-mono);
+  font-size: 11px;
+  color: var(--am-text-muted);
+}
+
+.app-status__left,
+.app-status__panels,
+.app-status__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-status__right {
+  margin-left: auto;
+}
+
+.app-status__sync {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 1.2rem;
-  border-radius: 9999px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
+  gap: 5px;
+  color: var(--am-text-dim);
 }
 
-.status-badge.connected {
-  background: rgba(16, 185, 129, 0.12);
-  color: var(--success-color);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+.app-status__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--am-border);
+  border-radius: 3px;
 }
 
-.status-badge.disconnected {
-  background: rgba(239, 68, 68, 0.12);
-  color: var(--error-color);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+.app-status__toggle--reserved {
+  color: var(--am-text-dim);
+  opacity: 0.55;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  position: relative;
+.app-status__block {
+  color: var(--am-text-dim);
+  letter-spacing: 0.02em;
 }
 
-.connected .status-dot {
-  background-color: var(--success-color);
-  box-shadow: 0 0 10px var(--success-color);
+/* ------------------------------------------------------------ canvas node */
+
+.am-node {
+  width: 330px;
+  border: 1px solid var(--am-border);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  overflow: hidden;
 }
 
-.disconnected .status-dot {
-  background-color: var(--error-color);
-  box-shadow: 0 0 10px var(--error-color);
+.am-node--board {
+  width: 320px;
 }
 
-.footer-info {
-  margin-top: 3rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border-color);
-  font-size: 0.85rem;
-  color: var(--text-muted);
+.am-node__titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--am-pad-tight) var(--am-pad);
+  border-bottom: 1px solid var(--am-border);
+}
+
+.am-node__title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--am-text);
+}
+
+.am-node__body {
+  padding: var(--am-pad);
+}
+
+/* React Flow marks the selected element; we answer with the flow accent. */
+.react-flow__node.selected .am-node {
+  border-color: var(--am-flow);
+}
+
+/* ------------------------------------------------------------- agent node */
+
+.am-agent__identity {
+  display: flex;
+  justify-content: flex-start;
+  padding-bottom: var(--am-pad-tight);
+  margin-bottom: var(--am-pad-tight);
+  border-bottom: 1px solid var(--am-border);
+}
+
+.am-agent__identity .am-addr {
+  align-items: flex-start;
+}
+
+.am-agent__log {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: var(--am-font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.am-agent__line {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.am-agent__block {
+  color: var(--am-text-dim);
+}
+
+.am-agent__hash {
+  color: var(--am-flow);
+}
+
+.am-agent__msg {
+  color: var(--am-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* -------------------------------------------------------------- task board */
+
+.am-board__count {
+  font-family: var(--am-font-mono);
+  font-size: 10px;
+  color: var(--am-text-dim);
+}
+
+.am-board__list {
+  list-style: none;
+}
+
+.am-board__task {
+  padding: var(--am-pad-tight) var(--am-pad);
+  border-bottom: 1px solid var(--am-border);
+}
+
+.am-board__task:last-child {
+  border-bottom: 0;
+}
+
+.am-board__taskhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.am-board__taskid {
+  font-family: var(--am-font-mono);
+  font-size: 10px;
+  color: var(--am-text-dim);
+  letter-spacing: 0.04em;
+}
+
+.am-board__tasktitle {
+  font-size: 12px;
+  color: var(--am-text);
+  line-height: 1.4;
+}
+
+.am-board__taskmeta {
+  display: flex;
+  gap: 10px;
+  margin-top: 5px;
+  font-family: var(--am-font-mono);
+  font-size: 10px;
+}
+
+.am-board__ref {
+  color: var(--am-text-dim);
+}
+
+.am-board__owner {
+  color: var(--am-identity);
+}
+
+/* --------------------------------------------------------- react flow skin */
+
+.react-flow {
+  /* React Flow's base stylesheet ships shadows on controls and built-in nodes.
+     Null the variables outright so the flat-design rule holds even if we later
+     use a built-in node type. */
+  --xy-controls-box-shadow: none;
+  --xy-node-boxshadow-hover: none;
+  --xy-node-boxshadow-selected: none;
+  --xy-edge-stroke-default: var(--am-flow);
+  --xy-connectionline-stroke-default: var(--am-flow);
+}
+
+.react-flow__node {
+  /* Node components own their own typography. */
+  font-family: var(--am-font-sans);
+  cursor: default;
+}
+
+.am-handle.react-flow__handle {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  border: 1px solid var(--am-flow);
+  background: var(--am-surface);
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path {
+  stroke: var(--am-success);
+}
+
+.react-flow__edge-text {
+  fill: var(--am-text-muted);
+}
+
+.react-flow__connectionline .react-flow__connection-path {
+  stroke: var(--am-flow);
+  stroke-width: 1.5;
+}
+
+.react-flow__controls {
+  border: 1px solid var(--am-border);
+  border-radius: var(--am-radius);
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  border: 0;
+  border-bottom: 1px solid var(--am-border);
+  background: var(--am-surface);
+  color: var(--am-text-muted);
+  width: 24px;
+  height: 24px;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: 0;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--am-base);
+  color: var(--am-text);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+/* React Flow's attribution is required unless subscribed to Pro, so tone it
+   into the theme rather than hiding it. */
+.react-flow__attribution {
+  background: transparent;
+}
+
+.react-flow__attribution a {
+  color: var(--am-text-dim);
+  font-family: var(--am-font-mono);
+  font-size: 9px;
 }
