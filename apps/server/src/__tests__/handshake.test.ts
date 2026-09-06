@@ -229,23 +229,29 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
       ws.close();
     });
 
-    it('15 & 16. should generate unique server-side sessionId and ignore client attempt to set sessionId', async () => {
+    it('15 & 16. should reject client handshake request containing unexpected sessionId field', async () => {
       const ws = await connectWs(projectA.id, sessionA.id);
 
-      const handshakeMsg = createAgentMeshMessage({
+      const invalidMsg = {
+        id: 'msg-1',
+        protocolVersion: AGENTMESH_PROTOCOL_VERSION,
         type: AgentMeshMessageType.AGENT_HANDSHAKE,
         projectId: projectA.id,
         senderId: agentA1.id,
-        payload: { agentId: agentA1.id, sessionId: 'client-chosen-session-id' } as never,
-      });
+        timestamp: new Date().toISOString(),
+        payload: {
+          agentId: agentA1.id,
+          sessionId: 'client-chosen-session-id',
+        },
+      };
 
       const responsePromise = receiveMessage(ws);
-      ws.send(JSON.stringify(handshakeMsg));
+      ws.send(JSON.stringify(invalidMsg));
       const res = await responsePromise;
 
-      expect(res.type).toBe('agent.handshake.accepted');
+      expect(res.type).toBe('agent.handshake.rejected');
       const payload = res.payload as Record<string, unknown>;
-      expect(payload.sessionId).not.toBe('client-chosen-session-id');
+      expect(payload.code).toBe('INVALID_MESSAGE');
 
       ws.close();
     });

@@ -1,14 +1,16 @@
 import { z } from 'zod';
 import { AgentMeshMessageType, AGENTMESH_PROTOCOL_VERSION } from './constants.js';
 
-export const agentHandshakePayloadSchema = z.object({
-  agentId: z.string().trim().min(1, 'Agent ID is required'),
-  clientVersion: z.string().trim().optional(),
-  capabilities: z
-    .array(z.string().trim())
-    .optional()
-    .transform((caps) => (caps ? caps.map((c) => c.trim().toLowerCase()) : undefined)),
-});
+export const agentHandshakePayloadSchema = z
+  .object({
+    agentId: z.string().trim().min(1, 'Agent ID is required'),
+    clientVersion: z.string().trim().optional(),
+    capabilities: z
+      .array(z.string().trim())
+      .optional()
+      .transform((caps) => (caps ? caps.map((c) => c.trim().toLowerCase()) : undefined)),
+  })
+  .strict();
 
 export const agentHandshakeAcceptedPayloadSchema = z.object({
   agentId: z.string().trim().min(1, 'Agent ID is required'),
