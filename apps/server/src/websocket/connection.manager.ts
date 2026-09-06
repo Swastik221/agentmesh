@@ -45,6 +45,16 @@ export class ConnectionManager {
     return count;
   }
 
+  getAuthenticatedAgentConnections(agentId: string): ConnectionMetadata[] {
+    const result: ConnectionMetadata[] = [];
+    for (const conn of this.connections.values()) {
+      if (conn.authenticated && conn.agentId === agentId) {
+        result.push(conn);
+      }
+    }
+    return result;
+  }
+
   removeConnection(connectionId: string): void {
     const conn = this.connections.get(connectionId);
     if (!conn) return;
