@@ -1,10 +1,29 @@
 import type { Server as HTTPServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, WebSocket, RawData } from 'ws';
+import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
 import { connectionManager } from './connection.manager.js';
 import { ConnectionMetadata, WebSocketMessage, WSMessageType } from './websocket.types.js';
+import { handshakeService, HandshakeErrorCode } from '../handshake/index.js';
+
+function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader) {
+    const cookies = cookieHeader.split(';').map((c) => c.trim());
+    for (const cookie of cookies) {
+      if (cookie.startsWith('agentmesh_session=')) {
+        return cookie.substring('agentmesh_session='.length);
+      }
+    }
+  }
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7).trim();
+  }
+  return undefined;
+}
 
 export class AgentMeshWebSocketServer {
   private wss: WebSocketServer;
@@ -17,8 +36,8 @@ export class AgentMeshWebSocketServer {
       this.handleUpgrade(req, socket as Duplex, head);
     });
 
-    this.wss.on('connection', (ws: WebSocket, _req: IncomingMessage, projectId: string) => {
-      this.handleConnection(ws, projectId);
+    this.wss.on('connection', (ws: WebSocket, req: IncomingMessage, projectId: string) => {
+      this.handleConnection(ws, req, projectId);
     });
 
     this.startHeartbeat(heartbeatIntervalMs);
@@ -64,8 +83,9 @@ export class AgentMeshWebSocketServer {
     }
   }
 
-  private handleConnection(ws: WebSocket, projectId: string): void {
-    const metadata = connectionManager.addConnection(projectId, ws);
+  private handleConnection(ws: WebSocket, req: IncomingMessage, projectId: string): void {
+    const httpSessionId = extractSessionIdFromReq(req);
+    const metadata = connectionManager.addConnection(projectId, ws, httpSessionId);
     logger.info(
       `[WebSocket] Connection ${metadata.connectionId} established for project ${projectId}`,
     );
@@ -79,11 +99,12 @@ export class AgentMeshWebSocketServer {
       this.handleIncomingMessage(metadata, data);
     });
 
-    ws.on('close', () => {
+    ws.on('close', async () => {
       logger.info(
         `[WebSocket] Connection ${metadata.connectionId} closed for project ${projectId}`,
       );
       connectionManager.removeConnection(metadata.connectionId);
+      await handshakeService.handleDisconnection(metadata);
     });
 
     ws.on('error', (err) => {
@@ -95,7 +116,10 @@ export class AgentMeshWebSocketServer {
     });
   }
 
-  private handleIncomingMessage(metadata: ConnectionMetadata, rawData: RawData): void {
+  private async handleIncomingMessage(
+    metadata: ConnectionMetadata,
+    rawData: RawData,
+  ): Promise<void> {
     let parsed: unknown;
     try {
       parsed = JSON.parse(rawData.toString());
@@ -118,21 +142,36 @@ export class AgentMeshWebSocketServer {
     metadata.lastHeartbeat = Date.now();
     metadata.isAlive = true;
 
-    switch (message.type) {
-      case WSMessageType.PING:
-        this.sendJson(metadata.socket, {
-          type: WSMessageType.PONG,
-          payload: {},
-        });
-        break;
+    // Handle handshake request
+    if (message.type === AgentMeshMessageType.AGENT_HANDSHAKE) {
+      const handshakeResult = await handshakeService.processHandshake(metadata, parsed);
+      this.sendJson(metadata.socket, handshakeResult.message as unknown as WebSocketMessage);
+      return;
+    }
 
-      case WSMessageType.PONG:
-        // Heartbeat response acknowledged
-        break;
+    // Ping / Pong handlers
+    if (message.type === WSMessageType.PING) {
+      this.sendJson(metadata.socket, {
+        type: WSMessageType.PONG,
+        payload: {},
+      });
+      return;
+    }
 
-      default:
-        // Unknown message types handled gracefully
-        break;
+    if (message.type === WSMessageType.PONG) {
+      return;
+    }
+
+    // Pre-handshake blocking for application messages
+    if (!metadata.authenticated) {
+      const rejection = handshakeService.createRejection(
+        metadata,
+        HandshakeErrorCode.HANDSHAKE_REQUIRED,
+        'Handshake required before sending application messages',
+        (parsed as { id?: string }).id,
+      );
+      this.sendJson(metadata.socket, rejection as unknown as WebSocketMessage);
+      return;
     }
   }
 

@@ -23,4 +23,9 @@ export interface ConnectionMetadata {
   connectedAt: Date;
   lastHeartbeat: number;
   isAlive: boolean;
+  httpSessionId?: string;
+  userId?: string;
+  agentId?: string;
+  sessionId?: string;
+  authenticated: boolean;
 }

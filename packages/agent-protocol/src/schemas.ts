@@ -1,6 +1,28 @@
 import { z } from 'zod';
 import { AgentMeshMessageType, AGENTMESH_PROTOCOL_VERSION } from './constants.js';
 
+export const agentHandshakePayloadSchema = z.object({
+  agentId: z.string().trim().min(1, 'Agent ID is required'),
+  clientVersion: z.string().trim().optional(),
+  capabilities: z
+    .array(z.string().trim())
+    .optional()
+    .transform((caps) => (caps ? caps.map((c) => c.trim().toLowerCase()) : undefined)),
+});
+
+export const agentHandshakeAcceptedPayloadSchema = z.object({
+  agentId: z.string().trim().min(1, 'Agent ID is required'),
+  sessionId: z.string().trim().min(1, 'Session ID is required'),
+  projectId: z.string().trim().min(1, 'Project ID is required'),
+  capabilities: z.array(z.string().trim().toLowerCase()),
+});
+
+export const agentHandshakeRejectedPayloadSchema = z.object({
+  code: z.string().trim().min(1, 'Error code is required'),
+  message: z.string().trim().min(1, 'Error message is required'),
+  retryable: z.boolean().optional(),
+});
+
 export const agentStatusPayloadSchema = z.object({
   status: z.enum(['OFFLINE', 'ONLINE', 'BUSY'], {
     errorMap: () => ({ message: 'Status must be OFFLINE, ONLINE, or BUSY' }),
@@ -68,6 +90,21 @@ export const baseEnvelopeSchema = z.object({
   correlationId: z.string().trim().min(1).optional(),
 });
 
+export const agentHandshakeMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.AGENT_HANDSHAKE),
+  payload: agentHandshakePayloadSchema,
+});
+
+export const agentHandshakeAcceptedMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.AGENT_HANDSHAKE_ACCEPTED),
+  payload: agentHandshakeAcceptedPayloadSchema,
+});
+
+export const agentHandshakeRejectedMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.AGENT_HANDSHAKE_REJECTED),
+  payload: agentHandshakeRejectedPayloadSchema,
+});
+
 export const agentStatusMessageSchema = baseEnvelopeSchema.extend({
   type: z.literal(AgentMeshMessageType.AGENT_STATUS),
   payload: agentStatusPayloadSchema,
@@ -114,6 +151,9 @@ export const errorMessageSchema = baseEnvelopeSchema.extend({
 });
 
 export const agentMeshMessageSchema = z.discriminatedUnion('type', [
+  agentHandshakeMessageSchema,
+  agentHandshakeAcceptedMessageSchema,
+  agentHandshakeRejectedMessageSchema,
   agentStatusMessageSchema,
   agentMessageSchema,
   taskRequestMessageSchema,
