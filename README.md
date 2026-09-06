@@ -144,6 +144,20 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentmesh?schema=pub
   ```
 - `DELETE /agents/:agentId/capabilities/:capability` -> Remove capability from agent (`204 No Content`, `404 Not Found` if agent or capability missing)
 
+### WebSocket Infrastructure (PRD #6)
+
+Real-time transport layer with in-memory connection manager and project room isolation.
+
+- **Endpoint**: `ws://localhost:<PORT>/ws?projectId=<project-id>`
+- **Validation**: `projectId` is required and must reference an existing project; missing or invalid project connections are rejected immediately (`400 Bad Request` / `404 Not Found`).
+- **Authentication**: Not implemented yet (authentication layer comes in a future PRD).
+- **Transport Events**:
+  - `ping` -> `{ "type": "ping", "payload": {} }` (Server responds with `{ "type": "pong", "payload": {} }`)
+  - `pong` -> `{ "type": "pong", "payload": {} }` (Server updates heartbeat timestamp)
+  - `error` -> `{ "type": "error", "payload": { "code": "INVALID_MESSAGE", "message": "Invalid WebSocket message" } }`
+- **Heartbeat & Liveness**: 30s server-side ping frame interval for tracking active sockets and terminating stale connections.
+- **Room Isolation**: `ConnectionManager.broadcastToProject(projectId, message)` delivers messages strictly to connections belonging to the target project.
+
 ### Error Response Format
 
 All API errors return standardized JSON responses:
