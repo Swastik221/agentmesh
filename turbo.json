@@ -1,11 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": [
-    "DATABASE_URL",
-    "NODE_ENV",
-    "PORT",
-    "WEB_ORIGIN"
-  ],
+  "globalEnv": ["DATABASE_URL", "NODE_ENV", "PORT", "WEB_ORIGIN"],
   "tasks": {
     "build": {
       "dependsOn": ["^build", "db:generate"],

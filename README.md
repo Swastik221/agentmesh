@@ -54,6 +54,75 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentmesh?schema=pub
 - **ProjectMember**: Membership association with composite constraint `(projectId, userId)` and roles (`OWNER`, `MEMBER`).
 - **Agent**: AI agent representation (`id` CUID, `projectId`, `ownerId`, `name`, `provider`, `status` enum `OFFLINE` | `ONLINE` | `BUSY`).
 
+## API Endpoints (PRD #3)
+
+> [!NOTE]
+> **Authentication Note**: Authentication and authorization (JWT / SIWE / Privy) are NOT implemented in PRD #3. Endpoints operate using explicit IDs in request bodies and URL path parameters.
+
+### Health Check
+
+- `GET /health` -> `200 OK`
+  ```json
+  {
+    "status": "ok",
+    "service": "agentmesh-server",
+    "database": "connected"
+  }
+  ```
+
+### Users API
+
+- `POST /users` -> Create user (`201 Created`)
+  ```json
+  { "walletAddress": "0x123...", "displayName": "Swastik" }
+  ```
+- `GET /users/:userId` -> Get user by ID (`200 OK` or `404 Not Found`)
+- `GET /users/wallet/:walletAddress` -> Lookup user by wallet (`200 OK` or `404 Not Found`)
+- `PATCH /users/:userId` -> Update display name (`200 OK` or `404 Not Found`)
+  ```json
+  { "displayName": "New Name" }
+  ```
+- `GET /users/:userId/projects` -> List user's project memberships (`200 OK` or `404 Not Found`)
+
+### Projects API
+
+- `POST /projects` -> Create project (`201 Created`)
+  - Automatically creates a `ProjectMember` record with role `OWNER` inside a transaction.
+  ```json
+  { "name": "AgentMesh", "description": "Collaborative AI workspace", "ownerId": "user-id" }
+  ```
+- `GET /projects/:projectId` -> Get project details with owner, members, agents (`200 OK` or `404 Not Found`)
+- `PATCH /projects/:projectId` -> Update project name or description (`200 OK` or `404 Not Found`)
+  ```json
+  { "name": "Updated Name", "description": "Updated Description" }
+  ```
+- `DELETE /projects/:projectId` -> Delete project and cascade members/agents (`200 OK` or `404 Not Found`)
+
+### Project Membership API
+
+- `POST /projects/:projectId/members` -> Add member to project (`201 Created`, `404 Not Found` if user/project missing, `409 Conflict` if duplicate)
+  ```json
+  { "userId": "user-id", "role": "MEMBER" }
+  ```
+- `GET /projects/:projectId/members` -> List members for project (`200 OK` or `404 Not Found`)
+- `PATCH /projects/:projectId/members/:userId` -> Update member role (`200 OK`, `409 Conflict` if attempting to demote the only OWNER)
+  ```json
+  { "role": "OWNER" }
+  ```
+- `DELETE /projects/:projectId/members/:userId` -> Remove member from project (`200 OK`, `409 Conflict` if attempting to remove the only OWNER)
+
+### Error Response Format
+
+All API errors return standardized JSON responses:
+
+```json
+{
+  "error": "VALIDATION_ERROR | NOT_FOUND | CONFLICT | INTERNAL_SERVER_ERROR",
+  "message": "Error description message",
+  "details": []
+}
+```
+
 ## Database Commands
 
 - **Generate Client**: `pnpm db:generate`
@@ -78,23 +147,5 @@ Run specific target applications:
 - **Typecheck**: `pnpm typecheck`
 - **Lint**: `pnpm lint`
 - **Format**: `pnpm format`
-- **Test**: `pnpm test` (includes PostgreSQL integration suite)
+- **Test**: `pnpm test` (includes API and database integration suites)
 - **Build**: `pnpm build`
-
-## Health Endpoint
-
-Backend exposes a health check endpoint verifying application and database connectivity:
-
-```http
-GET /health
-```
-
-Expected response (`HTTP 200`):
-
-```json
-{
-  "status": "ok",
-  "service": "agentmesh-server",
-  "database": "connected"
-}
-```
