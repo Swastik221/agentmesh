@@ -119,6 +119,7 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentmesh?schema=pub
   { "ownerId": "user-id", "name": "Claude Dev", "provider": "claude" }
   ```
 - `GET /projects/:projectId/agents` -> List project agents (`200 OK` or `404 Not Found` if project missing)
+  - Supports optional capability query filter: `GET /projects/:projectId/agents?capability=backend`
 - `GET /agents/:agentId` -> Get individual agent details (`200 OK` or `404 Not Found`)
 - `PATCH /agents/:agentId` -> Update agent (`200 OK`, `400 Bad Request` if invalid status or empty update payload, `404 Not Found`)
   ```json
@@ -126,6 +127,22 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentmesh?schema=pub
   ```
   Valid status values: `OFFLINE`, `ONLINE`, `BUSY`.
 - `DELETE /agents/:agentId` -> Delete agent (`204 No Content` or `404 Not Found`)
+
+### Agent Capabilities API (PRD #5)
+
+- `POST /agents/:agentId/capabilities` -> Add capability to agent (`201 Created`, `409 Conflict` if duplicate capability, `400 Bad Request` if invalid capability format, `404 Not Found` if agent missing)
+  - Capabilities are normalized (trimmed, lowercased, 2-50 chars, matching `^[a-z0-9]+(?:[-_][a-z0-9]+)*$`).
+  ```json
+  { "capability": "backend" }
+  ```
+- `GET /agents/:agentId/capabilities` -> List capabilities attached to agent (`200 OK` or `404 Not Found`)
+  ```json
+  {
+    "agentId": "agent-id",
+    "capabilities": ["backend", "code-review", "debugging"]
+  }
+  ```
+- `DELETE /agents/:agentId/capabilities/:capability` -> Remove capability from agent (`204 No Content`, `404 Not Found` if agent or capability missing)
 
 ### Error Response Format
 

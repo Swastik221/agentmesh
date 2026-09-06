@@ -24,7 +24,8 @@ export const listProjectAgents = async (
 ): Promise<void> => {
   try {
     const projectId = req.params.projectId as string;
-    const agents = await agentService.listProjectAgents(projectId);
+    const capability = req.query.capability as string | undefined;
+    const agents = await agentService.listProjectAgents(projectId, capability);
     res.status(200).json(agents);
   } catch (error) {
     next(error);
