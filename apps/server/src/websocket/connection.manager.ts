@@ -6,7 +6,11 @@ export class ConnectionManager {
   private connections: Map<string, ConnectionMetadata> = new Map();
   private projectRooms: Map<string, Set<string>> = new Map();
 
-  addConnection(projectId: string, socket: WebSocket): ConnectionMetadata {
+  addConnection(
+    projectId: string,
+    socket: WebSocket,
+    httpSessionId?: string,
+  ): ConnectionMetadata {
     const connectionId = crypto.randomUUID();
     const metadata: ConnectionMetadata = {
       connectionId,
@@ -15,6 +19,8 @@ export class ConnectionManager {
       connectedAt: new Date(),
       lastHeartbeat: Date.now(),
       isAlive: true,
+      httpSessionId,
+      authenticated: false,
     };
 
     this.connections.set(connectionId, metadata);
@@ -27,6 +33,16 @@ export class ConnectionManager {
     room.add(connectionId);
 
     return metadata;
+  }
+
+  getActiveAgentConnectionsCount(agentId: string): number {
+    let count = 0;
+    for (const conn of this.connections.values()) {
+      if (conn.authenticated && conn.agentId === agentId) {
+        count++;
+      }
+    }
+    return count;
   }
 
   removeConnection(connectionId: string): void {

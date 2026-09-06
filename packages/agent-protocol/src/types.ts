@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import {
+  agentHandshakePayloadSchema,
+  agentHandshakeAcceptedPayloadSchema,
+  agentHandshakeRejectedPayloadSchema,
   agentStatusPayloadSchema,
   agentMessagePayloadSchema,
   taskRequestPayloadSchema,
@@ -9,6 +12,9 @@ import {
   taskCompletedPayloadSchema,
   taskFailedPayloadSchema,
   errorPayloadSchema,
+  agentHandshakeMessageSchema,
+  agentHandshakeAcceptedMessageSchema,
+  agentHandshakeRejectedMessageSchema,
   agentStatusMessageSchema,
   agentMessageSchema,
   taskRequestMessageSchema,
@@ -22,6 +28,9 @@ import {
 } from './schemas.js';
 import { AGENTMESH_PROTOCOL_VERSION } from './constants.js';
 
+export type AgentHandshakePayload = z.infer<typeof agentHandshakePayloadSchema>;
+export type AgentHandshakeAcceptedPayload = z.infer<typeof agentHandshakeAcceptedPayloadSchema>;
+export type AgentHandshakeRejectedPayload = z.infer<typeof agentHandshakeRejectedPayloadSchema>;
 export type AgentStatusPayload = z.infer<typeof agentStatusPayloadSchema>;
 export type AgentMessagePayload = z.infer<typeof agentMessagePayloadSchema>;
 export type TaskRequestPayload = z.infer<typeof taskRequestPayloadSchema>;
@@ -32,6 +41,9 @@ export type TaskCompletedPayload = z.infer<typeof taskCompletedPayloadSchema>;
 export type TaskFailedPayload = z.infer<typeof taskFailedPayloadSchema>;
 export type ErrorPayload = z.infer<typeof errorPayloadSchema>;
 
+export type AgentHandshakeMessage = z.infer<typeof agentHandshakeMessageSchema>;
+export type AgentHandshakeAcceptedMessage = z.infer<typeof agentHandshakeAcceptedMessageSchema>;
+export type AgentHandshakeRejectedMessage = z.infer<typeof agentHandshakeRejectedMessageSchema>;
 export type AgentStatusMessage = z.infer<typeof agentStatusMessageSchema>;
 export type AgentMessage = z.infer<typeof agentMessageSchema>;
 export type TaskRequestMessage = z.infer<typeof taskRequestMessageSchema>;
