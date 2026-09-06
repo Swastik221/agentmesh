@@ -81,22 +81,8 @@ export const deleteEntry = async (
   try {
     const projectId = req.params.projectId as string;
     const entryId = req.params.entryId as string;
-    const result = await projectBrainService.deleteEntry(projectId, entryId, req.auth!.userId);
-    res.status(200).json(result);
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const getProjectBrain = async (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  try {
-    const projectId = req.params.projectId as string;
-    const result = await projectBrainService.getProjectBrain(projectId, req.auth!.userId);
-    res.status(200).json(result);
+    await projectBrainService.deleteEntry(projectId, entryId, req.auth!.userId);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

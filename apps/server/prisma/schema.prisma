@@ -139,7 +139,6 @@ model ProjectBrainEntry {
   type      ProjectBrainEntryType
   title     String
   content   String
-  tags      String[]              @default([])
   metadata  Json?
   createdAt DateTime              @default(now())
   updatedAt DateTime              @updatedAt

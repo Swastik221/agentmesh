@@ -49,7 +49,9 @@ export class ProjectBrainService {
         type: data.type,
         title: data.title,
         content: data.content,
-        tags: data.tags || [],
+        metadata: data.metadata !== undefined && data.metadata !== null
+          ? (data.metadata as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
       },
       include: {
         author: {
@@ -68,22 +70,6 @@ export class ProjectBrainService {
 
     if (query.type) {
       where.type = query.type;
-    }
-
-    if (query.tag) {
-      where.tags = {
-        has: query.tag,
-      };
-    }
-
-    if (query.search) {
-      const searchTerm = query.search.trim();
-      if (searchTerm.length > 0) {
-        where.OR = [
-          { title: { contains: searchTerm, mode: 'insensitive' } },
-          { content: { contains: searchTerm, mode: 'insensitive' } },
-        ];
-      }
     }
 
     const page = query.page || 1;
@@ -105,16 +91,11 @@ export class ProjectBrainService {
       prisma.projectBrainEntry.count({ where }),
     ]);
 
-    const totalPages = total > 0 ? Math.ceil(total / limit) : 1;
-
     return {
-      entries,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages,
-      },
+      items: entries,
+      page,
+      limit,
+      total,
     };
   }
 
@@ -153,14 +134,29 @@ export class ProjectBrainService {
       throw new NotFoundError('Project Brain entry not found');
     }
 
+    const updateData: Prisma.ProjectBrainEntryUpdateInput = {};
+
+    if (data.type !== undefined) {
+      updateData.type = data.type;
+    }
+
+    if (data.title !== undefined) {
+      updateData.title = data.title;
+    }
+
+    if (data.content !== undefined) {
+      updateData.content = data.content;
+    }
+
+    if (data.metadata !== undefined) {
+      updateData.metadata = data.metadata !== null
+        ? (data.metadata as Prisma.InputJsonValue)
+        : Prisma.JsonNull;
+    }
+
     return await prisma.projectBrainEntry.update({
       where: { id: entryId },
-      data: {
-        ...(data.type && { type: data.type }),
-        ...(data.title && { title: data.title }),
-        ...(data.content && { content: data.content }),
-        ...(data.tags && { tags: data.tags }),
-      },
+      data: updateData,
       include: {
         author: {
           select: authorSelect,
@@ -169,7 +165,7 @@ export class ProjectBrainService {
     });
   }
 
-  async deleteEntry(projectId: string, entryId: string, userId: string) {
+  async deleteEntry(projectId: string, entryId: string, userId: string): Promise<void> {
     await this.verifyProjectMembership(projectId, userId);
 
     const entry = await prisma.projectBrainEntry.findUnique({
@@ -183,36 +179,6 @@ export class ProjectBrainService {
     await prisma.projectBrainEntry.delete({
       where: { id: entryId },
     });
-
-    return { message: 'Project Brain entry deleted successfully' };
-  }
-
-  async getProjectBrain(projectId: string, userId: string) {
-    await this.verifyProjectMembership(projectId, userId);
-
-    const entries = await prisma.projectBrainEntry.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        author: {
-          select: authorSelect,
-        },
-      },
-    });
-
-    const stats = {
-      total: entries.length,
-      requirements: entries.filter((e) => e.type === 'REQUIREMENT').length,
-      decisions: entries.filter((e) => e.type === 'DECISION').length,
-      notes: entries.filter((e) => e.type === 'NOTE').length,
-      constraints: entries.filter((e) => e.type === 'CONSTRAINT').length,
-    };
-
-    return {
-      projectId,
-      entries,
-      stats,
-    };
   }
 }
 

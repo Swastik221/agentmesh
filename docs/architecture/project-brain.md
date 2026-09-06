@@ -17,21 +17,22 @@ enum ProjectBrainEntryType {
 }
 
 model ProjectBrainEntry {
-  id        String                @id @default(uuid())
+  id        String                @id @default(cuid())
   projectId String
   authorId  String
   type      ProjectBrainEntryType
   title     String
-  content   String                @db.Text
-  tags      String[]              @default([])
+  content   String
+  metadata  Json?
   createdAt DateTime              @default(now())
   updatedAt DateTime              @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  author  User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Restrict)
 
-  @@index([projectId, createdAt])
+  @@index([projectId])
   @@index([projectId, type])
+  @@index([authorId])
   @@map("project_brain_entries")
 }
 ```
@@ -47,15 +48,35 @@ model ProjectBrainEntry {
 
 ## API Endpoints
 
-- `POST /api/projects/:projectId/brain/entries`: Create a new entry
-- `GET /api/projects/:projectId/brain/entries`: List entries with filtering, pagination, and search
-- `GET /api/projects/:projectId/brain/entries/:entryId`: Get details of a single entry
-- `PUT /api/projects/:projectId/brain/entries/:entryId`: Update an entry
-- `DELETE /api/projects/:projectId/brain/entries/:entryId`: Delete an entry
-- `GET /api/projects/:projectId/brain`: Get aggregated Project Brain view with breakdown statistics
+- `POST /projects/:projectId/brain`: Create a new entry (accepts `type`, `title`, `content`, `metadata`)
+- `GET /projects/:projectId/brain`: List entries with filtering by `type` and pagination (`page`, `limit`)
+- `GET /projects/:projectId/brain/:entryId`: Get details of a single entry
+- `PATCH /projects/:projectId/brain/:entryId`: Partial update of an entry (supports `type`, `title`, `content`, `metadata`)
+- `DELETE /projects/:projectId/brain/:entryId`: Delete an entry (returns HTTP `204 No Content`)
 
-## Filtering & Pagination
+All routes are also accessible with the `/api` prefix (`/api/projects/:projectId/brain`).
 
-- **Filtering**: By `type` (`REQUIREMENT`, `DECISION`, `NOTE`, `CONSTRAINT`) and `tag`.
-- **Search**: Case-insensitive search across `title` and `content`.
-- **Pagination**: Default `page: 1`, `limit: 20` (max 100). Default ordering `createdAt DESC`.
+## Response Schemas
+
+### List Entries (`GET /projects/:projectId/brain`)
+
+```json
+{
+  "items": [
+    {
+      "id": "entry-uuid",
+      "projectId": "project-uuid",
+      "authorId": "user-uuid",
+      "type": "DECISION",
+      "title": "Architecture Standard",
+      "content": "Description content",
+      "metadata": { "env": "production" },
+      "createdAt": "2026-09-07T04:00:00.000Z",
+      "updatedAt": "2026-09-07T04:00:00.000Z"
+    }
+  ],
+  "page": 1,
+  "limit": 20,
+  "total": 42
+}
+```

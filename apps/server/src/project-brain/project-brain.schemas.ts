@@ -17,17 +17,7 @@ export const createProjectBrainEntrySchema = z.object({
     .refine((val) => val.length >= 1 && val.length <= 10000, {
       message: 'Content must be between 1 and 10000 characters',
     }),
-  tags: z
-    .array(
-      z
-        .string()
-        .transform((val) => val.trim())
-        .refine((val) => val.length >= 1, {
-          message: 'Tag cannot be empty',
-        }),
-    )
-    .optional()
-    .default([]),
+  metadata: z.record(z.unknown()).optional().nullable(),
 });
 
 export const updateProjectBrainEntrySchema = z
@@ -47,23 +37,14 @@ export const updateProjectBrainEntrySchema = z
         message: 'Content must be between 1 and 10000 characters',
       })
       .optional(),
-    tags: z
-      .array(
-        z
-          .string()
-          .transform((val) => val.trim())
-          .refine((val) => val.length >= 1, {
-            message: 'Tag cannot be empty',
-          }),
-      )
-      .optional(),
+    metadata: z.record(z.unknown()).optional().nullable(),
   })
   .refine(
     (data) =>
       data.type !== undefined ||
       data.title !== undefined ||
       data.content !== undefined ||
-      data.tags !== undefined,
+      data.metadata !== undefined,
     {
       message: 'At least one field must be provided for update',
     },
@@ -71,8 +52,6 @@ export const updateProjectBrainEntrySchema = z
 
 export const listProjectBrainEntriesQuerySchema = z.object({
   type: projectBrainEntryTypeEnum.optional(),
-  tag: z.string().optional(),
-  search: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });

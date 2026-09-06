@@ -6,20 +6,18 @@ import {
   getEntry,
   updateEntry,
   deleteEntry,
-  getProjectBrain,
 } from './project-brain.controller.js';
 
 const router: Router = Router();
 
-const prefixes = ['/api/projects/:projectId/brain', '/projects/:projectId/brain'];
+const prefixes = ['/projects/:projectId/brain', '/api/projects/:projectId/brain'];
 
 for (const prefix of prefixes) {
-  router.post(`${prefix}/entries`, requireAuth, createEntry);
-  router.get(`${prefix}/entries`, requireAuth, listEntries);
-  router.get(`${prefix}/entries/:entryId`, requireAuth, getEntry);
-  router.put(`${prefix}/entries/:entryId`, requireAuth, updateEntry);
-  router.delete(`${prefix}/entries/:entryId`, requireAuth, deleteEntry);
-  router.get(prefix, requireAuth, getProjectBrain);
+  router.post(prefix, requireAuth, createEntry);
+  router.get(prefix, requireAuth, listEntries);
+  router.get(`${prefix}/:entryId`, requireAuth, getEntry);
+  router.patch(`${prefix}/:entryId`, requireAuth, updateEntry);
+  router.delete(`${prefix}/:entryId`, requireAuth, deleteEntry);
 }
 
 export default router;

@@ -99,7 +99,7 @@ export interface ProjectBrainEntryDTO {
   type: ProjectBrainEntryType;
   title: string;
   content: string;
-  tags: string[];
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
   author?: UserDTO;
@@ -109,23 +109,20 @@ export interface CreateProjectBrainEntryDTO {
   type: ProjectBrainEntryType;
   title: string;
   content: string;
-  tags?: string[];
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface UpdateProjectBrainEntryDTO {
   type?: ProjectBrainEntryType;
   title?: string;
   content?: string;
-  tags?: string[];
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface ProjectBrainListResponseDTO {
-  entries: ProjectBrainEntryDTO[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+  items: ProjectBrainEntryDTO[];
+  page: number;
+  limit: number;
+  total: number;
 }
 
