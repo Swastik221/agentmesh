@@ -1,5 +1,11 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "DATABASE_URL",
+    "NODE_ENV",
+    "PORT",
+    "WEB_ORIGIN"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build", "db:generate"],
@@ -13,7 +19,8 @@
       "dependsOn": ["^typecheck", "db:generate"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
     },
     "dev": {
       "cache": false,
