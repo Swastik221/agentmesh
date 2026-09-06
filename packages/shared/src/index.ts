@@ -4,6 +4,8 @@ export interface HealthStatus {
   database: 'connected' | 'disconnected';
 }
 
+export const DEFAULT_SIWE_CHAIN_ID = 11155111;
+
 export type ProjectRole = 'OWNER' | 'MEMBER';
 export type AgentStatus = 'OFFLINE' | 'ONLINE' | 'BUSY';
 

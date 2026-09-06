@@ -167,6 +167,110 @@ describe('PRD #8 Wallet Identity & SIWE Integration Tests', () => {
       expect(res.body.error).toBe('UNAUTHORIZED');
     });
 
+    it('should NOT consume a valid nonce when signature verification fails', async () => {
+      const nonceRes = await request(app).get('/auth/nonce');
+      const nonce = nonceRes.body.nonce;
+
+      const siweMsg = new SiweMessage({
+        domain: config.siweDomain,
+        address: walletAddressA,
+        statement: 'Sign in with Ethereum to AgentMesh.',
+        uri: config.siweUri,
+        version: '1',
+        chainId: config.siweChainId,
+        nonce,
+        issuedAt: new Date().toISOString(),
+      });
+
+      const messageStr = siweMsg.prepareMessage();
+      const invalidSignature = await testAccountB.signMessage({ message: messageStr });
+
+      const res = await request(app).post('/auth/verify').send({
+        message: messageStr,
+        signature: invalidSignature,
+      });
+
+      expect(res.status).toBe(401);
+
+      // Verify nonce is NOT consumed when signature is invalid
+      const dbNonce = await prisma.siweNonce.findUnique({
+        where: { nonce },
+      });
+      expect(dbNonce).not.toBeNull();
+      expect(dbNonce?.nonce).toBe(nonce);
+    });
+
+    it('should consume a valid nonce exactly once upon successful signature verification', async () => {
+      const nonceRes = await request(app).get('/auth/nonce');
+      const nonce = nonceRes.body.nonce;
+
+      const siweMsg = new SiweMessage({
+        domain: config.siweDomain,
+        address: walletAddressA,
+        statement: 'Sign in with Ethereum to AgentMesh.',
+        uri: config.siweUri,
+        version: '1',
+        chainId: config.siweChainId,
+        nonce,
+        issuedAt: new Date().toISOString(),
+      });
+
+      const messageStr = siweMsg.prepareMessage();
+      const signature = await testAccountA.signMessage({ message: messageStr });
+
+      // First verification succeeds
+      const firstRes = await request(app).post('/auth/verify').send({
+        message: messageStr,
+        signature,
+      });
+      expect(firstRes.status).toBe(200);
+
+      // Nonce is deleted in DB
+      const dbNonce = await prisma.siweNonce.findUnique({ where: { nonce } });
+      expect(dbNonce).toBeNull();
+
+      // Second verification attempt with same nonce fails
+      const secondRes = await request(app).post('/auth/verify').send({
+        message: messageStr,
+        signature,
+      });
+      expect(secondRes.status).toBe(401);
+      expect(secondRes.body.error).toBe('UNAUTHORIZED');
+    });
+
+    it('should atomically handle concurrent verification attempts using the same nonce (exactly 1 succeeds and 1 fails)', async () => {
+      const nonceRes = await request(app).get('/auth/nonce');
+      const nonce = nonceRes.body.nonce;
+
+      const siweMsg = new SiweMessage({
+        domain: config.siweDomain,
+        address: walletAddressA,
+        statement: 'Sign in with Ethereum to AgentMesh.',
+        uri: config.siweUri,
+        version: '1',
+        chainId: config.siweChainId,
+        nonce,
+        issuedAt: new Date().toISOString(),
+      });
+
+      const messageStr = siweMsg.prepareMessage();
+      const signature = await testAccountA.signMessage({ message: messageStr });
+
+      // Fire two concurrent verification requests with exact same payload
+      const [res1, res2] = await Promise.all([
+        request(app).post('/auth/verify').send({ message: messageStr, signature }),
+        request(app).post('/auth/verify').send({ message: messageStr, signature }),
+      ]);
+
+      const statuses = [res1.status, res2.status].sort();
+      // Exactly one 200 (Success) and one 401 (Unauthorized)
+      expect(statuses).toEqual([200, 401]);
+
+      // Nonce is consumed
+      const dbNonce = await prisma.siweNonce.findUnique({ where: { nonce } });
+      expect(dbNonce).toBeNull();
+    });
+
     it('should reject domain mismatch with 401 Unauthorized', async () => {
       const nonceRes = await request(app).get('/auth/nonce');
       const nonce = nonceRes.body.nonce;

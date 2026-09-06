@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { DEFAULT_SIWE_CHAIN_ID } from '@agentmesh/shared';
 
 export interface AuthUser {
   id: string;
@@ -61,10 +62,7 @@ export function useAuth() {
           return accounts[0];
         }
       }
-      const fallbackAddr = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
-      setConnectedAddress(fallbackAddr);
-      setStatus('connected_unauthenticated');
-      return fallbackAddr;
+      throw new Error('Ethereum wallet not detected. Please install MetaMask or another Web3 wallet.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to connect wallet';
       setError(msg);
@@ -93,7 +91,10 @@ export function useAuth() {
 
       const domain = window.location.hostname || 'localhost';
       const origin = window.location.origin || 'http://localhost:5173';
-      const chainId = 11155111;
+      const chainId =
+        typeof import.meta !== 'undefined' && import.meta.env?.VITE_SIWE_CHAIN_ID
+          ? parseInt(import.meta.env.VITE_SIWE_CHAIN_ID, 10)
+          : DEFAULT_SIWE_CHAIN_ID;
       const issuedAt = new Date().toISOString();
 
       const message =
@@ -115,8 +116,7 @@ export function useAuth() {
           params: [message, addr],
         })) as string;
       } else {
-        signature =
-          '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1b';
+        throw new Error('Ethereum wallet not detected. Cannot sign SIWE message.');
       }
 
       const verifyRes = await fetch(`${API_BASE}/auth/verify`, {

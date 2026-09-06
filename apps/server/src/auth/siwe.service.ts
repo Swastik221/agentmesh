@@ -47,22 +47,16 @@ export class SiweService {
       );
     }
 
-    // 4. Validate and consume single-use nonce
+    // 4. Check SIWE nonce exists and is not expired (do NOT delete yet)
     const dbNonce = await prisma.siweNonce.findUnique({
       where: { nonce: siweMessage.nonce },
     });
 
     if (!dbNonce || dbNonce.expiresAt < new Date()) {
-      if (dbNonce) {
-        await prisma.siweNonce.delete({ where: { id: dbNonce.id } }).catch(() => {});
-      }
       throw new UnauthorizedError('Invalid or expired SIWE nonce');
     }
 
-    // Delete nonce immediately to ensure single-use
-    await prisma.siweNonce.delete({ where: { id: dbNonce.id } }).catch(() => {});
-
-    // 5. Verify SIWE signature
+    // 5. Verify SIWE signature BEFORE consuming nonce
     try {
       const verifyResult = await siweMessage.verify({
         signature,
@@ -79,7 +73,17 @@ export class SiweService {
       throw new UnauthorizedError('SIWE verification failed');
     }
 
-    // 6. Return lowercase normalized wallet address
+    // 6. Signature verification SUCCEEDED - atomically consume the nonce
+    try {
+      await prisma.siweNonce.delete({
+        where: { nonce: siweMessage.nonce },
+      });
+    } catch {
+      // Nonce already consumed concurrently or deleted
+      throw new UnauthorizedError('Invalid or expired SIWE nonce');
+    }
+
+    // 7. Return lowercase normalized wallet address
     return siweMessage.address.toLowerCase();
   }
 }
