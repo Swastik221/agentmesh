@@ -2,13 +2,32 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/*]
+    branches: [main, 'feat/*']
   pull_request:
     branches: [main]
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agentmesh_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/agentmesh_test?schema=public"
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,6 +42,15 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
+
+      - name: Approve build scripts
+        run: pnpm approve-builds --all
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Run Database Migrations
+        run: pnpm --filter @agentmesh/server prisma migrate deploy
 
       - name: Lint
         run: pnpm lint
