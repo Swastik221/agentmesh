@@ -1,0 +1,8 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+  - 'contracts'
+  - 'docs'
+  - 'scripts'
+allowBuilds:
+  esbuild: true

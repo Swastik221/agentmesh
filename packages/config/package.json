@@ -1,0 +1,14 @@
+{
+  "name": "@agentmesh/config",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.js",
+  "files": [
+    "tsconfig.base.json"
+  ],
+  "scripts": {
+    "lint": "echo 'No linting needed for config'",
+    "typecheck": "echo 'No typecheck needed for config'",
+    "build": "echo 'No build needed for config'"
+  }
+}
