@@ -44,6 +44,18 @@ export interface AgentDTO {
   updatedAt: string;
 }
 
+export interface CreateAgentDTO {
+  ownerId: string;
+  name: string;
+  provider: string;
+}
+
+export interface UpdateAgentDTO {
+  name?: string;
+  provider?: string;
+  status?: AgentStatus;
+}
+
 export interface ApiErrorResponse {
   error: string;
   message: string;

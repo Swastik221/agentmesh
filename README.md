@@ -54,10 +54,10 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentmesh?schema=pub
 - **ProjectMember**: Membership association with composite constraint `(projectId, userId)` and roles (`OWNER`, `MEMBER`).
 - **Agent**: AI agent representation (`id` CUID, `projectId`, `ownerId`, `name`, `provider`, `status` enum `OFFLINE` | `ONLINE` | `BUSY`).
 
-## API Endpoints (PRD #3)
+## API Endpoints (PRD #4)
 
 > [!NOTE]
-> **Authentication Note**: Authentication and authorization (JWT / SIWE / Privy) are NOT implemented in PRD #3. Endpoints operate using explicit IDs in request bodies and URL path parameters.
+> **Authentication Note**: Authentication and authorization (JWT / SIWE / Privy) are NOT implemented in PRD #4. Endpoints operate using explicit IDs in request bodies and URL path parameters.
 
 ### Health Check
 
@@ -111,13 +111,29 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentmesh?schema=pub
   ```
 - `DELETE /projects/:projectId/members/:userId` -> Remove member from project (`200 OK`, `409 Conflict` if attempting to remove the only OWNER)
 
+### Agent Registry API (PRD #4)
+
+- `POST /projects/:projectId/agents` -> Register agent (`201 Created`, `404 Not Found` if project or owner missing, `403 Forbidden` if owner isn't a project member, `400 Bad Request` if invalid body)
+  - Agent is always initialized with `status = OFFLINE`.
+  ```json
+  { "ownerId": "user-id", "name": "Claude Dev", "provider": "claude" }
+  ```
+- `GET /projects/:projectId/agents` -> List project agents (`200 OK` or `404 Not Found` if project missing)
+- `GET /agents/:agentId` -> Get individual agent details (`200 OK` or `404 Not Found`)
+- `PATCH /agents/:agentId` -> Update agent (`200 OK`, `400 Bad Request` if invalid status or empty update payload, `404 Not Found`)
+  ```json
+  { "name": "Claude Backend", "provider": "claude", "status": "ONLINE" }
+  ```
+  Valid status values: `OFFLINE`, `ONLINE`, `BUSY`.
+- `DELETE /agents/:agentId` -> Delete agent (`204 No Content` or `404 Not Found`)
+
 ### Error Response Format
 
 All API errors return standardized JSON responses:
 
 ```json
 {
-  "error": "VALIDATION_ERROR | NOT_FOUND | CONFLICT | INTERNAL_SERVER_ERROR",
+  "error": "VALIDATION_ERROR | NOT_FOUND | FORBIDDEN | CONFLICT | INTERNAL_SERVER_ERROR",
   "message": "Error description message",
   "details": []
 }
