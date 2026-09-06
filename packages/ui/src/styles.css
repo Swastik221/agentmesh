@@ -1,0 +1,195 @@
+/*
+ * @agentmesh/ui — shared tokens + primitive styles.
+ *
+ * House rules, enforced by convention throughout:
+ *   - flat only: no box-shadow, no text-shadow, no gradient, no filter
+ *   - 1px --am-border is the only separator
+ *   - accents are semantic, never decorative
+ */
+
+:root {
+  --am-base: #0a0e17;
+  --am-surface: #0d1117;
+  --am-border: #232c40;
+
+  --am-success: #3ddc97;
+  --am-flow: #22d3ee;
+  --am-warning: #f0b458;
+  --am-identity: #a78bfa;
+  --am-window-close: #e5534b;
+
+  --am-text: #e6edf3;
+  --am-text-muted: #8b98ad;
+  --am-text-dim: #5c6a82;
+
+  --am-font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --am-font-mono: 'SFMono-Regular', 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+
+  /* Nodes and cards get generous breathing room. */
+  --am-pad: 12px;
+  --am-pad-tight: 10px;
+  --am-radius: 6px;
+}
+
+/* ---------------------------------------------------------------- hex grid */
+
+.am-hexgrid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.am-hexgrid__cell {
+  fill: none;
+  stroke: var(--am-border);
+  stroke-width: 1;
+  /* Faint enough to read as texture rather than content. */
+  opacity: 0.45;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ------------------------------------------------------------ window dots */
+
+.am-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.am-dots__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: block;
+}
+
+.am-dots__dot--close {
+  background: var(--am-window-close);
+}
+.am-dots__dot--min {
+  background: var(--am-warning);
+}
+.am-dots__dot--max {
+  background: var(--am-success);
+}
+
+/* ----------------------------------------------------------------- badges */
+
+.am-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--am-border);
+  border-radius: 3px;
+  font-family: var(--am-font-mono);
+  font-size: 10px;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--am-text-muted);
+  background: transparent;
+}
+
+.am-badge__marker {
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: currentColor;
+  display: block;
+}
+
+.am-badge--neutral {
+  color: var(--am-text-muted);
+}
+.am-badge--accent {
+  color: var(--am-success);
+  border-color: var(--am-success);
+}
+.am-badge--success {
+  color: var(--am-success);
+  border-color: var(--am-success);
+}
+.am-badge--warning {
+  color: var(--am-warning);
+  border-color: var(--am-warning);
+}
+.am-badge--flow {
+  color: var(--am-flow);
+  border-color: var(--am-flow);
+}
+.am-badge--identity {
+  color: var(--am-identity);
+  border-color: var(--am-identity);
+}
+
+/* ------------------------------------------------------------------ pills */
+
+.am-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--am-border);
+  border-radius: 999px;
+  font-family: var(--am-font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  color: var(--am-text-muted);
+  background: transparent;
+}
+
+.am-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  display: block;
+}
+
+.am-pill--neutral {
+  color: var(--am-text-muted);
+}
+.am-pill--accent,
+.am-pill--success {
+  color: var(--am-success);
+  border-color: var(--am-success);
+}
+.am-pill--warning {
+  color: var(--am-warning);
+  border-color: var(--am-warning);
+}
+.am-pill--flow {
+  color: var(--am-flow);
+  border-color: var(--am-flow);
+}
+.am-pill--identity {
+  color: var(--am-identity);
+  border-color: var(--am-identity);
+}
+
+/* -------------------------------------------------------------- addresses */
+
+.am-addr {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.35;
+}
+
+.am-addr__label {
+  font-family: var(--am-font-mono);
+  font-size: 12px;
+  color: var(--am-identity);
+}
+
+.am-addr__hash {
+  font-family: var(--am-font-mono);
+  font-size: 10px;
+  color: var(--am-text-dim);
+  letter-spacing: 0.02em;
+}
