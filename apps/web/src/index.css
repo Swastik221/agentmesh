@@ -69,6 +69,17 @@ body {
   letter-spacing: -0.01em;
 }
 
+.app-header__divider {
+  width: 1px;
+  height: 16px;
+  background: var(--am-border);
+}
+
+.app-header__project {
+  font-size: 13px;
+  color: var(--am-text-muted);
+}
+
 .app-header__identity {
   display: flex;
   align-items: center;
@@ -158,7 +169,104 @@ body {
 .app-main {
   position: relative;
   min-width: 0;
+  overflow-y: auto;
   background: var(--am-base);
+}
+
+/* --------------------------------------------------------------- overview */
+
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  min-height: 100%;
+}
+
+.overview__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.overview__project {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.overview__slug {
+  font-family: var(--am-font-mono);
+  font-size: 11px;
+  color: var(--am-text-dim);
+}
+
+.section-heading {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--am-text-dim);
+  margin-bottom: 10px;
+}
+
+.overview__canvas {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 420px;
+}
+
+.overview__canvas-frame {
+  flex: 1;
+  position: relative;
+  border: 1px solid var(--am-border);
+  border-radius: var(--am-radius);
+  overflow: hidden;
+}
+
+/* Filled by WorkspaceCanvas, which pins itself to this frame. */
+.workspace-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* ------------------------------------------------------------ agent cards */
+
+.agent-roster__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: var(--am-pad);
+  border: 1px solid var(--am-border);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+}
+
+.agent-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--am-text-muted);
+}
+
+.agent-card__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--am-text);
+}
+
+.agent-card__vendor {
+  font-family: var(--am-font-mono);
+  font-size: 10px;
+  color: var(--am-text-dim);
 }
 
 .app-placeholder {

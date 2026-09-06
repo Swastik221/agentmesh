@@ -92,9 +92,15 @@ function Canvas() {
  * scoped here rather than leaking into the surrounding shell.
  */
 export function WorkspaceCanvas() {
+  // React Flow sizes its root with an inline `height: 100%`, which only
+  // resolves against a parent with a definite height. The absolute wrapper
+  // gives it one no matter how the surrounding layout is sized, so the canvas
+  // stays drop-in reusable.
   return (
-    <ReactFlowProvider>
-      <Canvas />
-    </ReactFlowProvider>
+    <div className="workspace-canvas">
+      <ReactFlowProvider>
+        <Canvas />
+      </ReactFlowProvider>
+    </div>
   );
 }

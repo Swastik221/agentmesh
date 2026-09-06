@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Globe, RefreshCw, Terminal } from 'lucide-react';
-import { Pill } from '@agentmesh/ui';
+import { BackendStatus } from './BackendStatus';
+import type { BackendHealth } from '../../hooks/useBackendHealth';
 
 /** Mock chain head. Ticks slowly so the bar feels live without drawing the eye. */
 const BLOCK_INTERVAL_MS = 12_000;
 const INITIAL_BLOCK = 18_432_908;
 
-export function StatusBar() {
+export interface StatusBarProps {
+  health: BackendHealth;
+}
+
+export function StatusBar({ health }: StatusBarProps) {
   const [block, setBlock] = useState(INITIAL_BLOCK);
 
   useEffect(() => {
@@ -17,12 +22,10 @@ export function StatusBar() {
   return (
     <footer className="app-status">
       <div className="app-status__left">
-        <Pill tone="success" dot>
-          connected
-        </Pill>
+        <BackendStatus state={health.state} degraded={health.database === 'disconnected'} />
         <span className="app-status__sync">
           <RefreshCw size={12} strokeWidth={1.75} aria-hidden="true" />
-          synced
+          {health.database ? `db ${health.database}` : 'db unknown'}
         </span>
       </div>
 
