@@ -72,6 +72,16 @@ export interface AddCapabilityDTO {
   capability: string;
 }
 
+export interface WebSocketMessage<T = unknown> {
+  type: string;
+  payload: T;
+}
+
+export interface WSErrorPayload {
+  code: string;
+  message: string;
+}
+
 export interface ApiErrorResponse {
   error: string;
   message: string;
