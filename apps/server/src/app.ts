@@ -1,6 +1,8 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import healthRouter from './routes/health.router.js';
+import userRouter from './routes/user.router.js';
+import projectRouter from './routes/project.router.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { config } from './config/index.js';
 
@@ -15,6 +17,8 @@ export const createApp = (): Express => {
   app.use(express.json());
 
   app.use('/', healthRouter);
+  app.use('/', userRouter);
+  app.use('/', projectRouter);
 
   app.use(errorHandler);
 
