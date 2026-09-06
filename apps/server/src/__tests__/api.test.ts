@@ -309,12 +309,8 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
 
       // Issue concurrent requests demoting userA and userB simultaneously
       const [resA, resB] = await Promise.all([
-        request(app)
-          .patch(`/projects/${projectId}/members/${userAId}`)
-          .send({ role: 'MEMBER' }),
-        request(app)
-          .patch(`/projects/${projectId}/members/${userBId}`)
-          .send({ role: 'MEMBER' }),
+        request(app).patch(`/projects/${projectId}/members/${userAId}`).send({ role: 'MEMBER' }),
+        request(app).patch(`/projects/${projectId}/members/${userBId}`).send({ role: 'MEMBER' }),
       ]);
 
       const statuses = [resA.status, resB.status];
@@ -334,9 +330,7 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
 
     it('should atomically prevent concurrent removals resulting in 0 OWNERs', async () => {
       // Ensure both userA and userB are OWNERs so there are 2 OWNERs
-      await request(app)
-        .patch(`/projects/${projectId}/members/${userAId}`)
-        .send({ role: 'OWNER' });
+      await request(app).patch(`/projects/${projectId}/members/${userAId}`).send({ role: 'OWNER' });
 
       const memberB = await prisma.projectMember.findUnique({
         where: { projectId_userId: { projectId, userId: userBId } },
