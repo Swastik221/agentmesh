@@ -8,7 +8,7 @@ Multiplayer workspace for humans + AI agents.
 agentmesh/
 ├── apps/
 │   ├── web/            # React + Vite frontend application
-│   └── server/         # Express + Node.js TypeScript backend application
+│   └── server/         # Express + Node.js TypeScript backend application (with Prisma ORM)
 ├── packages/
 │   ├── shared/         # Shared TypeScript interfaces & types
 │   ├── agent-protocol/ # Protocol definition package foundation
@@ -23,6 +23,7 @@ agentmesh/
 
 - **Node.js**: `>= 20.0.0`
 - **pnpm**: `>= 9.0.0` (Recommended: `12.3.4`)
+- **PostgreSQL**: `>= 14` (Recommended: `16`)
 
 ## Installation
 
@@ -43,7 +44,21 @@ Default variables:
 ```env
 PORT=3001
 WEB_ORIGIN=http://localhost:5173
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentmesh?schema=public"
 ```
+
+## Core Models Overview
+
+- **User**: Represents a human or system user (`id` CUID, `walletAddress` unique, `displayName`).
+- **Project**: Collaboration workspace (`id` CUID, `name`, `description`, `ownerId` -> User).
+- **ProjectMember**: Membership association with composite constraint `(projectId, userId)` and roles (`OWNER`, `MEMBER`).
+- **Agent**: AI agent representation (`id` CUID, `projectId`, `ownerId`, `name`, `provider`, `status` enum `OFFLINE` | `ONLINE` | `BUSY`).
+
+## Database Commands
+
+- **Generate Client**: `pnpm db:generate`
+- **Run Migrations**: `pnpm db:migrate`
+- **Seed Development Data**: `pnpm db:seed`
 
 ## Development Commands
 
@@ -63,12 +78,12 @@ Run specific target applications:
 - **Typecheck**: `pnpm typecheck`
 - **Lint**: `pnpm lint`
 - **Format**: `pnpm format`
-- **Test**: `pnpm test`
+- **Test**: `pnpm test` (includes PostgreSQL integration suite)
 - **Build**: `pnpm build`
 
 ## Health Endpoint
 
-Backend exposes a health check endpoint:
+Backend exposes a health check endpoint verifying application and database connectivity:
 
 ```http
 GET /health
@@ -79,6 +94,7 @@ Expected response (`HTTP 200`):
 ```json
 {
   "status": "ok",
-  "service": "agentmesh-server"
+  "service": "agentmesh-server",
+  "database": "connected"
 }
 ```
