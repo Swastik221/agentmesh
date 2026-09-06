@@ -22,14 +22,18 @@
     "@agentmesh/agent-protocol": "workspace:*",
     "@agentmesh/shared": "workspace:*",
     "@prisma/client": "^6.4.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "siwe": "^3.0.0",
+    "viem": "^2.56.3",
     "ws": "^8.21.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@agentmesh/config": "workspace:*",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.4",

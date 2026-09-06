@@ -1,7 +1,9 @@
 import { Waypoints } from 'lucide-react';
-import { Pill, TruncatedAddress } from '@agentmesh/ui';
+import { Pill } from '@agentmesh/ui';
+
 import { BackendStatus } from '../status/BackendStatus';
-import { currentProject, currentUser } from '../../data/workspace';
+import { WalletAuthButton } from '../auth/WalletAuthButton';
+import { currentProject } from '../../data/workspace';
 import type { BackendHealth, BackendState } from '../../hooks/useBackendHealth';
 
 export interface HeaderProps {
@@ -29,11 +31,7 @@ export function Header({ backendState, databaseState }: HeaderProps) {
         <Pill tone="success" dot>
           auto-comm on
         </Pill>
-        <TruncatedAddress
-          address={currentUser.address}
-          label={currentUser.ens}
-          className="app-header__wallet"
-        />
+        <WalletAuthButton />
       </div>
     </header>
   );

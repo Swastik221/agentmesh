@@ -1,10 +1,12 @@
 import express, { Express } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import healthRouter from './routes/health.router.js';
 import userRouter from './routes/user.router.js';
 import projectRouter from './routes/project.router.js';
 import agentRouter from './routes/agent.router.js';
 import agentCapabilityRouter from './routes/agent-capability.router.js';
+import authRouter from './auth/auth.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { config } from './config/index.js';
 
@@ -14,11 +16,14 @@ export const createApp = (): Express => {
   app.use(
     cors({
       origin: config.webOrigin,
+      credentials: true,
     }),
   );
   app.use(express.json());
+  app.use(cookieParser());
 
   app.use('/', healthRouter);
+  app.use('/', authRouter);
   app.use('/', userRouter);
   app.use('/', projectRouter);
   app.use('/', agentRouter);
