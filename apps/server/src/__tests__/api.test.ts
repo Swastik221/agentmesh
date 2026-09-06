@@ -299,6 +299,86 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     });
   });
 
+  describe('OWNER Invariant Concurrency Tests', () => {
+    it('should atomically prevent concurrent demotions resulting in 0 OWNERs', async () => {
+      // Re-add userB as OWNER so there are 2 OWNERs: userA and userB
+      await request(app).post(`/projects/${projectId}/members`).send({
+        userId: userBId,
+        role: 'OWNER',
+      });
+
+      // Issue concurrent requests demoting userA and userB simultaneously
+      const [resA, resB] = await Promise.all([
+        request(app)
+          .patch(`/projects/${projectId}/members/${userAId}`)
+          .send({ role: 'MEMBER' }),
+        request(app)
+          .patch(`/projects/${projectId}/members/${userBId}`)
+          .send({ role: 'MEMBER' }),
+      ]);
+
+      const statuses = [resA.status, resB.status];
+      expect(statuses).toContain(200);
+      expect(statuses).toContain(409);
+
+      // Verify that exactly 1 OWNER remains in the database
+      const ownerCount = await prisma.projectMember.count({
+        where: {
+          projectId,
+          role: ProjectRole.OWNER,
+        },
+      });
+
+      expect(ownerCount).toBe(1);
+    });
+
+    it('should atomically prevent concurrent removals resulting in 0 OWNERs', async () => {
+      // Ensure both userA and userB are OWNERs so there are 2 OWNERs
+      await request(app)
+        .patch(`/projects/${projectId}/members/${userAId}`)
+        .send({ role: 'OWNER' });
+
+      const memberB = await prisma.projectMember.findUnique({
+        where: { projectId_userId: { projectId, userId: userBId } },
+      });
+      if (!memberB) {
+        await request(app).post(`/projects/${projectId}/members`).send({
+          userId: userBId,
+          role: 'OWNER',
+        });
+      } else {
+        await request(app)
+          .patch(`/projects/${projectId}/members/${userBId}`)
+          .send({ role: 'OWNER' });
+      }
+
+      const ownerCountBefore = await prisma.projectMember.count({
+        where: { projectId, role: ProjectRole.OWNER },
+      });
+      expect(ownerCountBefore).toBe(2);
+
+      // Issue concurrent removal requests for both userA and userB
+      const [resA, resB] = await Promise.all([
+        request(app).delete(`/projects/${projectId}/members/${userAId}`),
+        request(app).delete(`/projects/${projectId}/members/${userBId}`),
+      ]);
+
+      const statuses = [resA.status, resB.status];
+      expect(statuses).toContain(200);
+      expect(statuses).toContain(409);
+
+      // Verify that exactly 1 OWNER remains in the database
+      const ownerCountAfter = await prisma.projectMember.count({
+        where: {
+          projectId,
+          role: ProjectRole.OWNER,
+        },
+      });
+
+      expect(ownerCountAfter).toBe(1);
+    });
+  });
+
   describe('Project Delete API', () => {
     it('DELETE /projects/:projectId -> should delete project and cascade members', async () => {
       const res = await request(app).delete(`/projects/${projectId}`);

@@ -64,90 +64,112 @@ export class MemberService {
     userId: string,
     data: UpdateMemberRoleInput,
   ): Promise<ProjectMember> {
-    const member = await prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: {
-          projectId,
-          userId,
-        },
-      },
-    });
+    return await prisma.$transaction(async (tx) => {
+      // Row-level lock on the project to ensure concurrency-safe OWNER invariant enforcement
+      const projects = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "projects" WHERE id = ${projectId} FOR UPDATE
+      `;
 
-    if (!member) {
-      throw new NotFoundError(
-        `Membership for user '${userId}' in project '${projectId}' not found`,
-      );
-    }
+      if (!projects || projects.length === 0) {
+        throw new NotFoundError(`Project with ID '${projectId}' not found`);
+      }
 
-    if (member.role === ProjectRole.OWNER && data.role === ProjectRole.MEMBER) {
-      const ownerCount = await prisma.projectMember.count({
+      const member = await tx.projectMember.findUnique({
         where: {
-          projectId,
-          role: ProjectRole.OWNER,
+          projectId_userId: {
+            projectId,
+            userId,
+          },
         },
       });
 
-      if (ownerCount <= 1) {
-        throw new ConflictError(
-          'Cannot demote the only project OWNER. A project must have at least one OWNER.',
+      if (!member) {
+        throw new NotFoundError(
+          `Membership for user '${userId}' in project '${projectId}' not found`,
         );
       }
-    }
 
-    return await prisma.projectMember.update({
-      where: {
-        projectId_userId: {
-          projectId,
-          userId,
+      if (member.role === ProjectRole.OWNER && data.role === ProjectRole.MEMBER) {
+        const ownerCount = await tx.projectMember.count({
+          where: {
+            projectId,
+            role: ProjectRole.OWNER,
+          },
+        });
+
+        if (ownerCount <= 1) {
+          throw new ConflictError(
+            'Cannot demote the only project OWNER. A project must have at least one OWNER.',
+          );
+        }
+      }
+
+      return await tx.projectMember.update({
+        where: {
+          projectId_userId: {
+            projectId,
+            userId,
+          },
         },
-      },
-      data: {
-        role: data.role,
-      },
+        data: {
+          role: data.role,
+        },
+      });
     });
   }
 
   async removeMember(projectId: string, userId: string): Promise<{ message: string }> {
-    const member = await prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: {
-          projectId,
-          userId,
-        },
-      },
-    });
+    return await prisma.$transaction(async (tx) => {
+      // Row-level lock on the project to ensure concurrency-safe OWNER invariant enforcement
+      const projects = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "projects" WHERE id = ${projectId} FOR UPDATE
+      `;
 
-    if (!member) {
-      throw new NotFoundError(
-        `Membership for user '${userId}' in project '${projectId}' not found`,
-      );
-    }
+      if (!projects || projects.length === 0) {
+        throw new NotFoundError(`Project with ID '${projectId}' not found`);
+      }
 
-    if (member.role === ProjectRole.OWNER) {
-      const ownerCount = await prisma.projectMember.count({
+      const member = await tx.projectMember.findUnique({
         where: {
-          projectId,
-          role: ProjectRole.OWNER,
+          projectId_userId: {
+            projectId,
+            userId,
+          },
         },
       });
 
-      if (ownerCount <= 1) {
-        throw new ConflictError(
-          'Cannot remove the only project OWNER. A project must have at least one OWNER.',
+      if (!member) {
+        throw new NotFoundError(
+          `Membership for user '${userId}' in project '${projectId}' not found`,
         );
       }
-    }
 
-    await prisma.projectMember.delete({
-      where: {
-        projectId_userId: {
-          projectId,
-          userId,
+      if (member.role === ProjectRole.OWNER) {
+        const ownerCount = await tx.projectMember.count({
+          where: {
+            projectId,
+            role: ProjectRole.OWNER,
+          },
+        });
+
+        if (ownerCount <= 1) {
+          throw new ConflictError(
+            'Cannot remove the only project OWNER. A project must have at least one OWNER.',
+          );
+        }
+      }
+
+      await tx.projectMember.delete({
+        where: {
+          projectId_userId: {
+            projectId,
+            userId,
+          },
         },
-      },
-    });
+      });
 
-    return { message: 'Member removed successfully' };
+      return { message: 'Member removed successfully' };
+    });
   }
 }
 
