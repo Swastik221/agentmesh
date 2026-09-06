@@ -561,3 +561,55 @@ body {
   font-family: var(--am-font-mono);
   font-size: 9px;
 }
+
+/* ------------------------------------------------------------- responsive */
+
+/*
+ * Desktop-first, and deliberately modest: the shell keeps its shape and the
+ * rail sheds its labels rather than collapsing into a drawer. Below the
+ * narrow breakpoint the header wraps its identity block instead of
+ * overflowing. There is no mobile layout in this pass.
+ */
+@media (max-width: 1100px) {
+  .app-body {
+    grid-template-columns: 60px 1fr;
+  }
+
+  .app-nav {
+    justify-content: center;
+    padding: 10px 0;
+  }
+
+  .app-nav__label,
+  .app-nav__tag {
+    /* The button keeps its accessible name via `title`. */
+    display: none;
+  }
+
+  .app-header__project,
+  .app-header__divider {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .app-header {
+    padding: 0 10px;
+  }
+
+  .app-header__identity {
+    gap: 8px;
+  }
+
+  .app-header__wallet {
+    display: none;
+  }
+
+  .app-status__panels {
+    display: none;
+  }
+
+  .overview {
+    padding: 12px;
+  }
+}
