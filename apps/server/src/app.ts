@@ -4,6 +4,7 @@ import healthRouter from './routes/health.router.js';
 import userRouter from './routes/user.router.js';
 import projectRouter from './routes/project.router.js';
 import agentRouter from './routes/agent.router.js';
+import agentCapabilityRouter from './routes/agent-capability.router.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { config } from './config/index.js';
 
@@ -21,6 +22,7 @@ export const createApp = (): Express => {
   app.use('/', userRouter);
   app.use('/', projectRouter);
   app.use('/', agentRouter);
+  app.use('/', agentCapabilityRouter);
 
   app.use(errorHandler);
 

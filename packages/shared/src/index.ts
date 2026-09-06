@@ -56,6 +56,22 @@ export interface UpdateAgentDTO {
   status?: AgentStatus;
 }
 
+export interface AgentCapabilityDTO {
+  id: string;
+  agentId: string;
+  capability: string;
+  createdAt: string;
+}
+
+export interface AgentCapabilitiesResponseDTO {
+  agentId: string;
+  capabilities: string[];
+}
+
+export interface AddCapabilityDTO {
+  capability: string;
+}
+
 export interface ApiErrorResponse {
   error: string;
   message: string;

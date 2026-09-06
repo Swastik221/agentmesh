@@ -49,7 +49,7 @@ export class AgentService {
     return agent;
   }
 
-  async listProjectAgents(projectId: string): Promise<Agent[]> {
+  async listProjectAgents(projectId: string, capabilityQuery?: string) {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
     });
@@ -57,15 +57,35 @@ export class AgentService {
       throw new NotFoundError(`Project with ID ${projectId} not found`);
     }
 
+    const normalizedCap =
+      capabilityQuery && capabilityQuery.trim() !== ''
+        ? capabilityQuery.trim().toLowerCase()
+        : undefined;
+
     return prisma.agent.findMany({
-      where: { projectId },
+      where: {
+        projectId,
+        ...(normalizedCap && {
+          capabilities: {
+            some: {
+              capability: normalizedCap,
+            },
+          },
+        }),
+      },
+      include: {
+        capabilities: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async getAgent(agentId: string): Promise<Agent> {
+  async getAgent(agentId: string) {
     const agent = await prisma.agent.findUnique({
       where: { id: agentId },
+      include: {
+        capabilities: true,
+      },
     });
     if (!agent) {
       throw new NotFoundError(`Agent with ID ${agentId} not found`);
