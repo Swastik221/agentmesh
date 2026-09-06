@@ -1,15 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
+
 import { projectService } from '../services/project.service.js';
 import { createProjectSchema, updateProjectSchema } from '../schemas/project.schema.js';
+import { AuthenticatedRequest } from '../auth/auth.types.js';
 
 export const createProject = async (
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
   try {
     const input = createProjectSchema.parse(req.body);
-    const project = await projectService.createProject(input);
+    const ownerId = req.auth ? req.auth.userId : input.ownerId;
+    const project = await projectService.createProject({
+      ...input,
+      ownerId,
+    });
     res.status(201).json(project);
   } catch (error) {
     next(error);

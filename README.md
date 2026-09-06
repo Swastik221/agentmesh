@@ -54,10 +54,7 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentmesh?schema=pub
 - **ProjectMember**: Membership association with composite constraint `(projectId, userId)` and roles (`OWNER`, `MEMBER`).
 - **Agent**: AI agent representation (`id` CUID, `projectId`, `ownerId`, `name`, `provider`, `status` enum `OFFLINE` | `ONLINE` | `BUSY`).
 
-## API Endpoints (PRD #4)
-
-> [!NOTE]
-> **Authentication Note**: Authentication and authorization (JWT / SIWE / Privy) are NOT implemented in PRD #4. Endpoints operate using explicit IDs in request bodies and URL path parameters.
+## API Endpoints (PRD #8)
 
 ### Health Check
 
@@ -69,6 +66,19 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentmesh?schema=pub
     "database": "connected"
   }
   ```
+
+### Wallet Authentication API (PRD #8)
+
+- `GET /auth/nonce` -> Generate single-use cryptographic SIWE nonce (`200 OK`)
+  ```json
+  { "nonce": "random-nonce-string" }
+  ```
+- `POST /auth/verify` -> Verify EIP-4361 SIWE signature, create/find user with lowercased address, issue session cookie (`200 OK`, `401 Unauthorized` if invalid signature/nonce/domain)
+  ```json
+  { "message": "SIWE message", "signature": "0x..." }
+  ```
+- `GET /auth/me` -> Get authenticated user from session cookie or Bearer token (`200 OK` or `401 Unauthorized`)
+- `POST /auth/logout` -> Invalidate session and clear session cookie (`204 No Content`)
 
 ### Users API
 

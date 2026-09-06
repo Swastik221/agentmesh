@@ -11,11 +11,13 @@ import {
   updateMemberRole,
   removeMember,
 } from '../controllers/member.controller.js';
+import { optionalAuth } from '../auth/auth.middleware.js';
 
 const router: Router = Router();
 
 // Project Endpoints
-router.post('/projects', createProject);
+router.post('/projects', optionalAuth, createProject);
+
 router.get('/projects/:projectId', getProjectById);
 router.patch('/projects/:projectId', updateProject);
 router.delete('/projects/:projectId', deleteProject);

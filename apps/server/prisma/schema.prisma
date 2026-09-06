@@ -28,9 +28,11 @@ model User {
   ownedProjects Project[]       @relation("UserOwnedProjects")
   memberships   ProjectMember[] @relation("UserProjectMemberships")
   ownedAgents   Agent[]         @relation("UserOwnedAgents")
+  authSessions  AuthSession[]
 
   @@map("users")
 }
+
 
 model Project {
   id          String          @id @default(cuid())
@@ -97,4 +99,28 @@ model AgentCapability {
   @@index([capability])
   @@map("agent_capabilities")
 }
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model SiweNonce {
+  id        String   @id @default(cuid())
+  nonce     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("siwe_nonces")
+}
+
 
