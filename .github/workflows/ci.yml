@@ -50,7 +50,7 @@ jobs:
         run: pnpm db:generate
 
       - name: Run Database Migrations
-        run: pnpm --filter @agentmesh/server prisma migrate deploy
+        run: pnpm --filter @agentmesh/server exec prisma migrate deploy
 
       - name: Lint
         run: pnpm lint
