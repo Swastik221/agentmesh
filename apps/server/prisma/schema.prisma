@@ -1,0 +1,84 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum ProjectRole {
+  OWNER
+  MEMBER
+}
+
+enum AgentStatus {
+  OFFLINE
+  ONLINE
+  BUSY
+}
+
+model User {
+  id            String          @id @default(cuid())
+  walletAddress String?         @unique
+  displayName   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  ownedProjects Project[]       @relation("UserOwnedProjects")
+  memberships   ProjectMember[] @relation("UserProjectMemberships")
+  ownedAgents   Agent[]         @relation("UserOwnedAgents")
+
+  @@map("users")
+}
+
+model Project {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  owner       User            @relation("UserOwnedProjects", fields: [ownerId], references: [id], onDelete: Restrict)
+  members     ProjectMember[]
+  agents      Agent[]
+
+  @@index([ownerId])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String      @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectRole
+  createdAt DateTime    @default(now())
+
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User        @relation("UserProjectMemberships", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model Agent {
+  id        String      @id @default(cuid())
+  projectId String
+  ownerId   String
+  name      String
+  provider  String
+  status    AgentStatus @default(OFFLINE)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner     User        @relation("UserOwnedAgents", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@index([projectId])
+  @@index([ownerId])
+  @@index([status])
+  @@map("agents")
+}

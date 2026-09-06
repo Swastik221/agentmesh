@@ -3,7 +3,7 @@ import request from 'supertest';
 import { createApp } from '../app.js';
 
 describe('GET /health', () => {
-  it('should return HTTP 200 with status ok and service name', async () => {
+  it('should return HTTP 200 with status ok, service name, and database connectivity', async () => {
     const app = createApp();
     const response = await request(app).get('/health');
 
@@ -11,6 +11,7 @@ describe('GET /health', () => {
     expect(response.body).toEqual({
       status: 'ok',
       service: 'agentmesh-server',
+      database: 'connected',
     });
   });
 });
