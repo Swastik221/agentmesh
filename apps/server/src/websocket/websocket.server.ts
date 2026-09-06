@@ -7,6 +7,7 @@ import { logger } from '../lib/logger.js';
 import { connectionManager } from './connection.manager.js';
 import { ConnectionMetadata, WebSocketMessage, WSMessageType } from './websocket.types.js';
 import { handshakeService, HandshakeErrorCode } from '../handshake/index.js';
+import { messagingService } from '../messaging/index.js';
 
 function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
   const cookieHeader = req.headers.cookie;
@@ -146,6 +147,15 @@ export class AgentMeshWebSocketServer {
     if (message.type === AgentMeshMessageType.AGENT_HANDSHAKE) {
       const handshakeResult = await handshakeService.processHandshake(metadata, parsed);
       this.sendJson(metadata.socket, handshakeResult.message as unknown as WebSocketMessage);
+      return;
+    }
+
+    // Handle agent.message
+    if (message.type === AgentMeshMessageType.AGENT_MESSAGE) {
+      const result = await messagingService.processAgentMessage(metadata, parsed);
+      if (!result.success && result.error) {
+        this.sendJson(metadata.socket, result.error as unknown as WebSocketMessage);
+      }
       return;
     }
 
