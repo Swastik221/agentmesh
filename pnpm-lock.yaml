@@ -130,6 +130,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@agentmesh/agent-protocol':
+        specifier: workspace:*
+        version: link:../../packages/agent-protocol
       '@agentmesh/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -227,6 +230,10 @@ importers:
         version: 6.4.3(@types/node@22.20.1)(jiti@2.7.0)(tsx@4.23.13)
 
   packages/agent-protocol:
+    dependencies:
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
     devDependencies:
       '@agentmesh/config':
         specifier: workspace:*
@@ -234,6 +241,9 @@ importers:
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(supports-color@7.2.0)(tsx@4.23.13)
 
   packages/config: {}
 

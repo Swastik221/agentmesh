@@ -19,6 +19,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@agentmesh/agent-protocol": "workspace:*",
     "@agentmesh/shared": "workspace:*",
     "@prisma/client": "^6.4.0",
     "cors": "^2.8.5",

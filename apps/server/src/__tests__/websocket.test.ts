@@ -9,6 +9,12 @@ import {
   connectionManager,
   AgentMeshWebSocketServer,
 } from '../websocket/index.js';
+import {
+  AGENTMESH_PROTOCOL_VERSION,
+  createAgentMeshMessage,
+  parseAgentMeshMessage,
+  AgentMeshMessageType,
+} from '@agentmesh/agent-protocol';
 
 describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
   const app = createApp();
@@ -249,6 +255,26 @@ describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
 
       ws.close();
       wsServer.startHeartbeat(60000); // restore interval
+    });
+  });
+
+  describe('AgentMesh Protocol Cross-Package Interop', () => {
+    it('should successfully import, create, and parse protocol messages from @agentmesh/agent-protocol', () => {
+      const msg = createAgentMeshMessage({
+        type: AgentMeshMessageType.AGENT_STATUS,
+        projectId: project1Id,
+        senderId: userId,
+        payload: { status: 'ONLINE' },
+      });
+
+      expect(msg.protocolVersion).toBe(AGENTMESH_PROTOCOL_VERSION);
+      expect(msg.type).toBe('agent.status');
+
+      const parsed = parseAgentMeshMessage(msg);
+      expect(parsed.id).toBe(msg.id);
+      if (parsed.type === 'agent.status') {
+        expect(parsed.payload.status).toBe('ONLINE');
+      }
     });
   });
 });
