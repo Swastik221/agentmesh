@@ -2,13 +2,21 @@ import type { Node } from '@xyflow/react';
 
 /** Sections in the left rail. Terminal and Browser are reserved for a later pass. */
 export type SectionId =
-  'project' | 'agents' | 'tasks' | 'activity' | 'files' | 'terminal' | 'browser';
+  'overview' | 'agents' | 'tasks' | 'files' | 'activity' | 'terminal' | 'browser';
 
 export interface NavItem {
   id: SectionId;
   label: string;
   /** Reserved sections render greyed out and are not selectable. */
   reserved?: boolean;
+}
+
+/** Agent roster entry on the Overview page. Visual placeholder only. */
+export interface PlaceholderAgent {
+  id: string;
+  name: string;
+  vendor: string;
+  status: 'offline';
 }
 
 /** One line of explorer-style agent output: block height, tx-ish hash, message. */

@@ -15,13 +15,29 @@ export const currentUser = {
 } as const;
 
 export const navItems: NavItem[] = [
-  { id: 'project', label: 'Project' },
+  { id: 'overview', label: 'Overview' },
   { id: 'agents', label: 'Agents' },
   { id: 'tasks', label: 'Tasks' },
-  { id: 'activity', label: 'Activity' },
   { id: 'files', label: 'Files' },
+  { id: 'activity', label: 'Activity' },
   { id: 'terminal', label: 'Terminal', reserved: true },
   { id: 'browser', label: 'Browser', reserved: true },
+];
+
+/** Placeholder project. There is no project switching yet. */
+export const currentProject = {
+  name: 'AgentMesh Demo Project',
+  slug: 'agentmesh-demo',
+} as const;
+
+/**
+ * Visual-only agent roster for the Overview page. These are placeholders and
+ * are deliberately offline — no agent registration exists yet.
+ */
+export const placeholderAgents = [
+  { id: 'claude', name: 'Claude', vendor: 'Anthropic', status: 'offline' as const },
+  { id: 'codex', name: 'Codex', vendor: 'OpenAI', status: 'offline' as const },
+  { id: 'gemini', name: 'Gemini', vendor: 'Google', status: 'offline' as const },
 ];
 
 export const initialNodes: WorkspaceNode[] = [

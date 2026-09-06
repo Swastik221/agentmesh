@@ -1,6 +1,6 @@
 import { Waypoints } from 'lucide-react';
 import { Pill, TruncatedAddress } from '@agentmesh/ui';
-import { currentUser } from '../data/workspace';
+import { currentUser } from '../../data/workspace';
 
 /**
  * Top chrome: product identity on the left, who you are and whether the mesh
