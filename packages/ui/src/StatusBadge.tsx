@@ -16,7 +16,12 @@ export interface StatusBadgeProps {
   className?: string;
 }
 
-export function StatusBadge({ tone = 'neutral', children, marker = true, className }: StatusBadgeProps) {
+export function StatusBadge({
+  tone = 'neutral',
+  children,
+  marker = true,
+  className,
+}: StatusBadgeProps) {
   return (
     <span className={`am-badge am-badge--${tone}${className ? ` ${className}` : ''}`}>
       {marker ? <i className="am-badge__marker" aria-hidden="true" /> : null}

@@ -35,7 +35,13 @@ function hexPath(cx: number, cy: number): string {
  * The tile holds one whole hexagon plus the two half-hexagons that straddle the
  * left and right tile edges; together they interlock across repeats.
  */
-export function HexGrid({ offsetX = 0, offsetY = 0, scale = 1, id = 'am-hex', className }: HexGridProps) {
+export function HexGrid({
+  offsetX = 0,
+  offsetY = 0,
+  scale = 1,
+  id = 'am-hex',
+  className,
+}: HexGridProps) {
   const patternTransform = `translate(${offsetX},${offsetY}) scale(${scale})`;
 
   return (
