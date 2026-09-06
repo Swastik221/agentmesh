@@ -25,7 +25,6 @@ export class AgentMeshWebSocketServer {
   }
 
   private async handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
-
     try {
       const reqUrl = req.url || '';
       const parsedUrl = new URL(reqUrl, 'http://localhost');
