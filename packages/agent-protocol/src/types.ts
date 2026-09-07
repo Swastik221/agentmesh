@@ -5,6 +5,7 @@ import {
   agentHandshakeRejectedPayloadSchema,
   agentStatusPayloadSchema,
   agentMessagePayloadSchema,
+  taskStatusPayloadSchema,
   taskRequestPayloadSchema,
   taskAcceptedPayloadSchema,
   taskRejectedPayloadSchema,
@@ -17,6 +18,7 @@ import {
   agentHandshakeRejectedMessageSchema,
   agentStatusMessageSchema,
   agentMessageSchema,
+  taskStatusMessageSchema,
   taskRequestMessageSchema,
   taskAcceptedMessageSchema,
   taskRejectedMessageSchema,
@@ -33,6 +35,7 @@ export type AgentHandshakeAcceptedPayload = z.infer<typeof agentHandshakeAccepte
 export type AgentHandshakeRejectedPayload = z.infer<typeof agentHandshakeRejectedPayloadSchema>;
 export type AgentStatusPayload = z.infer<typeof agentStatusPayloadSchema>;
 export type AgentMessagePayload = z.infer<typeof agentMessagePayloadSchema>;
+export type TaskStatusPayload = z.infer<typeof taskStatusPayloadSchema>;
 export type TaskRequestPayload = z.infer<typeof taskRequestPayloadSchema>;
 export type TaskAcceptedPayload = z.infer<typeof taskAcceptedPayloadSchema>;
 export type TaskRejectedPayload = z.infer<typeof taskRejectedPayloadSchema>;
@@ -46,6 +49,7 @@ export type AgentHandshakeAcceptedMessage = z.infer<typeof agentHandshakeAccepte
 export type AgentHandshakeRejectedMessage = z.infer<typeof agentHandshakeRejectedMessageSchema>;
 export type AgentStatusMessage = z.infer<typeof agentStatusMessageSchema>;
 export type AgentMessage = z.infer<typeof agentMessageSchema>;
+export type TaskStatusMessage = z.infer<typeof taskStatusMessageSchema>;
 export type TaskRequestMessage = z.infer<typeof taskRequestMessageSchema>;
 export type TaskAcceptedMessage = z.infer<typeof taskAcceptedMessageSchema>;
 export type TaskRejectedMessage = z.infer<typeof taskRejectedMessageSchema>;

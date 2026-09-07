@@ -36,6 +36,13 @@ export const agentMessagePayloadSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+export const taskStatusPayloadSchema = z.object({
+  taskId: z.string().trim().min(1, 'Task ID is required'),
+  status: z.enum(['TODO', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED', 'FAILED', 'CANCELLED'], {
+    errorMap: () => ({ message: 'Status must be a valid task status' }),
+  }),
+});
+
 export const taskRequestPayloadSchema = z.object({
   taskId: z.string().trim().min(1, 'Task ID is required'),
   title: z.string().trim().min(1, 'Task title cannot be empty'),
@@ -117,6 +124,11 @@ export const agentMessageSchema = baseEnvelopeSchema.extend({
   payload: agentMessagePayloadSchema,
 });
 
+export const taskStatusMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.TASK_STATUS),
+  payload: taskStatusPayloadSchema,
+});
+
 export const taskRequestMessageSchema = baseEnvelopeSchema.extend({
   type: z.literal(AgentMeshMessageType.TASK_REQUEST),
   payload: taskRequestPayloadSchema,
@@ -158,6 +170,7 @@ export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   agentHandshakeRejectedMessageSchema,
   agentStatusMessageSchema,
   agentMessageSchema,
+  taskStatusMessageSchema,
   taskRequestMessageSchema,
   taskAcceptedMessageSchema,
   taskRejectedMessageSchema,
@@ -166,3 +179,4 @@ export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   taskFailedMessageSchema,
   errorMessageSchema,
 ]);
+

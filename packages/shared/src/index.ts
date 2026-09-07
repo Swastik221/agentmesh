@@ -144,6 +144,7 @@ export interface TaskDTO {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
+  filePaths?: string[];
   createdAt: string;
   updatedAt: string;
   creator?: UserDTO;
@@ -178,6 +179,7 @@ export interface CreateTaskInput {
   title: string;
   description: string;
   priority?: TaskPriority;
+  filePaths?: string[];
 }
 
 export interface UpdateTaskInput {
@@ -185,7 +187,41 @@ export interface UpdateTaskInput {
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
+  filePaths?: string[];
 }
+
+export interface ProjectWorkspaceDTO {
+  id: string;
+  projectId: string;
+  rootPath: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceTaskStateDTO {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  responsibleAgentIds: string[];
+  filePaths: string[];
+}
+
+export interface WorkspaceStateDTO {
+  projectId: string;
+  workspace: {
+    id: string;
+  };
+  tasks: WorkspaceTaskStateDTO[];
+}
+
+export interface ExecutionContextDTO {
+  projectId: string;
+  workspaceId: string;
+  rootPath: string;
+  workingDirectory: string;
+}
+
 
 export interface AssignTaskResponsibilityInput {
   agentId: string;

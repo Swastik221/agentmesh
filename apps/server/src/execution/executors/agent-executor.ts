@@ -1,8 +1,11 @@
+import { ExecutionContextDTO } from '@agentmesh/shared';
+
 export interface AgentExecutionRequest {
   executionId: string;
   taskId: string;
   agentId: string;
   input?: Record<string, unknown> | null;
+  context?: ExecutionContextDTO;
 }
 
 export interface AgentExecutionResult {

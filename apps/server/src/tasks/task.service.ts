@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, TaskStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import {
   BadRequestError,
@@ -13,6 +13,10 @@ import {
   AssignResponsibilityInput,
   CreateDependencyInput,
 } from './task.schemas.js';
+import { validateFilePaths } from '../workspace/file-path.validator.js';
+import { assertNoFileConflicts } from '../workspace/conflict-detector.js';
+import { connectionManager } from '../websocket/connection.manager.js';
+import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
 
 const creatorSelect = {
   id: true,
@@ -46,16 +50,29 @@ export class TaskService {
     }
   }
 
+  public broadcastTaskStatusEvent(projectId: string, taskId: string, status: TaskStatus): void {
+    connectionManager.broadcastToProject(projectId, {
+      type: AgentMeshMessageType.TASK_STATUS,
+      payload: {
+        taskId,
+        status,
+      },
+    });
+  }
+
   async createTask(projectId: string, userId: string, data: CreateTaskInput) {
     await this.verifyProjectMembership(projectId, userId);
 
-    return await prisma.task.create({
+    const validatedFilePaths = validateFilePaths(data.filePaths);
+
+    const createdTask = await prisma.task.create({
       data: {
         projectId,
         creatorId: userId,
         title: data.title,
         description: data.description,
         priority: data.priority,
+        filePaths: validatedFilePaths,
       },
       include: {
         creator: {
@@ -69,6 +86,10 @@ export class TaskService {
         dependencies: true,
       },
     });
+
+    this.broadcastTaskStatusEvent(projectId, createdTask.id, createdTask.status);
+
+    return createdTask;
   }
 
   async listTasks(projectId: string, userId: string, query: ListTasksQuery) {
@@ -155,27 +176,50 @@ export class TaskService {
       throw new NotFoundError('Task not found');
     }
 
+    const validatedFilePaths =
+      data.filePaths !== undefined ? validateFilePaths(data.filePaths) : undefined;
+
     const updateData: Prisma.TaskUpdateInput = {};
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined) updateData.description = data.description;
     if (data.status !== undefined) updateData.status = data.status;
     if (data.priority !== undefined) updateData.priority = data.priority;
+    if (validatedFilePaths !== undefined) updateData.filePaths = validatedFilePaths;
 
-    return await prisma.task.update({
-      where: { id: taskId },
-      data: updateData,
-      include: {
-        creator: {
-          select: creatorSelect,
-        },
-        responsibilities: {
-          include: {
-            agent: true,
+    const updatedTask = await prisma.$transaction(async (tx) => {
+      // Execute PostgreSQL row lock on project tasks to guarantee concurrency safety
+      await tx.$executeRaw`SELECT * FROM tasks WHERE "projectId" = ${projectId} FOR UPDATE`;
+
+      const targetStatus = data.status !== undefined ? data.status : task.status;
+      const targetFilePaths =
+        validatedFilePaths !== undefined ? validatedFilePaths : task.filePaths;
+
+      if (targetStatus === 'IN_PROGRESS') {
+        await assertNoFileConflicts(projectId, taskId, targetFilePaths, tx);
+      }
+
+      return await tx.task.update({
+        where: { id: taskId },
+        data: updateData,
+        include: {
+          creator: {
+            select: creatorSelect,
           },
+          responsibilities: {
+            include: {
+              agent: true,
+            },
+          },
+          dependencies: true,
         },
-        dependencies: true,
-      },
+      });
     });
+
+    if (data.status !== undefined && updatedTask.status !== task.status) {
+      this.broadcastTaskStatusEvent(projectId, taskId, updatedTask.status);
+    }
+
+    return updatedTask;
   }
 
   async deleteTask(projectId: string, taskId: string, userId: string): Promise<void> {
@@ -236,26 +280,36 @@ export class TaskService {
       throw new ConflictError('Agent is already assigned to this task');
     }
 
-    try {
-      return await prisma.taskResponsibility.create({
-        data: {
-          taskId,
-          agentId: data.agentId,
-          role: data.role || null,
-        },
-        include: {
-          agent: true,
-        },
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        throw new ConflictError('Agent is already assigned to this task');
+    return await prisma.$transaction(async (tx) => {
+      // Execute PostgreSQL row lock on project tasks to guarantee concurrency safety
+      await tx.$executeRaw`SELECT * FROM tasks WHERE "projectId" = ${projectId} FOR UPDATE`;
+
+      // Assert no conflict with existing IN_PROGRESS tasks
+      await assertNoFileConflicts(projectId, taskId, task.filePaths, tx);
+
+      try {
+        const responsibility = await tx.taskResponsibility.create({
+          data: {
+            taskId,
+            agentId: data.agentId,
+            role: data.role || null,
+          },
+          include: {
+            agent: true,
+          },
+        });
+
+        return responsibility;
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          throw new ConflictError('Agent is already assigned to this task');
+        }
+        throw error;
       }
-      throw error;
-    }
+    });
   }
 
   async listResponsibilities(projectId: string, taskId: string, userId: string) {

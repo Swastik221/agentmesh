@@ -10,6 +10,15 @@ export const errorHandler = (
   _next: NextFunction,
 ): void => {
   if (err instanceof AppError) {
+    if ('conflicts' in err && Array.isArray((err as unknown as { conflicts: unknown }).conflicts)) {
+      res.status(err.statusCode).json({
+        error: err.code,
+        message: err.message,
+        conflicts: (err as unknown as { conflicts: unknown }).conflicts,
+      });
+      return;
+    }
+
     res.status(err.statusCode).json({
       error: err.code,
       message: err.message,
