@@ -215,14 +215,15 @@ export class ExecutionService {
         return;
       }
 
-      // 4. Transition RUNNING -> COMPLETED or FAILED
+      // 4. Atomic/conditional transition RUNNING -> COMPLETED or FAILED
       const targetStatus =
         result.status === 'COMPLETED' ? ExecutionStatus.COMPLETED : ExecutionStatus.FAILED;
 
-      this.validateStateTransition(currentExec.status, targetStatus);
-
-      await prisma.taskExecution.update({
-        where: { id: executionId },
+      const finishUpdateResult = await prisma.taskExecution.updateMany({
+        where: {
+          id: executionId,
+          status: ExecutionStatus.RUNNING,
+        },
         data: {
           status: targetStatus,
           output:
@@ -233,6 +234,12 @@ export class ExecutionService {
           completedAt: new Date(),
         },
       });
+
+      if (finishUpdateResult.count === 0) {
+        // Conditional update affected 0 rows (execution was cancelled concurrently)
+        await this.syncAgentStatus(execution.agentId);
+        return;
+      }
 
       // Task State Integration: check if this execution is the latest execution for the task
       const latestExecution = await prisma.taskExecution.findFirst({
@@ -265,8 +272,11 @@ export class ExecutionService {
         ) {
           const errorMessage =
             err instanceof Error ? err.message : 'Execution failed unexpectedly';
-          await prisma.taskExecution.update({
-            where: { id: executionId },
+          await prisma.taskExecution.updateMany({
+            where: {
+              id: executionId,
+              status: ExecutionStatus.RUNNING,
+            },
             data: {
               status: ExecutionStatus.FAILED,
               error: errorMessage,
@@ -322,12 +332,30 @@ export class ExecutionService {
 
     this.validateStateTransition(execution.status, ExecutionStatus.CANCELLED);
 
-    const updated = await prisma.taskExecution.update({
-      where: { id: executionId },
+    const cancelUpdateResult = await prisma.taskExecution.updateMany({
+      where: {
+        id: executionId,
+        status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
+      },
       data: {
         status: ExecutionStatus.CANCELLED,
         completedAt: new Date(),
       },
+    });
+
+    if (cancelUpdateResult.count === 0) {
+      // Execution was no longer QUEUED or RUNNING (e.g., completed concurrently)
+      const currentExec = await prisma.taskExecution.findUnique({
+        where: { id: executionId },
+      });
+
+      throw new ConflictError(
+        `Invalid execution state transition from '${currentExec?.status || execution.status}' to 'CANCELLED'`,
+      );
+    }
+
+    const updated = await prisma.taskExecution.findUniqueOrThrow({
+      where: { id: executionId },
       include: {
         agent: true,
         task: true,

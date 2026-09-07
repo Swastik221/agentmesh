@@ -679,6 +679,45 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
       expect(agentState?.status).toBe('ONLINE');
     });
 
+    it('Cancellation race when execution completes concurrently: cancel update fails with 409 Conflict and cannot overwrite COMPLETED', async () => {
+      const task = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Terminal Completion Race Task',
+          description: 'Testing cancel race against COMPLETED execution',
+        },
+      });
+
+      await prisma.taskResponsibility.create({
+        data: { taskId: task.id, agentId: agentP1Responsible.id },
+      });
+
+      // Create execution and let MockAgentExecutor finish it to COMPLETED
+      const createRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${task.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ agentId: agentP1Responsible.id });
+
+      const execId = createRes.body.id;
+      await waitForExecutionStatus(execId);
+
+      // Now attempt cancellation: updateMany where status is QUEUED/RUNNING affects 0 rows and throws ConflictError (409)
+      const cancelRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${task.id}/executions/${execId}/cancel`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
+
+      expect(cancelRes.status).toBe(409);
+      expect(cancelRes.body.message).toContain('Invalid execution state transition');
+
+      // Verify execution remains COMPLETED and task remains COMPLETED
+      const finalExec = await prisma.taskExecution.findUnique({ where: { id: execId } });
+      expect(finalExec?.status).toBe('COMPLETED');
+
+      const finalTask = await prisma.task.findUnique({ where: { id: task.id } });
+      expect(finalTask?.status).toBe('COMPLETED');
+    });
+
     it('Multiple active executions on same agent: agent remains BUSY until all active executions complete/cancel', async () => {
       const multiTask1 = await prisma.task.create({
         data: {
