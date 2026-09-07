@@ -68,3 +68,25 @@ export const getExecution = async (
     next(error);
   }
 };
+
+export const cancelExecution = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const projectId = req.params.projectId as string;
+    const taskId = req.params.taskId as string;
+    const executionId = req.params.executionId as string;
+    const execution = await executionService.cancelExecution(
+      projectId,
+      taskId,
+      executionId,
+      req.auth!.userId,
+    );
+    res.status(200).json(execution);
+  } catch (error) {
+    next(error);
+  }
+};
+

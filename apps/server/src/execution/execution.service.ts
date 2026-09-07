@@ -55,6 +55,22 @@ export class ExecutionService {
     }
   }
 
+  private async syncAgentStatus(agentId: string): Promise<void> {
+    const activeExecutionsCount = await prisma.taskExecution.count({
+      where: {
+        agentId,
+        status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
+      },
+    });
+
+    if (activeExecutionsCount === 0) {
+      await prisma.agent.update({
+        where: { id: agentId },
+        data: { status: 'ONLINE' },
+      });
+    }
+  }
+
   async createExecution(
     projectId: string,
     taskId: string,
@@ -112,113 +128,215 @@ export class ExecutionService {
       },
     });
 
-    // Run execution pipeline synchronously for deterministic processing
-    await this.runExecutionPipeline(execution.id, data.input || null);
-
-    // Return latest execution state
-    return await prisma.taskExecution.findUniqueOrThrow({
-      where: { id: execution.id },
-      include: {
-        agent: true,
-        task: true,
-      },
+    // Asynchronously trigger execution pipeline (fire-and-forget, zero unhandled rejections)
+    void this.runExecutionPipeline(execution.id, data.input || null).catch((err) => {
+      console.error(`Background execution pipeline error for ${execution.id}:`, err);
     });
+
+    // Return created execution immediately with QUEUED status
+    return execution;
   }
 
   public async runExecutionPipeline(
     executionId: string,
     rawInput: Record<string, unknown> | null,
   ): Promise<void> {
+    try {
+      const execution = await prisma.taskExecution.findUnique({
+        where: { id: executionId },
+      });
+
+      if (!execution) {
+        return;
+      }
+
+      // Check if execution was already cancelled
+      if (execution.status === ExecutionStatus.CANCELLED) {
+        return;
+      }
+
+      // 1. Transition QUEUED -> RUNNING
+      this.validateStateTransition(execution.status, ExecutionStatus.RUNNING);
+      await prisma.taskExecution.update({
+        where: { id: executionId },
+        data: {
+          status: ExecutionStatus.RUNNING,
+          startedAt: new Date(),
+        },
+      });
+
+      // Update Task status -> IN_PROGRESS if latest execution
+      const latestAtStart = await prisma.taskExecution.findFirst({
+        where: { taskId: execution.taskId },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (latestAtStart && latestAtStart.id === executionId) {
+        await prisma.task.update({
+          where: { id: execution.taskId },
+          data: { status: 'IN_PROGRESS' },
+        });
+      }
+
+      // Update Agent status -> BUSY
+      await prisma.agent.update({
+        where: { id: execution.agentId },
+        data: { status: 'BUSY' },
+      });
+
+      // 2. Invoke Executor
+      const result = await this.executor.execute({
+        executionId: execution.id,
+        taskId: execution.taskId,
+        agentId: execution.agentId,
+        input: rawInput,
+      });
+
+      // 3. Race Safety Check: verify execution was not cancelled while executor was running
+      const currentExec = await prisma.taskExecution.findUnique({
+        where: { id: executionId },
+      });
+
+      if (!currentExec || currentExec.status === ExecutionStatus.CANCELLED) {
+        await this.syncAgentStatus(execution.agentId);
+        return;
+      }
+
+      // 4. Transition RUNNING -> COMPLETED or FAILED
+      const targetStatus =
+        result.status === 'COMPLETED' ? ExecutionStatus.COMPLETED : ExecutionStatus.FAILED;
+
+      this.validateStateTransition(currentExec.status, targetStatus);
+
+      await prisma.taskExecution.update({
+        where: { id: executionId },
+        data: {
+          status: targetStatus,
+          output:
+            result.output !== undefined && result.output !== null
+              ? (result.output as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
+          error: result.error || null,
+          completedAt: new Date(),
+        },
+      });
+
+      // Task State Integration: check if this execution is the latest execution for the task
+      const latestExecution = await prisma.taskExecution.findFirst({
+        where: { taskId: execution.taskId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (latestExecution && latestExecution.id === executionId) {
+        await prisma.task.update({
+          where: { id: execution.taskId },
+          data: {
+            status: targetStatus === ExecutionStatus.COMPLETED ? 'COMPLETED' : 'FAILED',
+          },
+        });
+      }
+
+      // Agent Status Integration: check if agent has remaining active executions
+      await this.syncAgentStatus(execution.agentId);
+    } catch (err: unknown) {
+      console.error(`Error in runExecutionPipeline for execution ${executionId}:`, err);
+      try {
+        const currentExec = await prisma.taskExecution.findUnique({
+          where: { id: executionId },
+        });
+
+        if (
+          currentExec &&
+          currentExec.status !== ExecutionStatus.CANCELLED &&
+          currentExec.status !== ExecutionStatus.COMPLETED
+        ) {
+          const errorMessage =
+            err instanceof Error ? err.message : 'Execution failed unexpectedly';
+          await prisma.taskExecution.update({
+            where: { id: executionId },
+            data: {
+              status: ExecutionStatus.FAILED,
+              error: errorMessage,
+              completedAt: new Date(),
+            },
+          });
+
+          // Sync task if latest
+          const latestExecution = await prisma.taskExecution.findFirst({
+            where: { taskId: currentExec.taskId },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (latestExecution && latestExecution.id === executionId) {
+            await prisma.task.update({
+              where: { id: currentExec.taskId },
+              data: { status: 'FAILED' },
+            });
+          }
+
+          // Sync agent
+          await this.syncAgentStatus(currentExec.agentId);
+        }
+      } catch (cleanupErr) {
+        console.error(`Failed to handle error state for execution ${executionId}:`, cleanupErr);
+      }
+    }
+  }
+
+  async cancelExecution(
+    projectId: string,
+    taskId: string,
+    executionId: string,
+    userId: string,
+  ) {
+    await this.verifyProjectMembership(projectId, userId);
+
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+    });
+
+    if (!task || task.projectId !== projectId) {
+      throw new NotFoundError('Task not found');
+    }
+
     const execution = await prisma.taskExecution.findUnique({
       where: { id: executionId },
     });
 
-    if (!execution) {
-      return;
+    if (!execution || execution.taskId !== taskId) {
+      throw new NotFoundError('Execution not found');
     }
 
-    // 1. Transition QUEUED -> RUNNING
-    this.validateStateTransition(execution.status, ExecutionStatus.RUNNING);
-    await prisma.taskExecution.update({
+    this.validateStateTransition(execution.status, ExecutionStatus.CANCELLED);
+
+    const updated = await prisma.taskExecution.update({
       where: { id: executionId },
       data: {
-        status: ExecutionStatus.RUNNING,
-        startedAt: new Date(),
-      },
-    });
-
-    // Update Task status -> IN_PROGRESS
-    await prisma.task.update({
-      where: { id: execution.taskId },
-      data: { status: 'IN_PROGRESS' },
-    });
-
-    // Update Agent status -> BUSY
-    await prisma.agent.update({
-      where: { id: execution.agentId },
-      data: { status: 'BUSY' },
-    });
-
-    // 2. Invoke Executor
-    const result = await this.executor.execute({
-      executionId: execution.id,
-      taskId: execution.taskId,
-      agentId: execution.agentId,
-      input: rawInput,
-    });
-
-    // 3. Transition RUNNING -> COMPLETED or FAILED
-    const targetStatus =
-      result.status === 'COMPLETED' ? ExecutionStatus.COMPLETED : ExecutionStatus.FAILED;
-
-    const currentExec = await prisma.taskExecution.findUniqueOrThrow({
-      where: { id: executionId },
-    });
-
-    this.validateStateTransition(currentExec.status, targetStatus);
-
-    await prisma.taskExecution.update({
-      where: { id: executionId },
-      data: {
-        status: targetStatus,
-        output:
-          result.output !== undefined && result.output !== null
-            ? (result.output as Prisma.InputJsonValue)
-            : Prisma.JsonNull,
-        error: result.error || null,
+        status: ExecutionStatus.CANCELLED,
         completedAt: new Date(),
       },
+      include: {
+        agent: true,
+        task: true,
+      },
     });
 
-    // Task State Integration: check if this execution is the latest execution for the task
+    // Sync task state if latest
     const latestExecution = await prisma.taskExecution.findFirst({
-      where: { taskId: execution.taskId },
+      where: { taskId },
       orderBy: { createdAt: 'desc' },
     });
 
     if (latestExecution && latestExecution.id === executionId) {
       await prisma.task.update({
-        where: { id: execution.taskId },
-        data: {
-          status: targetStatus === ExecutionStatus.COMPLETED ? 'COMPLETED' : 'FAILED',
-        },
+        where: { id: taskId },
+        data: { status: 'CANCELLED' },
       });
     }
 
-    // Agent Status Integration: check if agent has remaining active executions
-    const activeExecutionsCount = await prisma.taskExecution.count({
-      where: {
-        agentId: execution.agentId,
-        status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
-      },
-    });
+    // Sync agent status
+    await this.syncAgentStatus(execution.agentId);
 
-    if (activeExecutionsCount === 0) {
-      await prisma.agent.update({
-        where: { id: execution.agentId },
-        data: { status: 'ONLINE' },
-      });
-    }
+    return updated;
   }
 
   async updateExecutionStatus(
@@ -284,19 +402,7 @@ export class ExecutionService {
     }
 
     // Apply Agent status sync
-    const activeExecutionsCount = await prisma.taskExecution.count({
-      where: {
-        agentId: execution.agentId,
-        status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
-      },
-    });
-
-    if (activeExecutionsCount === 0) {
-      await prisma.agent.update({
-        where: { id: execution.agentId },
-        data: { status: 'ONLINE' },
-      });
-    }
+    await this.syncAgentStatus(execution.agentId);
 
     return updated;
   }
@@ -375,3 +481,4 @@ export class ExecutionService {
 }
 
 export const executionService = new ExecutionService();
+

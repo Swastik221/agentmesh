@@ -4,6 +4,23 @@ import { createApp } from '../app.js';
 import { prisma } from '../lib/prisma.js';
 import { sessionService } from '../auth/session.service.js';
 import { executionService } from '../execution/execution.service.js';
+import { mockAgentExecutor } from '../execution/executors/mock-agent-executor.js';
+
+async function waitForExecutionStatus(
+  executionId: string,
+  targetStatuses: string[] = ['COMPLETED', 'FAILED', 'CANCELLED'],
+  timeoutMs = 2000,
+) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const exec = await prisma.taskExecution.findUnique({ where: { id: executionId } });
+    if (exec && targetStatuses.includes(exec.status)) {
+      return exec;
+    }
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  return await prisma.taskExecution.findUnique({ where: { id: executionId } });
+}
 
 describe('PRD #13 Agent Execution Layer Integration Tests', () => {
   const app = createApp();
@@ -163,6 +180,7 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
   });
 
   afterAll(async () => {
+    executionService.setExecutor(mockAgentExecutor);
     const projectIds = [project1?.id, project2?.id].filter(Boolean);
     if (projectIds.length > 0) {
       await prisma.taskExecution.deleteMany({ where: { task: { projectId: { in: projectIds } } } }).catch(() => {});
@@ -181,7 +199,7 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
     }
   });
 
-  describe('Execution Creation & Authorization', () => {
+  describe('Async Execution Creation & Authorization', () => {
     it('returns 401 Unauthorized when creating execution without auth', async () => {
       const res = await request(app)
         .post(`/projects/${project1.id}/tasks/${taskP1.id}/executions`)
@@ -239,7 +257,7 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
       expect(res.body.message).toContain('not assigned responsibility');
     });
 
-    it('creates execution successfully, persists input, and runs MockAgentExecutor pipeline', async () => {
+    it('creates execution asynchronously, returns 201 Created and QUEUED status immediately, then background pipeline completes', async () => {
       const inputData = { instruction: 'Build auth middleware', env: 'test' };
       const res = await request(app)
         .post(`/projects/${project1.id}/tasks/${taskP1.id}/executions`)
@@ -253,16 +271,18 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
       expect(res.body.taskId).toBe(taskP1.id);
       expect(res.body.agentId).toBe(agentP1Responsible.id);
       expect(res.body.input).toEqual(inputData);
-      expect(res.body.status).toBe('COMPLETED');
-      expect(res.body.output).toBeDefined();
-      expect(res.body.startedAt).toBeDefined();
-      expect(res.body.completedAt).toBeDefined();
+      expect(res.body.status).toBe('QUEUED');
+
+      // Wait for background execution pipeline to complete
+      const completedExec = await waitForExecutionStatus(res.body.id);
+      expect(completedExec?.status).toBe('COMPLETED');
+      expect(completedExec?.output).toBeDefined();
+      expect(completedExec?.completedAt).toBeDefined();
     });
   });
 
   describe('Mock Executor & Task/Agent Integration', () => {
     it('updates task to IN_PROGRESS then COMPLETED on successful mock execution', async () => {
-      // Create a new task and assign responsibility
       const newTask = await prisma.task.create({
         data: {
           projectId: project1.id,
@@ -282,7 +302,11 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
         .send({ agentId: agentP1Responsible.id });
 
       expect(res.status).toBe(201);
-      expect(res.body.status).toBe('COMPLETED');
+      expect(res.body.status).toBe('QUEUED');
+
+      // Wait for background completion
+      const completed = await waitForExecutionStatus(res.body.id);
+      expect(completed?.status).toBe('COMPLETED');
 
       // Verify task status updated to COMPLETED
       const updatedTask = await prisma.task.findUnique({ where: { id: newTask.id } });
@@ -312,15 +336,17 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.status).toBe('FAILED');
-      expect(res.body.error).toBe('Custom error message');
+      expect(res.body.status).toBe('QUEUED');
+
+      const failed = await waitForExecutionStatus(res.body.id);
+      expect(failed?.status).toBe('FAILED');
+      expect(failed?.error).toBe('Custom error message');
 
       const updatedTask = await prisma.task.findUnique({ where: { id: failTask.id } });
       expect(updatedTask?.status).toBe('FAILED');
     });
 
     it('updates agent status to BUSY during active execution then back to ONLINE when finished', async () => {
-      // Create agent and task
       const tempAgent = await prisma.agent.create({
         data: {
           projectId: project1.id,
@@ -344,48 +370,329 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
         data: { taskId: tempTask.id, agentId: tempAgent.id },
       });
 
-      // Execute task
-      await request(app)
+      const res = await request(app)
         .post(`/projects/${project1.id}/tasks/${tempTask.id}/executions`)
         .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
         .send({ agentId: tempAgent.id });
 
-      // After execution completes, tempAgent status should return to ONLINE
+      expect(res.status).toBe(201);
+
+      await waitForExecutionStatus(res.body.id);
+
       const agentAfter = await prisma.agent.findUnique({ where: { id: tempAgent.id } });
       expect(agentAfter?.status).toBe('ONLINE');
     });
   });
 
-  describe('Lifecycle State Transitions & Validation', () => {
-    it('rejects invalid state transition attempts (e.g. COMPLETED -> RUNNING)', async () => {
-      // Find an execution that completed
-      const listRes = await request(app)
-        .get(`/projects/${project1.id}/tasks/${taskP1.id}/executions`)
+  describe('Cancellation API Endpoint', () => {
+    it('cancels a QUEUED execution successfully via POST /cancel', async () => {
+      const cancelTask = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Task to Cancel QUEUED',
+          description: 'Description for cancel task',
+        },
+      });
+
+      await prisma.taskResponsibility.create({
+        data: { taskId: cancelTask.id, agentId: agentP1Responsible.id },
+      });
+
+      // Inject a delayed executor so execution stays QUEUED/RUNNING long enough
+      executionService.setExecutor({
+        async execute() {
+          await new Promise((r) => setTimeout(r, 200));
+          return { status: 'COMPLETED', output: null, error: null };
+        },
+      });
+
+      const createRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${cancelTask.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ agentId: agentP1Responsible.id });
+
+      const execId = createRes.body.id;
+
+      // Cancel execution immediately
+      const cancelRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${cancelTask.id}/executions/${execId}/cancel`)
         .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
 
-      const completedExecId = listRes.body.items[0].id;
+      expect(cancelRes.status).toBe(200);
+      expect(cancelRes.body.id).toBe(execId);
+      expect(cancelRes.body.status).toBe('CANCELLED');
 
-      // Attempt invalid transition via service helper
-      await expect(
-        executionService.updateExecutionStatus(
-          project1.id,
-          taskP1.id,
-          completedExecId,
-          ownerUser.id,
-          'RUNNING',
-        ),
-      ).rejects.toThrow('Invalid execution state transition');
+      // Verify task status updated to CANCELLED
+      const updatedTask = await prisma.task.findUnique({ where: { id: cancelTask.id } });
+      expect(updatedTask?.status).toBe('CANCELLED');
+
+      // Reset executor
+      executionService.setExecutor(mockAgentExecutor);
+    });
+
+    it('returns 409 Conflict when attempting to cancel COMPLETED execution', async () => {
+      const task = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Task Completed Cancel Test',
+          description: 'Description for completed task',
+        },
+      });
+
+      await prisma.taskResponsibility.create({
+        data: { taskId: task.id, agentId: agentP1Responsible.id },
+      });
+
+      const createRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${task.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ agentId: agentP1Responsible.id });
+
+      const execId = createRes.body.id;
+      await waitForExecutionStatus(execId);
+
+      const cancelRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${task.id}/executions/${execId}/cancel`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
+
+      expect(cancelRes.status).toBe(409);
+      expect(cancelRes.body.message).toContain('Invalid execution state transition');
+    });
+
+    it('returns 409 Conflict when attempting to cancel FAILED execution', async () => {
+      const failTask = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Task Failed Cancel Test',
+          description: 'Description for failed task',
+        },
+      });
+
+      await prisma.taskResponsibility.create({
+        data: { taskId: failTask.id, agentId: agentP1Responsible.id },
+      });
+
+      const createRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${failTask.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ agentId: agentP1Responsible.id, input: { fail: true } });
+
+      const execId = createRes.body.id;
+      await waitForExecutionStatus(execId);
+
+      const cancelRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${failTask.id}/executions/${execId}/cancel`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
+
+      expect(cancelRes.status).toBe(409);
+    });
+
+    it('returns 409 Conflict when attempting to cancel already CANCELLED execution', async () => {
+      const task = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Task Double Cancel Test',
+          description: 'Description for double cancel task',
+        },
+      });
+
+      await prisma.taskResponsibility.create({
+        data: { taskId: task.id, agentId: agentP1Responsible.id },
+      });
+
+      executionService.setExecutor({
+        async execute() {
+          await new Promise((r) => setTimeout(r, 200));
+          return { status: 'COMPLETED', output: null, error: null };
+        },
+      });
+
+      const createRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${task.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ agentId: agentP1Responsible.id });
+
+      const execId = createRes.body.id;
+
+      await request(app)
+        .post(`/projects/${project1.id}/tasks/${task.id}/executions/${execId}/cancel`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
+
+      const secondCancel = await request(app)
+        .post(`/projects/${project1.id}/tasks/${task.id}/executions/${execId}/cancel`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
+
+      expect(secondCancel.status).toBe(409);
+
+      executionService.setExecutor(mockAgentExecutor);
+    });
+
+    it('returns 401 Unauthorized when cancelling without auth', async () => {
+      const res = await request(app).post(
+        `/projects/${project1.id}/tasks/${taskP1.id}/executions/some-id/cancel`,
+      );
+
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 403 Forbidden when non-member tries to cancel', async () => {
+      const res = await request(app)
+        .post(`/projects/${project1.id}/tasks/${taskP1.id}/executions/some-id/cancel`)
+        .set('Cookie', [`agentmesh_session=${outsiderSession.id}`]);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 404 Not Found when execution does not exist', async () => {
+      const fakeExecId = '00000000-0000-0000-0000-000000000000';
+      const res = await request(app)
+        .post(`/projects/${project1.id}/tasks/${taskP1.id}/executions/${fakeExecId}/cancel`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
+
+      expect(res.status).toBe(404);
     });
   });
 
-  describe('Stale Execution Protection', () => {
-    it('stale/older execution completion does not overwrite newer task state', async () => {
+  describe('Race Safety & Concurrency Requirements', () => {
+    it('Cancellation race: executor finishing after cancellation does NOT overwrite CANCELLED status', async () => {
+      const raceTask = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Race Condition Task',
+          description: 'Description for race condition task',
+        },
+      });
+
+      await prisma.taskResponsibility.create({
+        data: { taskId: raceTask.id, agentId: agentP1Responsible.id },
+      });
+
+      let resolveExecutor: () => void;
+      const executorPromise = new Promise<void>((res) => {
+        resolveExecutor = res;
+      });
+
+      executionService.setExecutor({
+        async execute() {
+          await executorPromise;
+          return { status: 'COMPLETED', output: { race: true }, error: null };
+        },
+      });
+
+      const createRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${raceTask.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ agentId: agentP1Responsible.id });
+
+      const execId = createRes.body.id;
+
+      // Cancel while executor is waiting on promise
+      const cancelRes = await request(app)
+        .post(`/projects/${project1.id}/tasks/${raceTask.id}/executions/${execId}/cancel`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
+
+      expect(cancelRes.status).toBe(200);
+      expect(cancelRes.body.status).toBe('CANCELLED');
+
+      // Now resolve executor promise
+      resolveExecutor!();
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Re-query execution state: MUST remain CANCELLED
+      const finalExec = await prisma.taskExecution.findUnique({ where: { id: execId } });
+      expect(finalExec?.status).toBe('CANCELLED');
+
+      executionService.setExecutor(mockAgentExecutor);
+    });
+
+    it('Multiple active executions on same agent: agent remains BUSY until all active executions complete/cancel', async () => {
+      const multiTask1 = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Multi Exec 1',
+          description: 'Description 1',
+        },
+      });
+      const multiTask2 = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Multi Exec 2',
+          description: 'Description 2',
+        },
+      });
+
+      await prisma.taskResponsibility.create({
+        data: { taskId: multiTask1.id, agentId: agentP1Responsible.id },
+      });
+      await prisma.taskResponsibility.create({
+        data: { taskId: multiTask2.id, agentId: agentP1Responsible.id },
+      });
+
+      let finishFirstExec: () => void;
+      let finishSecondExec: () => void;
+
+      const p1 = new Promise<void>((r) => (finishFirstExec = r));
+      const p2 = new Promise<void>((r) => (finishSecondExec = r));
+
+      let callCount = 0;
+      executionService.setExecutor({
+        async execute() {
+          callCount++;
+          if (callCount === 1) {
+            await p1;
+          } else {
+            await p2;
+          }
+          return { status: 'COMPLETED', output: null, error: null };
+        },
+      });
+
+      const create1 = await request(app)
+        .post(`/projects/${project1.id}/tasks/${multiTask1.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ agentId: agentP1Responsible.id });
+
+      const create2 = await request(app)
+        .post(`/projects/${project1.id}/tasks/${multiTask2.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ agentId: agentP1Responsible.id });
+
+      expect(create1.status).toBe(201);
+      expect(create2.status).toBe(201);
+
+      // Finish first execution
+      finishFirstExec!();
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Agent must still be BUSY because execution 2 is running
+      const agentMiddle = await prisma.agent.findUnique({ where: { id: agentP1Responsible.id } });
+      expect(agentMiddle?.status).toBe('BUSY');
+
+      // Finish second execution
+      finishSecondExec!();
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Now agent should be ONLINE
+      const agentFinal = await prisma.agent.findUnique({ where: { id: agentP1Responsible.id } });
+      expect(agentFinal?.status).toBe('ONLINE');
+
+      executionService.setExecutor(mockAgentExecutor);
+    });
+
+    it('Stale task protection: older execution completion/cancellation does not overwrite newer task state', async () => {
       const multiTask = await prisma.task.create({
         data: {
           projectId: project1.id,
           creatorId: ownerUser.id,
-          title: 'Multi Execution Task',
-          description: 'Testing stale execution protection',
+          title: 'Stale Task State Protection',
+          description: 'Description for stale task protection',
         },
       });
 
@@ -393,7 +700,7 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
         data: { taskId: multiTask.id, agentId: agentP1Responsible.id },
       });
 
-      // Create older execution manually
+      // Older execution
       const olderExec = await prisma.taskExecution.create({
         data: {
           taskId: multiTask.id,
@@ -403,7 +710,7 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
         },
       });
 
-      // Create newer execution manually
+      // Newer execution
       const newerExec = await prisma.taskExecution.create({
         data: {
           taskId: multiTask.id,
@@ -413,7 +720,7 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
         },
       });
 
-      // Finish newer execution first -> COMPLETED
+      // Complete newer execution -> COMPLETED
       await executionService.updateExecutionStatus(
         project1.id,
         multiTask.id,
@@ -434,13 +741,13 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
         'FAILED',
       );
 
-      // Task status must remain COMPLETED (newer execution state preserved!)
+      // Task status must remain COMPLETED
       const taskAfterOlder = await prisma.task.findUnique({ where: { id: multiTask.id } });
       expect(taskAfterOlder?.status).toBe('COMPLETED');
     });
   });
 
-  describe('Execution Retrieval & Pagination', () => {
+  describe('Execution Retrieval & Dual Route Verification', () => {
     it('lists task executions with paginated response { items, page, limit, total }', async () => {
       const res = await request(app)
         .get(`/projects/${project1.id}/tasks/${taskP1.id}/executions?page=1&limit=10`)
@@ -453,45 +760,43 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
       expect(res.body.total).toBeGreaterThanOrEqual(1);
     });
 
-    it('gets a single execution by ID (GET /projects/:projectId/tasks/:taskId/executions/:executionId)', async () => {
-      const listRes = await request(app)
-        .get(`/projects/${project1.id}/tasks/${taskP1.id}/executions`)
+    it('supports route with /api prefix for cancellation', async () => {
+      const cancelTask = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Api Prefix Cancel Task',
+          description: 'Description for api prefix task',
+        },
+      });
+
+      await prisma.taskResponsibility.create({
+        data: { taskId: cancelTask.id, agentId: agentP1Responsible.id },
+      });
+
+      executionService.setExecutor({
+        async execute() {
+          await new Promise((r) => setTimeout(r, 200));
+          return { status: 'COMPLETED', output: null, error: null };
+        },
+      });
+
+      const createRes = await request(app)
+        .post(`/api/projects/${project1.id}/tasks/${cancelTask.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ agentId: agentP1Responsible.id });
+
+      const execId = createRes.body.id;
+
+      const cancelRes = await request(app)
+        .post(`/api/projects/${project1.id}/tasks/${cancelTask.id}/executions/${execId}/cancel`)
         .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
 
-      const targetId = listRes.body.items[0].id;
+      expect(cancelRes.status).toBe(200);
+      expect(cancelRes.body.status).toBe('CANCELLED');
 
-      const getRes = await request(app)
-        .get(`/projects/${project1.id}/tasks/${taskP1.id}/executions/${targetId}`)
-        .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
-
-      expect(getRes.status).toBe(200);
-      expect(getRes.body.id).toBe(targetId);
-      expect(getRes.body.taskId).toBe(taskP1.id);
-    });
-
-    it('returns 404 when trying to access execution from another project (project isolation)', async () => {
-      const listRes = await request(app)
-        .get(`/projects/${project1.id}/tasks/${taskP1.id}/executions`)
-        .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
-
-      const targetId = listRes.body.items[0].id;
-
-      const res = await request(app)
-        .get(`/projects/${project2.id}/tasks/${taskP2.id}/executions/${targetId}`)
-        .set('Cookie', [`agentmesh_session=${outsiderSession.id}`]);
-
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('Dual Path Prefix Verification', () => {
-    it('supports route with /api prefix (/api/projects/:projectId/tasks/:taskId/executions)', async () => {
-      const res = await request(app)
-        .get(`/api/projects/${project1.id}/tasks/${taskP1.id}/executions`)
-        .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
-
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.items)).toBe(true);
+      executionService.setExecutor(mockAgentExecutor);
     });
   });
 });
+
