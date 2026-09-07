@@ -718,6 +718,89 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
       expect(finalTask?.status).toBe('COMPLETED');
     });
 
+    it('Execution A finishing while Execution B becomes QUEUED/RUNNING ensures final agent status is BUSY', async () => {
+      const taskA = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Concurrency Task A',
+          description: 'Task A for agent busy concurrency test',
+        },
+      });
+
+      const taskB = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Concurrency Task B',
+          description: 'Task B for agent busy concurrency test',
+        },
+      });
+
+      await prisma.taskResponsibility.create({
+        data: { taskId: taskA.id, agentId: agentP1Responsible.id },
+      });
+      await prisma.taskResponsibility.create({
+        data: { taskId: taskB.id, agentId: agentP1Responsible.id },
+      });
+
+      let releaseA: () => void;
+      const promiseA = new Promise<void>((r) => (releaseA = r));
+
+      executionService.setExecutor({
+        async execute(req) {
+          if (req.taskId === taskA.id) {
+            await promiseA;
+          }
+          return { status: 'COMPLETED', output: { done: true }, error: null };
+        },
+      });
+
+      // Start Execution A (will pause at promiseA in RUNNING status)
+      const resA = await request(app)
+        .post(`/projects/${project1.id}/tasks/${taskA.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ agentId: agentP1Responsible.id });
+
+      const execAId = resA.body.id;
+
+      // Create Execution B as QUEUED and set agent BUSY
+      const queuedB = await prisma.taskExecution.create({
+        data: {
+          taskId: taskB.id,
+          agentId: agentP1Responsible.id,
+          status: 'QUEUED',
+        },
+      });
+
+      await prisma.agent.update({
+        where: { id: agentP1Responsible.id },
+        data: { status: 'BUSY' },
+      });
+
+      // Release Execution A so it finishes its pipeline and invokes syncAgentStatus()
+      releaseA!();
+      await waitForExecutionStatus(execAId);
+
+      // Even after Execution A finished and called syncAgentStatus(), Execution B is active in DB.
+      // Final agent status MUST be BUSY!
+      const agentState = await prisma.agent.findUnique({ where: { id: agentP1Responsible.id } });
+      expect(agentState?.status).toBe('BUSY');
+
+      // Cleanup Execution B
+      await executionService.cancelExecution(
+        project1.id,
+        taskB.id,
+        queuedB.id,
+        ownerUser.id,
+      );
+
+      const agentFinal = await waitForAgentStatus(agentP1Responsible.id, 'ONLINE');
+      expect(agentFinal?.status).toBe('ONLINE');
+
+      executionService.setExecutor(mockAgentExecutor);
+    });
+
     it('Multiple active executions on same agent: agent remains BUSY until all active executions complete/cancel', async () => {
       const multiTask1 = await prisma.task.create({
         data: {

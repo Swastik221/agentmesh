@@ -68,6 +68,22 @@ export class ExecutionService {
         where: { id: agentId },
         data: { status: 'ONLINE' },
       });
+
+      // Post-update re-check to guarantee zero race condition where an execution
+      // became active (QUEUED or RUNNING) concurrently during the ONLINE update window.
+      const recheckActiveCount = await prisma.taskExecution.count({
+        where: {
+          agentId,
+          status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
+        },
+      });
+
+      if (recheckActiveCount > 0) {
+        await prisma.agent.update({
+          where: { id: agentId },
+          data: { status: 'BUSY' },
+        });
+      }
     }
   }
 
@@ -126,6 +142,12 @@ export class ExecutionService {
         agent: true,
         task: true,
       },
+    });
+
+    // Mark agent BUSY immediately upon creating a QUEUED execution
+    await prisma.agent.update({
+      where: { id: data.agentId },
+      data: { status: 'BUSY' },
     });
 
     // Asynchronously trigger execution pipeline (fire-and-forget, zero unhandled rejections)
