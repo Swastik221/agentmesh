@@ -236,16 +236,26 @@ export class TaskService {
       throw new ConflictError('Agent is already assigned to this task');
     }
 
-    return await prisma.taskResponsibility.create({
-      data: {
-        taskId,
-        agentId: data.agentId,
-        role: data.role || null,
-      },
-      include: {
-        agent: true,
-      },
-    });
+    try {
+      return await prisma.taskResponsibility.create({
+        data: {
+          taskId,
+          agentId: data.agentId,
+          role: data.role || null,
+        },
+        include: {
+          agent: true,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictError('Agent is already assigned to this task');
+      }
+      throw error;
+    }
   }
 
   async listResponsibilities(projectId: string, taskId: string, userId: string) {
@@ -349,12 +359,22 @@ export class TaskService {
       throw new ConflictError('Dependency already exists');
     }
 
-    return await prisma.taskDependency.create({
-      data: {
-        taskId,
-        dependsOnTaskId: data.dependsOnTaskId,
-      },
-    });
+    try {
+      return await prisma.taskDependency.create({
+        data: {
+          taskId,
+          dependsOnTaskId: data.dependsOnTaskId,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictError('Dependency already exists');
+      }
+      throw error;
+    }
   }
 
   async listDependencies(projectId: string, taskId: string, userId: string) {

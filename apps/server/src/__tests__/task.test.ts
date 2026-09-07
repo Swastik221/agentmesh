@@ -485,6 +485,31 @@ describe('PRD #12 Task / Responsibility Engine Integration Tests', () => {
 
       expect(listRes.body.length).toBe(0);
     });
+
+    it('handles concurrent duplicate responsibility assignment attempts cleanly (exactly one 201 and one 409)', async () => {
+      const freshTaskRes = await request(app)
+        .post(`/projects/${project1.id}/tasks`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({
+          title: 'Task for Concurrent Responsibility Test',
+          description: 'Testing race condition handling',
+        });
+      const taskId = freshTaskRes.body.id;
+
+      const [res1, res2] = await Promise.all([
+        request(app)
+          .post(`/projects/${project1.id}/tasks/${taskId}/responsibilities`)
+          .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+          .send({ agentId: agentP1.id, role: 'backend' }),
+        request(app)
+          .post(`/projects/${project1.id}/tasks/${taskId}/responsibilities`)
+          .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+          .send({ agentId: agentP1.id, role: 'backend' }),
+      ]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([201, 409]);
+    });
   });
 
   describe('Task Dependencies', () => {
@@ -591,6 +616,34 @@ describe('PRD #12 Task / Responsibility Engine Integration Tests', () => {
         .set('Cookie', [`agentmesh_session=${ownerSession.id}`]);
 
       expect(listRes.body.length).toBe(0);
+    });
+
+    it('handles concurrent duplicate dependency creation attempts cleanly (exactly one 201 and one 409)', async () => {
+      const freshTask1 = await request(app)
+        .post(`/projects/${project1.id}/tasks`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ title: 'Task A Concurrent Dep', description: 'Testing race condition' });
+      const freshTask2 = await request(app)
+        .post(`/projects/${project1.id}/tasks`)
+        .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+        .send({ title: 'Task B Concurrent Dep', description: 'Testing race condition' });
+
+      const t1Id = freshTask1.body.id;
+      const t2Id = freshTask2.body.id;
+
+      const [res1, res2] = await Promise.all([
+        request(app)
+          .post(`/projects/${project1.id}/tasks/${t1Id}/dependencies`)
+          .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+          .send({ dependsOnTaskId: t2Id }),
+        request(app)
+          .post(`/projects/${project1.id}/tasks/${t1Id}/dependencies`)
+          .set('Cookie', [`agentmesh_session=${ownerSession.id}`])
+          .send({ dependsOnTaskId: t2Id }),
+      ]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([201, 409]);
     });
   });
 
