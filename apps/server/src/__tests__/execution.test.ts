@@ -393,9 +393,7 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
 
       expect(res.status).toBe(201);
 
-      await waitForExecutionStatus(res.body.id);
-
-      const agentAfter = await prisma.agent.findUnique({ where: { id: tempAgent.id } });
+      const agentAfter = await waitForAgentStatus(tempAgent.id, 'ONLINE');
       expect(agentAfter?.status).toBe('ONLINE');
     });
   });

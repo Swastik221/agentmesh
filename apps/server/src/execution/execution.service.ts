@@ -84,6 +84,11 @@ export class ExecutionService {
           data: { status: 'BUSY' },
         });
       }
+    } else {
+      await prisma.agent.update({
+        where: { id: agentId },
+        data: { status: 'BUSY' },
+      });
     }
   }
 
@@ -219,12 +224,28 @@ export class ExecutionService {
         data: { status: 'BUSY' },
       });
 
-      // 2. Invoke Executor
+      // 2. Resolve Workspace Execution Context
+      let context;
+      try {
+        const taskObj = await prisma.task.findUnique({
+          where: { id: execution.taskId },
+          select: { projectId: true },
+        });
+        if (taskObj) {
+          const { workspaceService } = await import('../workspace/workspace.service.js');
+          context = await workspaceService.getExecutionContext(taskObj.projectId, execution.taskId);
+        }
+      } catch (ctxErr) {
+        console.error(`Failed to resolve workspace context for execution ${executionId}:`, ctxErr);
+      }
+
+      // 3. Invoke Executor
       const result = await this.executor.execute({
         executionId: execution.id,
         taskId: execution.taskId,
         agentId: execution.agentId,
         input: rawInput,
+        context,
       });
 
       // 3. Race Safety Check: verify execution was not cancelled while executor was running

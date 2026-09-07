@@ -29,6 +29,18 @@ export class ConflictError extends AppError {
   }
 }
 
+export class FileConflictError extends AppError {
+  public readonly conflicts: Array<{ taskId: string; filePaths: string[] }>;
+
+  constructor(
+    conflicts: Array<{ taskId: string; filePaths: string[] }>,
+    message: string = 'Task conflicts with an active task modifying the same workspace files.',
+  ) {
+    super(message, 409, 'FILE_CONFLICT');
+    this.conflicts = conflicts;
+  }
+}
+
 export class ForbiddenError extends AppError {
   constructor(message: string = 'Forbidden') {
     super(message, 403, 'FORBIDDEN');
@@ -40,3 +52,4 @@ export class UnauthorizedError extends AppError {
     super(message, 401, 'UNAUTHORIZED');
   }
 }
+

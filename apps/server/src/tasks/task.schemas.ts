@@ -18,6 +18,7 @@ export const createTaskSchema = z.object({
       message: 'Description must be between 1 and 10000 characters',
     }),
   priority: taskPriorityEnum.optional().default(TaskPriority.MEDIUM),
+  filePaths: z.array(z.string()).optional(),
 });
 
 export const updateTaskSchema = z
@@ -38,13 +39,15 @@ export const updateTaskSchema = z
       .optional(),
     status: taskStatusEnum.optional(),
     priority: taskPriorityEnum.optional(),
+    filePaths: z.array(z.string()).optional(),
   })
   .refine(
     (data) =>
       data.title !== undefined ||
       data.description !== undefined ||
       data.status !== undefined ||
-      data.priority !== undefined,
+      data.priority !== undefined ||
+      data.filePaths !== undefined,
     {
       message: 'At least one field must be provided for update',
     },

@@ -49,6 +49,7 @@ model Project {
   agents       Agent[]
   brainEntries ProjectBrainEntry[]
   tasks        Task[]
+  workspace    ProjectWorkspace?
 
   @@index([ownerId])
   @@map("projects")
@@ -180,6 +181,7 @@ model Task {
   description String
   status      TaskStatus   @default(TODO)
   priority    TaskPriority @default(MEDIUM)
+  filePaths   String[]     @default([])
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -257,6 +259,19 @@ model TaskExecution {
   @@index([status])
   @@map("task_executions")
 }
+
+model ProjectWorkspace {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  rootPath  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_workspaces")
+}
+
 
 
 

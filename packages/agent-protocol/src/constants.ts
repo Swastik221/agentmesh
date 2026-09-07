@@ -6,6 +6,7 @@ export const AgentMeshMessageType = {
   AGENT_HANDSHAKE_REJECTED: 'agent.handshake.rejected',
   AGENT_STATUS: 'agent.status',
   AGENT_MESSAGE: 'agent.message',
+  TASK_STATUS: 'task.status',
   TASK_REQUEST: 'task.request',
   TASK_ACCEPTED: 'task.accepted',
   TASK_REJECTED: 'task.rejected',
