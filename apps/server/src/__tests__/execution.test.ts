@@ -17,9 +17,25 @@ async function waitForExecutionStatus(
     if (exec && targetStatuses.includes(exec.status)) {
       return exec;
     }
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 10));
   }
   return await prisma.taskExecution.findUnique({ where: { id: executionId } });
+}
+
+async function waitForAgentStatus(
+  agentId: string,
+  targetStatus: string,
+  timeoutMs = 2000,
+) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const agent = await prisma.agent.findUnique({ where: { id: agentId } });
+    if (agent && agent.status === targetStatus) {
+      return agent;
+    }
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  return await prisma.agent.findUnique({ where: { id: agentId } });
 }
 
 describe('PRD #13 Agent Execution Layer Integration Tests', () => {
@@ -399,10 +415,11 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
         data: { taskId: cancelTask.id, agentId: agentP1Responsible.id },
       });
 
-      // Inject a delayed executor so execution stays QUEUED/RUNNING long enough
+      let releaseExecutor: () => void;
+      const releasePromise = new Promise<void>((r) => (releaseExecutor = r));
       executionService.setExecutor({
         async execute() {
-          await new Promise((r) => setTimeout(r, 200));
+          await releasePromise;
           return { status: 'COMPLETED', output: null, error: null };
         },
       });
@@ -427,7 +444,8 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
       const updatedTask = await prisma.task.findUnique({ where: { id: cancelTask.id } });
       expect(updatedTask?.status).toBe('CANCELLED');
 
-      // Reset executor
+      // Unblock executor and reset
+      releaseExecutor!();
       executionService.setExecutor(mockAgentExecutor);
     });
 
@@ -504,9 +522,11 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
         data: { taskId: task.id, agentId: agentP1Responsible.id },
       });
 
+      let releaseExecutor: () => void;
+      const releasePromise = new Promise<void>((r) => (releaseExecutor = r));
       executionService.setExecutor({
         async execute() {
-          await new Promise((r) => setTimeout(r, 200));
+          await releasePromise;
           return { status: 'COMPLETED', output: null, error: null };
         },
       });
@@ -528,6 +548,7 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
 
       expect(secondCancel.status).toBe(409);
 
+      releaseExecutor!();
       executionService.setExecutor(mockAgentExecutor);
     });
 
@@ -599,9 +620,10 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
       expect(cancelRes.status).toBe(200);
       expect(cancelRes.body.status).toBe('CANCELLED');
 
-      // Now resolve executor promise
+      // Now resolve executor promise and wait for agent cleanup
       resolveExecutor!();
-      await new Promise((r) => setTimeout(r, 50));
+      const agentState = await waitForAgentStatus(agentP1Responsible.id, 'ONLINE');
+      expect(agentState?.status).toBe('ONLINE');
 
       // Re-query execution state: MUST remain CANCELLED
       const finalExec = await prisma.taskExecution.findUnique({ where: { id: execId } });
@@ -714,20 +736,18 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
       expect(create1.status).toBe(201);
       expect(create2.status).toBe(201);
 
-      // Finish first execution
+      // Finish first execution and wait for execution1 to complete
       finishFirstExec!();
-      await new Promise((r) => setTimeout(r, 50));
+      await waitForExecutionStatus(create1.body.id);
 
       // Agent must still be BUSY because execution 2 is running
       const agentMiddle = await prisma.agent.findUnique({ where: { id: agentP1Responsible.id } });
       expect(agentMiddle?.status).toBe('BUSY');
 
-      // Finish second execution
+      // Finish second execution and wait for execution2 and agent status sync to complete
       finishSecondExec!();
-      await new Promise((r) => setTimeout(r, 50));
-
-      // Now agent should be ONLINE
-      const agentFinal = await prisma.agent.findUnique({ where: { id: agentP1Responsible.id } });
+      await waitForExecutionStatus(create2.body.id);
+      const agentFinal = await waitForAgentStatus(agentP1Responsible.id, 'ONLINE');
       expect(agentFinal?.status).toBe('ONLINE');
 
       executionService.setExecutor(mockAgentExecutor);
@@ -821,9 +841,11 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
         data: { taskId: cancelTask.id, agentId: agentP1Responsible.id },
       });
 
+      let releaseExecutor: () => void;
+      const releasePromise = new Promise<void>((r) => (releaseExecutor = r));
       executionService.setExecutor({
         async execute() {
-          await new Promise((r) => setTimeout(r, 200));
+          await releasePromise;
           return { status: 'COMPLETED', output: null, error: null };
         },
       });
@@ -842,6 +864,7 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
       expect(cancelRes.status).toBe(200);
       expect(cancelRes.body.status).toBe('CANCELLED');
 
+      releaseExecutor!();
       executionService.setExecutor(mockAgentExecutor);
     });
   });
