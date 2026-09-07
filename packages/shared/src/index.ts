@@ -126,3 +126,74 @@ export interface ProjectBrainListResponseDTO {
   total: number;
 }
 
+export type TaskStatus =
+  | 'TODO'
+  | 'IN_PROGRESS'
+  | 'BLOCKED'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export interface TaskDTO {
+  id: string;
+  projectId: string;
+  creatorId: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  createdAt: string;
+  updatedAt: string;
+  creator?: UserDTO;
+  responsibilities?: TaskResponsibilityDTO[];
+  dependencies?: TaskDependencyDTO[];
+}
+
+export interface TaskResponsibilityDTO {
+  id: string;
+  taskId: string;
+  agentId: string;
+  role: string | null;
+  createdAt: string;
+  agent?: AgentDTO;
+}
+
+export interface TaskDependencyDTO {
+  id: string;
+  taskId: string;
+  dependsOnTaskId: string;
+  createdAt: string;
+}
+
+export interface TaskListResponseDTO {
+  items: TaskDTO[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface CreateTaskInput {
+  title: string;
+  description: string;
+  priority?: TaskPriority;
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+}
+
+export interface AssignTaskResponsibilityInput {
+  agentId: string;
+  role?: string;
+}
+
+export interface CreateTaskDependencyInput {
+  dependsOnTaskId: string;
+}
+
+
