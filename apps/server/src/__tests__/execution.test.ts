@@ -610,6 +610,53 @@ describe('PRD #13 Agent Execution Layer Integration Tests', () => {
       executionService.setExecutor(mockAgentExecutor);
     });
 
+    it('Cancellation race before RUNNING transition: cancellation winning before QUEUED -> RUNNING update stops pipeline', async () => {
+      const preRunningTask = await prisma.task.create({
+        data: {
+          projectId: project1.id,
+          creatorId: ownerUser.id,
+          title: 'Pre-RUNNING Cancellation Task',
+          description: 'Testing cancellation winning before RUNNING transition',
+        },
+      });
+
+      await prisma.taskResponsibility.create({
+        data: { taskId: preRunningTask.id, agentId: agentP1Responsible.id },
+      });
+
+      // Create a QUEUED execution directly in DB without triggering pipeline yet
+      const queuedExec = await prisma.taskExecution.create({
+        data: {
+          taskId: preRunningTask.id,
+          agentId: agentP1Responsible.id,
+          status: 'QUEUED',
+        },
+      });
+
+      // Cancel execution before runExecutionPipeline runs
+      await executionService.cancelExecution(
+        project1.id,
+        preRunningTask.id,
+        queuedExec.id,
+        ownerUser.id,
+      );
+
+      const dbBefore = await prisma.taskExecution.findUnique({ where: { id: queuedExec.id } });
+      expect(dbBefore?.status).toBe('CANCELLED');
+
+      // Now run the pipeline on the cancelled execution
+      await executionService.runExecutionPipeline(queuedExec.id, null);
+
+      // Verify that updateMany affects 0 rows, re-reads CANCELLED, and pipeline aborts without transitioning to RUNNING/COMPLETED
+      const dbAfter = await prisma.taskExecution.findUnique({ where: { id: queuedExec.id } });
+      expect(dbAfter?.status).toBe('CANCELLED');
+      expect(dbAfter?.startedAt).toBeNull();
+      expect(dbAfter?.completedAt).toBeDefined();
+
+      const agentState = await prisma.agent.findUnique({ where: { id: agentP1Responsible.id } });
+      expect(agentState?.status).toBe('ONLINE');
+    });
+
     it('Multiple active executions on same agent: agent remains BUSY until all active executions complete/cancel', async () => {
       const multiTask1 = await prisma.task.create({
         data: {

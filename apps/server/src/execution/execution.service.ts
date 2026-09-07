@@ -155,15 +155,29 @@ export class ExecutionService {
         return;
       }
 
-      // 1. Transition QUEUED -> RUNNING
-      this.validateStateTransition(execution.status, ExecutionStatus.RUNNING);
-      await prisma.taskExecution.update({
-        where: { id: executionId },
+      // 1. Atomic/conditional transition QUEUED -> RUNNING
+      const updateResult = await prisma.taskExecution.updateMany({
+        where: {
+          id: executionId,
+          status: ExecutionStatus.QUEUED,
+        },
         data: {
           status: ExecutionStatus.RUNNING,
           startedAt: new Date(),
         },
       });
+
+      if (updateResult.count === 0) {
+        // Conditional update affected 0 rows (execution is no longer QUEUED)
+        const currentExec = await prisma.taskExecution.findUnique({
+          where: { id: executionId },
+        });
+
+        if (currentExec?.status === ExecutionStatus.CANCELLED) {
+          await this.syncAgentStatus(execution.agentId);
+        }
+        return;
+      }
 
       // Update Task status -> IN_PROGRESS if latest execution
       const latestAtStart = await prisma.taskExecution.findFirst({
