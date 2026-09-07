@@ -364,6 +364,44 @@ describe('Shared Development Environment (PRD #14)', () => {
 
       expect(assignRes.body.error).toBe('FILE_CONFLICT');
     });
+
+    it('refetches fresh task state inside transaction during concurrent file-path mutation vs responsibility assignment', async () => {
+      // Task 1 is IN_PROGRESS on src/conflicting.ts
+      const task1 = await request(app)
+        .post(`/projects/${projectA.id}/tasks`)
+        .set('Cookie', userA.cookie)
+        .send({ title: 'Active Task', description: 'Desc 1', filePaths: ['src/conflicting.ts'] })
+        .expect(201);
+
+      await request(app)
+        .patch(`/projects/${projectA.id}/tasks/${task1.body.id}`)
+        .set('Cookie', userA.cookie)
+        .send({ status: 'IN_PROGRESS' })
+        .expect(200);
+
+      // Task 2 initially has safe filePaths (no conflict)
+      const task2 = await request(app)
+        .post(`/projects/${projectA.id}/tasks`)
+        .set('Cookie', userA.cookie)
+        .send({ title: 'Mutating Task', description: 'Desc 2', filePaths: ['src/safe.ts'] })
+        .expect(201);
+
+      // Trigger simultaneous task file-path mutation (adding conflicting path) and responsibility assignment
+      const [pathMutationRes, assignRes] = await Promise.all([
+        request(app)
+          .patch(`/projects/${projectA.id}/tasks/${task2.body.id}`)
+          .set('Cookie', userA.cookie)
+          .send({ filePaths: ['src/conflicting.ts'] }),
+        request(app)
+          .post(`/projects/${projectA.id}/tasks/${task2.body.id}/responsibilities`)
+          .set('Cookie', userA.cookie)
+          .send({ agentId: agentA.id }),
+      ]);
+
+      // At least one of the concurrent operations must detect the file conflict and fail with 409
+      const statuses = [pathMutationRes.status, assignRes.status];
+      expect(statuses).toContain(409);
+    });
   });
 
   describe('Workspace State Snapshot', () => {

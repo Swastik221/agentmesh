@@ -190,9 +190,17 @@ export class TaskService {
       // Execute PostgreSQL row lock on project tasks to guarantee concurrency safety
       await tx.$executeRaw`SELECT * FROM tasks WHERE "projectId" = ${projectId} FOR UPDATE`;
 
-      const targetStatus = data.status !== undefined ? data.status : task.status;
+      const freshTask = await tx.task.findUnique({
+        where: { id: taskId },
+      });
+
+      if (!freshTask || freshTask.projectId !== projectId) {
+        throw new NotFoundError('Task not found');
+      }
+
+      const targetStatus = data.status !== undefined ? data.status : freshTask.status;
       const targetFilePaths =
-        validatedFilePaths !== undefined ? validatedFilePaths : task.filePaths;
+        validatedFilePaths !== undefined ? validatedFilePaths : freshTask.filePaths;
 
       if (targetStatus === 'IN_PROGRESS') {
         await assertNoFileConflicts(projectId, taskId, targetFilePaths, tx);
@@ -284,8 +292,17 @@ export class TaskService {
       // Execute PostgreSQL row lock on project tasks to guarantee concurrency safety
       await tx.$executeRaw`SELECT * FROM tasks WHERE "projectId" = ${projectId} FOR UPDATE`;
 
-      // Assert no conflict with existing IN_PROGRESS tasks
-      await assertNoFileConflicts(projectId, taskId, task.filePaths, tx);
+      // Refetch target task inside transaction after acquiring row lock to ensure fresh DB state (filePaths)
+      const freshTask = await tx.task.findUnique({
+        where: { id: taskId },
+      });
+
+      if (!freshTask || freshTask.projectId !== projectId) {
+        throw new NotFoundError('Task not found');
+      }
+
+      // Assert no conflict with existing IN_PROGRESS tasks using fresh filePaths
+      await assertNoFileConflicts(projectId, taskId, freshTask.filePaths, tx);
 
       try {
         const responsibility = await tx.taskResponsibility.create({
