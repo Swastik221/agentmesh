@@ -84,6 +84,7 @@ model Agent {
   owner                User                 @relation("UserOwnedAgents", fields: [ownerId], references: [id], onDelete: Restrict)
   capabilities         AgentCapability[]
   taskResponsibilities TaskResponsibility[]
+  executions           TaskExecution[]
 
   @@index([projectId])
   @@index([ownerId])
@@ -187,6 +188,7 @@ model Task {
   responsibilities TaskResponsibility[]
   dependencies     TaskDependency[]     @relation("TaskDependencies")
   dependents       TaskDependency[]     @relation("TaskDependents")
+  executions       TaskExecution[]
 
   @@index([projectId])
   @@index([projectId, status])
@@ -225,6 +227,37 @@ model TaskDependency {
   @@index([dependsOnTaskId])
   @@map("task_dependencies")
 }
+
+enum ExecutionStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model TaskExecution {
+  id          String          @id @default(cuid())
+  taskId      String
+  agentId     String
+  status      ExecutionStatus @default(QUEUED)
+  input       Json?
+  output      Json?
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([agentId])
+  @@index([status])
+  @@map("task_executions")
+}
+
 
 
 

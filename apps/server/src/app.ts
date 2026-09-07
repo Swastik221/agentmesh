@@ -9,6 +9,7 @@ import agentCapabilityRouter from './routes/agent-capability.router.js';
 import authRouter from './auth/auth.routes.js';
 import projectBrainRouter from './project-brain/project-brain.routes.js';
 import taskRouter from './tasks/task.routes.js';
+import executionRouter from './execution/execution.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { config } from './config/index.js';
 
@@ -32,6 +33,7 @@ export const createApp = (): Express => {
   app.use('/', agentCapabilityRouter);
   app.use('/', projectBrainRouter);
   app.use('/', taskRouter);
+  app.use('/', executionRouter);
 
   app.use(errorHandler);
 

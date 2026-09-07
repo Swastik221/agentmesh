@@ -196,4 +196,40 @@ export interface CreateTaskDependencyInput {
   dependsOnTaskId: string;
 }
 
+export type ExecutionStatus =
+  | 'QUEUED'
+  | 'RUNNING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export interface TaskExecutionDTO {
+  id: string;
+  taskId: string;
+  agentId: string;
+  status: ExecutionStatus;
+  input?: Record<string, unknown> | null;
+  output?: Record<string, unknown> | null;
+  error?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  agent?: AgentDTO;
+  task?: TaskDTO;
+}
+
+export interface CreateTaskExecutionInput {
+  agentId: string;
+  input?: Record<string, unknown> | null;
+}
+
+export interface TaskExecutionListResponseDTO {
+  items: TaskExecutionDTO[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+
 
