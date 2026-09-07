@@ -84,6 +84,11 @@ export class ExecutionService {
           data: { status: 'BUSY' },
         });
       }
+    } else {
+      await prisma.agent.update({
+        where: { id: agentId },
+        data: { status: 'BUSY' },
+      });
     }
   }
 
