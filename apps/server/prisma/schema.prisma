@@ -30,6 +30,7 @@ model User {
   ownedAgents   Agent[]             @relation("UserOwnedAgents")
   authSessions  AuthSession[]
   brainEntries  ProjectBrainEntry[]
+  createdTasks  Task[]
 
   @@map("users")
 }
@@ -47,6 +48,7 @@ model Project {
   members      ProjectMember[]
   agents       Agent[]
   brainEntries ProjectBrainEntry[]
+  tasks        Task[]
 
   @@index([ownerId])
   @@map("projects")
@@ -78,9 +80,10 @@ model Agent {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  owner        User              @relation("UserOwnedAgents", fields: [ownerId], references: [id], onDelete: Restrict)
-  capabilities AgentCapability[]
+  project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner                User                 @relation("UserOwnedAgents", fields: [ownerId], references: [id], onDelete: Restrict)
+  capabilities         AgentCapability[]
+  taskResponsibilities TaskResponsibility[]
 
   @@index([projectId])
   @@index([ownerId])
@@ -151,5 +154,77 @@ model ProjectBrainEntry {
   @@index([authorId])
   @@map("project_brain_entries")
 }
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  projectId   String
+  creatorId   String
+  title       String
+  description String
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project          Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator          User                 @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  responsibilities TaskResponsibility[]
+  dependencies     TaskDependency[]     @relation("TaskDependencies")
+  dependents       TaskDependency[]     @relation("TaskDependents")
+
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([projectId, priority])
+  @@index([creatorId])
+  @@map("tasks")
+}
+
+model TaskResponsibility {
+  id        String   @id @default(cuid())
+  taskId    String
+  agentId   String
+  role      String?
+  createdAt DateTime @default(now())
+
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, agentId])
+  @@index([taskId])
+  @@index([agentId])
+  @@map("task_responsibilities")
+}
+
+model TaskDependency {
+  id              String   @id @default(cuid())
+  taskId          String
+  dependsOnTaskId String
+  createdAt       DateTime @default(now())
+
+  task          Task @relation("TaskDependencies", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnTask Task @relation("TaskDependents", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@index([taskId])
+  @@index([dependsOnTaskId])
+  @@map("task_dependencies")
+}
+
 
 
