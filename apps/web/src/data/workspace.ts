@@ -15,7 +15,7 @@ export const currentUser = {
 } as const;
 
 export const navItems: NavItem[] = [
-  { id: 'overview', label: 'Overview' },
+  { id: 'overview', label: 'Project' },
   { id: 'agents', label: 'Agents' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'files', label: 'Files' },
@@ -26,9 +26,9 @@ export const navItems: NavItem[] = [
 
 /** Placeholder project. There is no project switching yet. */
 export const currentProject = {
-  id: 'agentmesh-demo',
-  name: 'AgentMesh Demo Project',
-  slug: 'agentmesh-demo',
+  id: 'checkout-protocol',
+  name: 'Checkout protocol workspace',
+  slug: 'checkout-protocol',
 } as const;
 
 /**
