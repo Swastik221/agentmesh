@@ -39,11 +39,17 @@ function Panel({
   return (
     <g transform={`translate(${x} ${y})`}>
       <g className={`scene-panel ${className}`}>
-        <rect width="270" height="166" rx="10" fill="#0d1117" stroke="#314059" />
-        <path d="M0 39H270" stroke="#232c40" />
-        <circle cx="17" cy="20" r="3" fill="#f0b458" />
-        <circle cx="28" cy="20" r="3" fill="#3ddc97" />
-        <text x="43" y="24" fill="#e2e8f0" fontSize="12">
+        <rect
+          width="270"
+          height="166"
+          rx="10"
+          fill="var(--am-ink-900)"
+          stroke="var(--am-border-dark)"
+        />
+        <path d="M0 39H270" stroke="var(--am-border-dark)" />
+        <circle cx="17" cy="20" r="3" fill="var(--am-amber)" />
+        <circle cx="28" cy="20" r="3" fill="var(--am-green)" />
+        <text x="43" y="24" fill="var(--am-text-on-dark)" fontSize="12">
           {title}
         </text>
         {children}
@@ -247,7 +253,7 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                   key={i}
                   pathLength="1"
                   d={`M20 ${64 + i * 23}H${i % 2 ? 160 : 235}`}
-                  stroke={i % 2 ? '#a78bfa' : '#3ddc97'}
+                  stroke={i % 2 ? 'var(--am-purple)' : 'var(--am-green)'}
                   strokeWidth="4"
                 />
               ))}
@@ -258,7 +264,7 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                 <path
                   className="scene-editor-caret"
                   d="M20 145V158"
-                  stroke="#22d3ee"
+                  stroke="var(--am-cyan)"
                   strokeWidth="3"
                 />
               </g>
@@ -283,39 +289,57 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                 height="73"
                 rx="9"
                 fill="none"
-                stroke="#22d3ee"
+                stroke="var(--am-cyan)"
               />
-              <text className="scene-agent-waiting" x="820" y="415" fill="#94a3b8" fontSize="14">
+              <text
+                className="scene-agent-waiting"
+                x="820"
+                y="415"
+                fill="var(--am-technical-label)"
+                fontSize="14"
+              >
                 agent.waiting
               </text>
-              <text className="scene-agent-ready" x="820" y="415" fill="#e2e8f0" fontSize="14">
+              <text
+                className="scene-agent-ready"
+                x="820"
+                y="415"
+                fill="var(--am-text-on-dark)"
+                fontSize="14"
+              >
                 agent.ready
               </text>
               <text
                 className="scene-agent-capabilities"
                 x="820"
                 y="438"
-                fill="#8b98ad"
+                fill="var(--am-text-muted)"
                 fontSize="10"
               >
                 Capabilities declared
               </text>
-              <circle className="scene-agent-indicator" cx="934" cy="410" r="4" fill="#3ddc97" />
+              <circle
+                className="scene-agent-indicator"
+                cx="934"
+                cy="410"
+                r="4"
+                fill="var(--am-green)"
+              />
             </g>
             <path
               className="scene-agent-connection"
               pathLength="1"
               d={AGENT_WIRE}
-              stroke="#22d3ee"
+              stroke="var(--am-cyan)"
               strokeWidth="2"
             />
             {/* The scroll-driven packet: it carries the first signal across as
                 you scroll, and fades into the card's own indicator on arrival. */}
-            <circle className="scene-data-packet" r="4" fill="#3ddc97" />
+            <circle className="scene-data-packet" r="4" fill="var(--am-green)" />
             {/* The settled state's traffic, on its own clock so the finished
                 scene is never completely still. It runs from load and is only
                 ever revealed by opacity, so it has nothing to switch on. */}
-            <circle className="scene-data-loop" r="3.5" fill="#3ddc97">
+            <circle className="scene-data-loop" r="3.5" fill="var(--am-green)">
               <animateMotion dur="4.5s" repeatCount="indefinite" path={AGENT_WIRE} />
             </circle>
           </>
@@ -324,13 +348,13 @@ export function ChapterScene({ role }: { role: SceneRole }) {
         {role === 'control' && (
           <>
             <Panel x={435} y={105} title="Task scope / AM-115" className="control-scope">
-              <text x="19" y="75" fill="#3ddc97" fontSize="12">
+              <text x="19" y="75" fill="var(--am-green)" fontSize="12">
                 ✓ src/payment.ts
               </text>
-              <text x="19" y="103" fill="#f0b458" fontSize="12">
+              <text x="19" y="103" fill="var(--am-amber)" fontSize="12">
                 × .env — excluded
               </text>
-              <text x="19" y="133" fill="#8b98ad" fontSize="10">
+              <text x="19" y="133" fill="var(--am-text-muted)" fontSize="10">
                 Review before execution
               </text>
             </Panel>
@@ -338,61 +362,69 @@ export function ChapterScene({ role }: { role: SceneRole }) {
               className="control-check-path"
               pathLength="1"
               d="M570 272V288C570 309 614 311 650 320"
-              stroke="#22d3ee"
+              stroke="var(--am-cyan)"
               strokeWidth="1.5"
               strokeDasharray="4 7"
             />
             <path
               className="control-boundary-ghost"
               d="M748 92V500"
-              stroke="#f0b458"
+              stroke="var(--am-amber)"
               strokeWidth="1"
             />
             <path
               className="control-boundary"
               pathLength="1"
               d="M748 92V500"
-              stroke="#f0b458"
+              stroke="var(--am-amber)"
               strokeWidth="3"
             />
             <text
               className="control-boundary-label"
               x="764"
               y="116"
-              fill="#f0b458"
+              fill="var(--am-amber)"
               fontSize="9"
               letterSpacing="2"
             >
               HUMAN CONTROL
             </text>
             <g className="scene-request">
-              <rect x="0" y="0" width="160" height="58" rx="7" fill="#2a241b" stroke="#f0b458" />
-              <text x="14" y="19" fill="#8b98ad" fontSize="8" letterSpacing="1.3">
+              <rect
+                x="0"
+                y="0"
+                width="160"
+                height="58"
+                rx="7"
+                fill="#2a241b"
+                stroke="var(--am-amber)"
+              />
+              <text x="14" y="19" fill="var(--am-text-muted)" fontSize="8" letterSpacing="1.3">
                 AGENT ACTION
               </text>
-              <text x="14" y="40" fill="#f0b458" fontSize="12">
+              <text x="14" y="40" fill="var(--am-amber)" fontSize="12">
                 deploy.request
               </text>
-              <circle cx="146" cy="30" r="4" fill="#f0b458" />
+              <circle cx="146" cy="30" r="4" fill="var(--am-amber)" />
             </g>
             <g className="control-human-token">
-              <circle cx="800" cy="190" r="23" fill="#172638" stroke="#a78bfa" />
+              <circle cx="800" cy="190" r="23" fill="#172638" stroke="var(--am-purple)" />
               <path d="M800 178V191" stroke="#f8f5ec" strokeWidth="2" />
               <circle cx="800" cy="198" r="1.8" fill="#f8f5ec" />
-              <text x="832" y="186" fill="#c4b5fd" fontSize="9">
+              <text x="832" y="186" fill="var(--am-purple)" fontSize="9">
                 DEV1.ETH
               </text>
-              <text x="832" y="202" fill="#8b98ad" fontSize="8">
+              <text x="832" y="202" fill="var(--am-text-muted)" fontSize="8">
                 owner decision
               </text>
             </g>
             <g className="control-approval-state" transform="translate(446 446)">
-              <rect width="230" height="45" rx="7" fill="#151f29" stroke="#f0b458" />
-              <circle cx="17" cy="15" r="3" fill="#f0b458" />
-              <text x="29" y="18" fill="#f0b458" fontSize="9" letterSpacing="1.1">
+              <rect width="230" height="45" rx="7" fill="#151f29" stroke="var(--am-amber)" />
+              <circle cx="17" cy="15" r="3" fill="var(--am-amber)" />
+              <text x="29" y="18" fill="var(--am-amber)" fontSize="9" letterSpacing="1.1">
                 ACTION PAUSED
               </text>
-              <text x="17" y="34" fill="#b8c1c8" fontSize="8">
+              <text x="17" y="34" fill="var(--am-technical-label)" fontSize="8">
                 Owner decision required
               </text>
             </g>
@@ -408,13 +440,13 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                 height="48"
                 rx="9"
                 fill="#101722"
-                stroke="#a78bfa"
+                stroke="var(--am-purple)"
               />
-              <circle cx="499" cy="139" r="5" fill="#a78bfa" />
-              <text x="513" y="134" fill="#8b98ad" fontSize="8" letterSpacing="1.2">
+              <circle cx="499" cy="139" r="5" fill="var(--am-purple)" />
+              <text x="513" y="134" fill="var(--am-text-muted)" fontSize="8" letterSpacing="1.2">
                 WALLET CONNECTED
               </text>
-              <text x="513" y="149" fill="#e2e8f0" fontSize="11">
+              <text x="513" y="149" fill="var(--am-text-on-dark)" fontSize="11">
                 0x1a2b...9f3c
               </text>
             </g>
@@ -422,7 +454,7 @@ export function ChapterScene({ role }: { role: SceneRole }) {
               className="identity-resolve-line"
               pathLength="1"
               d="M592 163V192"
-              stroke="#a78bfa"
+              stroke="var(--am-purple)"
               strokeWidth="1.5"
             />
             <g className="identity-owner">
@@ -432,25 +464,25 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                 width="284"
                 height="98"
                 rx="10"
-                fill="#0d1117"
-                stroke="#a78bfa"
+                fill="var(--am-ink-900)"
+                stroke="var(--am-purple)"
               />
-              <circle cx="477" cy="222" r="14" fill="#1b2034" stroke="#a78bfa" />
-              <text x="473" y="227" fill="#c4b5fd" fontSize="12">
+              <circle cx="477" cy="222" r="14" fill="#1b2034" stroke="var(--am-purple)" />
+              <text x="473" y="227" fill="var(--am-purple)" fontSize="12">
                 A
               </text>
-              <text x="500" y="216" fill="#8b98ad" fontSize="8" letterSpacing="1.1">
+              <text x="500" y="216" fill="var(--am-text-muted)" fontSize="8" letterSpacing="1.1">
                 HUMAN OWNER
               </text>
-              <text x="500" y="237" fill="#e2e8f0" fontSize="14">
+              <text x="500" y="237" fill="var(--am-text-on-dark)" fontSize="14">
                 dev1.eth
               </text>
               <g className="identity-verified">
-                <circle cx="474" cy="266" r="3" fill="#3ddc97" />
-                <text x="484" y="269" fill="#3ddc97" fontSize="8">
+                <circle cx="474" cy="266" r="3" fill="var(--am-green)" />
+                <text x="484" y="269" fill="var(--am-green)" fontSize="8">
                   ENS VERIFIED
                 </text>
-                <text x="630" y="269" fill="#8b98ad" fontSize="8">
+                <text x="630" y="269" fill="var(--am-text-muted)" fontSize="8">
                   owns this identity
                 </text>
               </g>
@@ -459,7 +491,7 @@ export function ChapterScene({ role }: { role: SceneRole }) {
               className="identity-branch-line"
               pathLength="1"
               d="M592 290V340"
-              stroke="#a78bfa"
+              stroke="var(--am-purple)"
               strokeWidth="1.5"
             />
             <circle
@@ -467,8 +499,8 @@ export function ChapterScene({ role }: { role: SceneRole }) {
               cx="592"
               cy="307"
               r="4"
-              fill="#0a0e17"
-              stroke="#a78bfa"
+              fill="var(--am-ink-950)"
+              stroke="var(--am-purple)"
             />
             <g className="identity-agent">
               <rect
@@ -477,18 +509,18 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                 width="326"
                 height="152"
                 rx="10"
-                fill="#0d1117"
-                stroke="#232c40"
+                fill="var(--am-ink-900)"
+                stroke="var(--am-border-dark)"
               />
-              <path d="M470 384H796" stroke="#232c40" />
-              <circle cx="493" cy="362" r="4" fill="#a78bfa" />
-              <text x="506" y="358" fill="#8b98ad" fontSize="8" letterSpacing="1.1">
+              <path d="M470 384H796" stroke="var(--am-border-dark)" />
+              <circle cx="493" cy="362" r="4" fill="var(--am-purple)" />
+              <text x="506" y="358" fill="var(--am-text-muted)" fontSize="8" letterSpacing="1.1">
                 AGENT SUBNAME
               </text>
-              <text x="506" y="375" fill="#e2e8f0" fontSize="12">
+              <text x="506" y="375" fill="var(--am-text-on-dark)" fontSize="12">
                 codex.dev1.eth
               </text>
-              <text x="681" y="366" fill="#c4b5fd" fontSize="9">
+              <text x="681" y="366" fill="var(--am-purple)" fontSize="9">
                 Orion / Codex
               </text>
               <g className="identity-capability identity-capability-1">
@@ -499,9 +531,9 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                   height="23"
                   rx="11.5"
                   fill="#17152a"
-                  stroke="#a78bfa"
+                  stroke="var(--am-purple)"
                 />
-                <text x="506" y="416" fill="#c4b5fd" fontSize="8">
+                <text x="506" y="416" fill="var(--am-purple)" fontSize="8">
                   frontend
                 </text>
               </g>
@@ -513,9 +545,9 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                   height="23"
                   rx="11.5"
                   fill="#101d1a"
-                  stroke="#3ddc97"
+                  stroke="var(--am-green)"
                 />
-                <text x="584" y="416" fill="#3ddc97" fontSize="8">
+                <text x="584" y="416" fill="var(--am-green)" fontSize="8">
                   repo:read
                 </text>
               </g>
@@ -527,9 +559,9 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                   height="23"
                   rx="11.5"
                   fill="#101d1a"
-                  stroke="#3ddc97"
+                  stroke="var(--am-green)"
                 />
-                <text x="668" y="416" fill="#3ddc97" fontSize="8">
+                <text x="668" y="416" fill="var(--am-green)" fontSize="8">
                   task:claim
                 </text>
               </g>
@@ -541,14 +573,20 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                   height="25"
                   rx="12.5"
                   fill="#2a241b"
-                  stroke="#f0b458"
+                  stroke="var(--am-amber)"
                 />
-                <circle cx="505" cy="447.5" r="3" fill="#f0b458" />
-                <text x="516" y="451" fill="#f0b458" fontSize="8">
+                <circle cx="505" cy="447.5" r="3" fill="var(--am-amber)" />
+                <text x="516" y="451" fill="var(--am-amber)" fontSize="8">
                   deploy:approval-required
                 </text>
               </g>
-              <text className="identity-scope-note" x="490" y="480" fill="#8b98ad" fontSize="8">
+              <text
+                className="identity-scope-note"
+                x="490"
+                y="480"
+                fill="var(--am-text-muted)"
+                fontSize="8"
+              >
                 Scoped by dev1.eth · agent cannot expand permissions
               </text>
             </g>
@@ -563,20 +601,20 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                 width="245"
                 height="126"
                 rx="10"
-                fill="#0d1117"
-                stroke="#314059"
+                fill="var(--am-ink-900)"
+                stroke="var(--am-border-dark)"
               />
-              <path d="M475 141H720" stroke="#232c40" />
-              <circle cx="492" cy="123" r="3" fill="#f0b458" />
-              <circle cx="503" cy="123" r="3" fill="#3ddc97" />
-              <text x="518" y="127" fill="#e2e8f0" fontSize="10">
+              <path d="M475 141H720" stroke="var(--am-border-dark)" />
+              <circle cx="492" cy="123" r="3" fill="var(--am-amber)" />
+              <circle cx="503" cy="123" r="3" fill="var(--am-green)" />
+              <text x="518" y="127" fill="var(--am-text-on-dark)" fontSize="10">
                 Local change / src/checkout.ts
               </text>
               <text
                 className="developer-code developer-code-1"
                 x="493"
                 y="164"
-                fill="#8b98ad"
+                fill="var(--am-text-muted)"
                 fontSize="9"
               >
                 01 const payment = validate(input)
@@ -585,7 +623,7 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                 className="developer-code developer-code-2"
                 x="493"
                 y="184"
-                fill="#3ddc97"
+                fill="var(--am-green)"
                 fontSize="9"
               >
                 02 + publishArtifact(payment)
@@ -594,7 +632,7 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                 className="developer-code developer-code-3"
                 x="493"
                 y="204"
-                fill="#22d3ee"
+                fill="var(--am-cyan)"
                 fontSize="9"
               >
                 03 save → Orion
@@ -604,39 +642,39 @@ export function ChapterScene({ role }: { role: SceneRole }) {
               className="developer-editor-link"
               pathLength="1"
               d="M598 231V251C598 268 574 271 563 278"
-              stroke="#22d3ee"
+              stroke="var(--am-cyan)"
               strokeWidth="1.5"
             />
             <path
               className="developer-event-spine"
               pathLength="1"
               d="M737 159V495H758"
-              stroke="#314059"
+              stroke="var(--am-border-dark)"
               strokeWidth="1.5"
             />
             {[
-              ['TASK_PROPOSED', 'AM-115 · Orion / Codex', '#a78bfa'],
-              ['ARTIFACT_PUBLISHED', 'payment-api.json · v1', '#22d3ee'],
-              ['REVIEW_REQUESTED', 'owner · dev1.eth', '#f0b458'],
+              ['TASK_PROPOSED', 'AM-115 · Orion / Codex', 'var(--am-purple)'],
+              ['ARTIFACT_PUBLISHED', 'payment-api.json · v1', 'var(--am-cyan)'],
+              ['REVIEW_REQUESTED', 'owner · dev1.eth', 'var(--am-amber)'],
             ].map(([label, detail, color], i) => {
               const y = 125 + i * 118;
               return (
                 <g key={label} className={`developer-event developer-event-${i + 1}`}>
                   <path d={`M737 ${y + 34}H758`} stroke={color} strokeWidth="1.5" />
-                  <circle cx="737" cy={y + 34} r="4" fill="#0a0e17" stroke={color} />
+                  <circle cx="737" cy={y + 34} r="4" fill="var(--am-ink-950)" stroke={color} />
                   <rect
                     x="758"
                     y={y}
                     width="220"
                     height="69"
                     rx="8"
-                    fill="#0d1117"
+                    fill="var(--am-ink-900)"
                     stroke={color}
                   />
                   <text x="775" y={y + 27} fill={color} fontSize="10">
                     {label}
                   </text>
-                  <text x="775" y={y + 49} fill="#8b98ad" fontSize="8">
+                  <text x="775" y={y + 49} fill="var(--am-text-muted)" fontSize="8">
                     {detail}
                   </text>
                 </g>
@@ -646,7 +684,7 @@ export function ChapterScene({ role }: { role: SceneRole }) {
               className="developer-origin-link"
               pathLength="1"
               d="M642 351C690 351 696 159 737 159"
-              stroke="#a78bfa"
+              stroke="var(--am-purple)"
               strokeWidth="1.5"
             />
             <g className="developer-trace">
@@ -657,16 +695,16 @@ export function ChapterScene({ role }: { role: SceneRole }) {
                 height="67"
                 rx="8"
                 fill="#101722"
-                stroke="#3ddc97"
+                stroke="var(--am-green)"
               />
-              <circle cx="775" cy="490" r="3.5" fill="#3ddc97" />
-              <text x="787" y="493" fill="#3ddc97" fontSize="8" letterSpacing="1.1">
+              <circle cx="775" cy="490" r="3.5" fill="var(--am-green)" />
+              <text x="787" y="493" fill="var(--am-green)" fontSize="8" letterSpacing="1.1">
                 TRACE COMPLETE
               </text>
-              <text x="775" y="511" fill="#b8c1c8" fontSize="7.5">
+              <text x="775" y="511" fill="var(--am-technical-label)" fontSize="7.5">
                 dev1.eth · Orion · AM-115
               </text>
-              <text x="775" y="526" fill="#8b98ad" fontSize="7.5">
+              <text x="775" y="526" fill="var(--am-text-muted)" fontSize="7.5">
                 payment-api.json · v1 · inspectable ✓
               </text>
             </g>
@@ -674,8 +712,12 @@ export function ChapterScene({ role }: { role: SceneRole }) {
         )}
         {role === 'questions' && (
           <g className="scene-float-a">
-            <path d="M330 110H595V225H435L398 259V225H330Z" fill="#182a37" stroke="#3ddc97" />
-            <text x="445" y="191" fill="#3ddc97" fontSize="65">
+            <path
+              d="M330 110H595V225H435L398 259V225H330Z"
+              fill="#182a37"
+              stroke="var(--am-green)"
+            />
+            <text x="445" y="191" fill="var(--am-green)" fontSize="65">
               ?
             </text>
           </g>
@@ -686,17 +728,17 @@ export function ChapterScene({ role }: { role: SceneRole }) {
               className="scene-draw"
               pathLength="1"
               d="M250 330C425 200 575 440 750 330"
-              stroke="#22d3ee"
+              stroke="var(--am-cyan)"
               strokeWidth="3"
             />
             <g className="scene-mesh">
               <path
                 d="M500 250L550 280V340L500 370L450 340V280Z"
                 fill="#172739"
-                stroke="#a78bfa"
+                stroke="var(--am-purple)"
                 strokeWidth="2"
               />
-              <text x="474" y="318" fill="#e2e8f0" fontSize="15">
+              <text x="474" y="318" fill="var(--am-text-on-dark)" fontSize="15">
                 MESH
               </text>
             </g>

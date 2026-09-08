@@ -11,20 +11,20 @@
   min-height: 520px;
   max-height: 920px;
   padding: 34px 38px;
-  border: 1px solid #232c40;
-  background: #0a0e17;
-  color: #e2e8f0;
+  border: 1px solid var(--am-border-dark);
+  background: var(--am-ink-950);
+  color: var(--am-text-on-dark);
 }
 .landing .story-cover .chapter-heading h2 {
-  color: #e2e8f0;
+  color: var(--am-text-on-dark);
   font-size: clamp(65px, 7.2vw, 112px);
   max-width: 80%;
 }
 .landing .story-cover .chapter-heading h2 sup {
-  color: #a78bfa;
+  color: var(--am-purple);
 }
 .landing .story-cover .chapter-heading > .eyebrow {
-  color: #8b98ad;
+  color: var(--am-text-muted);
 }
 .story-cover .chapter-cover-line {
   width: 38%;
@@ -36,7 +36,7 @@
   font-size: clamp(30px, 3vw, 46px);
 }
 .story-cover .chapter-cover-line > span {
-  color: #8b98ad;
+  color: var(--am-text-muted);
   font-size: 9px;
   line-height: 1.8;
 }
@@ -203,7 +203,7 @@
 }
 .scene--control .coder-control-light {
   opacity: calc(0.45 + var(--control-press) * 0.55);
-  filter: drop-shadow(0 0 calc(var(--control-press) * 6px) #f0b458);
+  filter: drop-shadow(0 0 calc(var(--control-press) * 6px) var(--am-amber));
 }
 .scene--identity .scene-character {
   width: 23%;
@@ -672,8 +672,8 @@
   position: relative;
   overflow: hidden;
   cursor: pointer;
-  background: #0a0e17;
-  color: #e2e8f0;
+  background: var(--am-ink-950);
+  color: var(--am-text-on-dark);
   scroll-margin-top: 0;
 }
 .workspace-story-heading {
@@ -691,22 +691,22 @@
   font-weight: 500;
 }
 .workspace-story-heading h2 em {
-  color: #a78bfa;
+  color: var(--am-purple);
 }
 .workspace-story-heading .eyebrow {
-  color: #8b98ad;
+  color: var(--am-text-muted);
 }
 .workspace-local {
   margin-left: auto;
   font: 10px var(--am-font-mono);
-  color: #8b98ad;
+  color: var(--am-text-muted);
 }
 .workspace-local i {
   display: inline-block;
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #3ddc97;
+  background: var(--am-green);
   margin-right: 6px;
 }
 .scroll-canvas {
@@ -720,8 +720,8 @@
   display: none;
 }
 .scroll-canvas .react-flow__attribution {
-  background: #0d1117;
-  color: #8b98ad;
+  background: var(--am-ink-900);
+  color: var(--am-text-muted);
 }
 .scroll-canvas .react-flow__attribution a {
   color: inherit;
@@ -737,7 +737,7 @@
   align-items: flex-start;
   gap: 1px;
   pointer-events: none;
-  color: #a78bfa;
+  color: var(--am-purple);
   z-index: 10;
   font: 13px var(--am-font-sans);
   transform-origin: 5px 5px;
@@ -747,7 +747,7 @@
 .workspace-cursor span {
   margin-top: 16px;
   padding: 4px 9px;
-  background: #a78bfa;
+  background: var(--am-purple);
   color: #131a27;
   border-radius: 4px;
   white-space: nowrap;
@@ -758,18 +758,18 @@
   font-size: 10px;
 }
 .workspace-cursor.cursor-1 {
-  color: #3ddc97;
+  color: var(--am-teal);
 }
 .workspace-cursor.cursor-1 span {
-  background: #3ddc97;
-  box-shadow: 0 0 0 calc(var(--cursor-hold) * 3px) rgb(61 220 151 / 22%);
+  background: var(--am-teal);
+  box-shadow: 0 0 0 calc(var(--cursor-hold) * 3px) rgb(36 158 145 / 22%);
 }
 .canvas-schema-packet {
   position: absolute;
   top: 0;
   left: 0;
   padding: 9px 13px;
-  border: 1px solid #3ddc97;
+  border: 1px solid var(--am-green);
   border-radius: 5px;
   background: #17362f;
   color: #c3eddf;
@@ -788,11 +788,11 @@
   font-size: 15px;
 }
 .workspace-story-footer > span {
-  color: #8b98ad;
+  color: var(--am-text-muted);
   font: 9px var(--am-font-mono);
 }
 .workspace-story-footer > div {
-  background: #232c40;
+  background: var(--am-border-dark);
   height: 2px;
   margin-top: 16px;
 }
@@ -800,7 +800,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  background: #22d3ee;
+  background: var(--am-cyan);
   transform-origin: left;
 }
 .workspace-inspector {
@@ -1017,7 +1017,7 @@
   filter: drop-shadow(0 0 calc(var(--draw) * 7px) rgb(34 211 238 / 55%));
 }
 .scroll-canvas .canvas-drawing-edge {
-  stroke: #22d3ee;
+  stroke: var(--am-cyan);
   stroke-width: 2;
 }
 .scroll-canvas .canvas-edge-pulse {
@@ -1083,11 +1083,11 @@
    text change is what made the terminals blink under a scrubbed scroll. */
 .landing .landing-header .landing-button.primary {
   background: #f8f5ec;
-  color: #151e24;
+  color: var(--am-ink-950);
   opacity: 1;
 }
 .landing .landing-header.header-paper .landing-button.primary {
-  background: #151e24;
+  background: var(--am-ink-950);
   color: #f8f5ec;
 }
 .scene-before {
@@ -1160,10 +1160,10 @@
 /* A single cursor grip drives the terminal; selection adds no separate translation. */
 .scroll-canvas .scripted-agent {
   transition: none !important;
-  --owner-color: #a78bfa;
+  --owner-color: var(--am-purple);
 }
 .scroll-canvas .owner-swastik {
-  --owner-color: #3ddc97;
+  --owner-color: var(--am-teal);
 }
 /* Held state is a 0-1 ring rather than a swapped border colour, so taking
    hold of a terminal fades in with the grip instead of switching on. */
@@ -1190,13 +1190,13 @@
    nor the caption reflows when the wording hands over. */
 .canvas-attribution {
   position: absolute;
-  color: #a78bfa;
+  color: var(--am-purple);
   font: 11px monospace;
   white-space: nowrap;
   pointer-events: none;
 }
 .canvas-attribution.cursor-1 {
-  color: #3ddc97;
+  color: var(--am-teal);
 }
 .canvas-attribution-lines,
 .canvas-task-event {
@@ -1211,13 +1211,13 @@
   border: 1px solid currentColor;
   border-radius: 999px;
   padding: 6px 10px;
-  background: #0d1117;
+  background: var(--am-ink-900);
 }
 .canvas-task-event {
   position: absolute;
   left: 20px;
   bottom: 0;
-  color: #3ddc97;
+  color: var(--am-green);
   font: 11px monospace;
   pointer-events: none;
 }

@@ -14,8 +14,8 @@
   height: 100svh;
   overflow: hidden;
   isolation: isolate;
-  background: #0a0e17;
-  color: #e2e8f0;
+  background: var(--am-ink-950);
+  color: var(--am-text-on-dark);
   scroll-margin-top: 0;
 }
 .intro-coder {
@@ -55,8 +55,8 @@
   width: 100%;
 }
 .intro-agent .mini-terminal {
-  background: #0d1117;
-  border: 1px solid #232c40;
+  background: var(--am-ink-900);
+  border: 1px solid var(--am-border-dark);
   border-radius: 9px;
   box-shadow: none;
 }
@@ -64,7 +64,7 @@
   min-height: 68px;
   padding: 16px 22px;
   gap: 10px;
-  border-color: #232c40;
+  border-color: var(--am-border-dark);
 }
 .intro-agent .mini-title strong {
   font-size: clamp(18px, 1.6vw, 25px);
@@ -91,7 +91,11 @@
 .intro-agent .owner-dot {
   width: 30px;
   height: 30px;
-  border-color: #a78bfa;
+  border-color: var(--am-purple);
+}
+.intro-agent--right .owner-dot {
+  color: var(--am-teal);
+  border-color: var(--am-teal);
 }
 .intro-agent .terminal-caret {
   animation: none;
@@ -108,14 +112,14 @@
 .intro-wire,
 .intro-wire-ember {
   fill: none;
-  stroke: #22d3ee;
+  stroke: var(--am-cyan);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
 }
 .intro-wire-ember {
-  stroke: #f0b458;
+  stroke: var(--am-amber);
   stroke-width: 4;
   stroke-dasharray: 0.12 0.88;
   opacity: 0;
@@ -130,7 +134,7 @@
 }
 .intro-border rect {
   fill: none;
-  stroke: #f0b458;
+  stroke: var(--am-amber);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-dasharray: 0.16 0.84;
@@ -154,8 +158,8 @@
     circle,
     #eafaff 0%,
     #a7edf2c9 5%,
-    #22d3ee59 17%,
-    #3ddc971a 35%,
+    rgb(43 169 194 / 35%) 17%,
+    rgb(53 201 139 / 10%) 35%,
     transparent 60%
   );
   border-radius: 50%;
@@ -177,12 +181,12 @@
   cursor: grab;
 }
 .intro-workspace .am-node {
-  background: #0d1117;
-  border-color: #232c40;
+  background: var(--am-ink-900);
+  border-color: var(--am-border-dark);
 }
 .intro-workspace .react-flow__attribution {
-  background: #0d1117;
-  color: #8b98ad;
+  background: var(--am-ink-900);
+  color: var(--am-text-muted);
 }
 .intro-workspace .react-flow__attribution a {
   color: inherit;
@@ -190,7 +194,7 @@
 .landing-introduction {
   min-height: 600px;
   padding: 150px 6% 110px;
-  background: #0a0e17;
+  background: var(--am-ink-950);
   text-align: center;
 }
 .landing-introduction .hero-copy {
@@ -206,7 +210,7 @@
   font-size: clamp(60px, 7.5vw, 112px);
 }
 .landing-introduction h1 em {
-  color: #a78bfa;
+  color: var(--am-purple);
 }
 .landing-introduction .hero-copy > p {
   max-width: 600px;

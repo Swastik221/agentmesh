@@ -1,95 +1,259 @@
 /* Supplied shared-canvas design, scoped to the existing React Flow scene.
    ScrollTrigger supplies 420vh of pin spacing plus the 100vh viewport. */
-.landing .workspace-scroll { color: #f8fafc; contain: layout paint; }
+.landing .workspace-scroll {
+  color: var(--am-text-on-dark);
+  contain: layout paint;
+}
 .workspace-scroll .workspace-story-heading {
-  top: max(106px, 8vh); left: 5vw; right: 5vw; z-index: 30;
-  display: grid; grid-template-columns: 240px 1fr 260px;
-  align-items: center; gap: 24px;
+  top: max(106px, 8vh);
+  left: 5vw;
+  right: 5vw;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: 240px 1fr 260px;
+  align-items: center;
+  gap: 24px;
 }
 .workspace-scroll .workspace-story-heading .eyebrow {
-  color: #94a3b8; font: 13px var(--am-font-mono); letter-spacing: .22em;
+  color: var(--am-technical-label);
+  font: 13px var(--am-font-mono);
+  letter-spacing: 0.22em;
 }
 .workspace-scroll .workspace-story-heading h2 {
-  margin: 0; font-size: clamp(56px, 6vw, 92px); line-height: .95;
-  letter-spacing: -.04em; color: #f8fafc;
+  margin: 0;
+  font-size: clamp(56px, 6vw, 92px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: var(--am-text-on-dark);
 }
 .workspace-scroll .workspace-story-heading h2 em {
-  color: #a78bfa; font-family: Georgia, 'Times New Roman', serif;
-  font-style: italic; font-weight: 400;
+  color: var(--am-purple);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
 }
 .workspace-scroll .workspace-local {
-  justify-self: end; display: inline-flex; align-items: center; gap: 12px;
-  color: #94a3b8; font: 14px var(--am-font-mono); white-space: nowrap;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--am-technical-label);
+  font: 14px var(--am-font-mono);
+  white-space: nowrap;
 }
-.workspace-scroll .workspace-local i { width: 7px; height: 7px; margin: 0; }
-.workspace-scroll .scroll-canvas { inset: 235px 2% 180px; }
-.workspace-scroll .react-flow__background { opacity: .35; }
+.workspace-scroll .workspace-local i {
+  width: 7px;
+  height: 7px;
+  margin: 0;
+}
+.workspace-scroll .scroll-canvas {
+  inset: 235px 2% 180px;
+}
+.workspace-scroll .react-flow__background {
+  opacity: 0.35;
+}
 .workspace-scroll .react-flow__node,
 .workspace-scroll .workspace-cursor,
-.workspace-scroll .canvas-schema-packet { will-change: transform, opacity; backface-visibility: hidden; }
-.workspace-scroll .am-node { background: #0d1117; border: 1px solid #232c40; border-radius: 8px; }
-.workspace-scroll .am-node--agent { width: 330px; }
-.workspace-scroll .am-node--board { width: 360px; }
-.workspace-scroll .am-node__titlebar { min-height: 48px; padding: 0 16px; gap: 12px; }
-.workspace-scroll .am-node--board .am-node__titlebar { min-height: 52px; }
-.workspace-scroll .am-node__title { font-size: 15px; color: #f8fafc; }
-.workspace-scroll .am-agent__identity { padding: 16px 0; color: #a78bfa; font-size: 13px; }
-.workspace-scroll .am-agent__log { padding: 14px 0 16px; gap: 9px; font-size: 12px; color: #94a3b8; }
-.workspace-scroll .am-board__task { padding: 16px; }
-.workspace-scroll .am-board__tasktitle { margin: 8px 0 7px; color: #f8fafc; font-size: 14px; }
-.workspace-scroll .am-board__taskid { color: #64748b; font-size: 12px; letter-spacing: .08em; }
-.workspace-scroll .workspace-cursor { z-index: 25; }
-.workspace-scroll .workspace-cursor span { padding: 8px 12px; border-radius: 5px; font-size: 14px; color: #151e24; }
-.workspace-scroll .canvas-attribution { font: 11px var(--am-font-mono); }
 .workspace-scroll .canvas-schema-packet {
-  border: 1px solid #3ddc97; color: #b7f7d8; background: #0d1117;
-  border-radius: 6px; padding: 12px 18px; font: 13px var(--am-font-mono);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+.workspace-scroll .am-node {
+  background: var(--am-ink-900);
+  border: 1px solid var(--am-border-dark);
+  border-radius: 8px;
+}
+.workspace-scroll .am-node--agent {
+  width: 330px;
+}
+.workspace-scroll .am-node--board {
+  width: 360px;
+}
+.workspace-scroll .am-node__titlebar {
+  min-height: 48px;
+  padding: 0 16px;
+  gap: 12px;
+}
+.workspace-scroll .am-node--board .am-node__titlebar {
+  min-height: 52px;
+}
+.workspace-scroll .am-node__title {
+  font-size: 15px;
+  color: var(--am-text-on-dark);
+}
+.workspace-scroll .am-agent__identity {
+  padding: 16px 0;
+  color: var(--am-purple);
+  font-size: 13px;
+}
+.workspace-scroll .am-agent__log {
+  padding: 14px 0 16px;
+  gap: 9px;
+  font-size: 12px;
+  color: var(--am-technical-label);
+}
+.workspace-scroll .am-board__task {
+  padding: 16px;
+}
+.workspace-scroll .am-board__tasktitle {
+  margin: 8px 0 7px;
+  color: var(--am-text-on-dark);
+  font-size: 14px;
+}
+.workspace-scroll .am-board__taskid {
+  color: var(--am-text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.workspace-scroll .workspace-cursor {
+  z-index: 25;
+}
+.workspace-scroll .workspace-cursor span {
+  padding: 8px 12px;
+  border-radius: 5px;
+  font-size: 14px;
+  color: var(--am-ink-950);
+}
+.workspace-scroll .canvas-attribution {
+  font: 11px var(--am-font-mono);
+}
+.workspace-scroll .canvas-schema-packet {
+  border: 1px solid var(--am-green);
+  color: var(--am-green);
+  background: var(--am-ink-900);
+  border-radius: 6px;
+  padding: 12px 18px;
+  font: 13px var(--am-font-mono);
 }
 .workspace-scroll .workspace-story-footer {
-  left: 0; right: 0; bottom: 48px; z-index: 30; display: grid;
-  justify-items: center; pointer-events: none;
+  left: 0;
+  right: 0;
+  bottom: 48px;
+  z-index: 30;
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
 }
 .workspace-scroll .workspace-story-footer p {
-  min-height: 34px; margin: 0; padding: 0 20px; color: #f8fafc;
-  font-size: 24px; line-height: 1.3;
+  min-height: 34px;
+  margin: 0;
+  padding: 0 20px;
+  color: var(--am-text-on-dark);
+  font-size: 24px;
+  line-height: 1.3;
 }
 /* Every caption occupies the same grid cell, so the footer keeps one height
    and one centre line while the copy hands over. */
-.workspace-scroll .workspace-caption { display: grid; justify-items: center; }
-.workspace-scroll .workspace-caption > span { grid-area: 1 / 1; }
-.workspace-scroll .workspace-story-footer > span { margin: 12px 0 28px; color: #94a3b8; font-size: 12px; }
+.workspace-scroll .workspace-caption {
+  display: grid;
+  justify-items: center;
+}
+.workspace-scroll .workspace-caption > span {
+  grid-area: 1 / 1;
+}
+.workspace-scroll .workspace-story-footer > span {
+  margin: 12px 0 28px;
+  color: var(--am-technical-label);
+  font-size: 12px;
+}
 /* The footer is pointer-events:none so it never blocks the canvas; the one
    control in it opts back in. */
 .workspace-scroll .workspace-replay {
-  pointer-events: auto; padding: 0; border: 0; background: none;
-  color: #a78bfa; font: inherit; text-decoration: underline; text-underline-offset: 3px;
+  pointer-events: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--am-purple);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
-.workspace-scroll .workspace-story-footer > div { width: min(760px, 48vw); margin: 0; }
-.workspace-scroll .workspace-inspector { right: 5vw; bottom: 15px; z-index: 31; font-size: 15px; }
-.workspace-scroll .react-flow__attribution { color: #94a3b8; background: rgb(13 17 23 / 70%); padding: 7px 9px; font-size: 12px; }
+.workspace-scroll .workspace-story-footer > div {
+  width: min(760px, 48vw);
+  margin: 0;
+}
+.workspace-scroll .workspace-inspector {
+  right: 5vw;
+  bottom: 15px;
+  z-index: 31;
+  font-size: 15px;
+}
+.workspace-scroll .react-flow__attribution {
+  color: var(--am-technical-label);
+  background: rgb(13 17 23 / 70%);
+  padding: 7px 9px;
+  font-size: 12px;
+}
 @media (max-width: 1200px) {
-  .workspace-scroll .workspace-story-heading { grid-template-columns: 170px 1fr; }
-  .workspace-scroll .workspace-local { grid-column: 2; justify-self: start; margin-left: 0; }
+  .workspace-scroll .workspace-story-heading {
+    grid-template-columns: 170px 1fr;
+  }
+  .workspace-scroll .workspace-local {
+    grid-column: 2;
+    justify-self: start;
+    margin-left: 0;
+  }
 }
 @media (max-width: 900px) {
-  .workspace-scroll .workspace-story-heading { top: 96px; grid-template-columns: 1fr; gap: 12px; }
-  .workspace-scroll .workspace-story-heading h2 { font-size: 56px; }
-  .workspace-scroll .workspace-local { grid-column: 1; justify-self: start; font-size: 12px; }
-  .workspace-scroll .scroll-canvas { inset: 260px 0 175px; }
-  .workspace-scroll .workspace-story-footer p { font-size: 20px; }
-  .workspace-scroll .workspace-story-footer > div { width: 78vw; }
-  .workspace-scroll .workspace-story-footer > span { font-size: 10px; margin-bottom: 20px; }
-  .workspace-scroll .canvas-task-event { bottom: -12px; font-size: 9px; }
+  .workspace-scroll .workspace-story-heading {
+    top: 96px;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .workspace-scroll .workspace-story-heading h2 {
+    font-size: 56px;
+  }
+  .workspace-scroll .workspace-local {
+    grid-column: 1;
+    justify-self: start;
+    font-size: 12px;
+  }
+  .workspace-scroll .scroll-canvas {
+    inset: 260px 0 175px;
+  }
+  .workspace-scroll .workspace-story-footer p {
+    font-size: 20px;
+  }
+  .workspace-scroll .workspace-story-footer > div {
+    width: 78vw;
+  }
+  .workspace-scroll .workspace-story-footer > span {
+    font-size: 10px;
+    margin-bottom: 20px;
+  }
+  .workspace-scroll .canvas-task-event {
+    bottom: -12px;
+    font-size: 9px;
+  }
 }
 @media (max-height: 750px) {
-  .workspace-scroll .workspace-story-heading { top: 86px; gap: 8px; }
-  .workspace-scroll .workspace-story-heading h2 { font-size: 44px; }
-  .workspace-scroll .scroll-canvas { top: 215px; bottom: 145px; }
-  .workspace-scroll .workspace-story-footer { bottom: 40px; }
-  .workspace-scroll .workspace-story-footer p { font-size: 18px; }
-  .workspace-scroll .workspace-story-footer > span { margin: 8px 0 16px; }
+  .workspace-scroll .workspace-story-heading {
+    top: 86px;
+    gap: 8px;
+  }
+  .workspace-scroll .workspace-story-heading h2 {
+    font-size: 44px;
+  }
+  .workspace-scroll .scroll-canvas {
+    top: 215px;
+    bottom: 145px;
+  }
+  .workspace-scroll .workspace-story-footer {
+    bottom: 40px;
+  }
+  .workspace-scroll .workspace-story-footer p {
+    font-size: 18px;
+  }
+  .workspace-scroll .workspace-story-footer > span {
+    margin: 8px 0 16px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .landing .workspace-scroll { min-height: 900px; }
-  .workspace-scroll .react-flow__node, .workspace-scroll .workspace-cursor { transition: none !important; }
+  .landing .workspace-scroll {
+    min-height: 900px;
+  }
+  .workspace-scroll .react-flow__node,
+  .workspace-scroll .workspace-cursor {
+    transition: none !important;
+  }
 }
