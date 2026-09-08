@@ -11,6 +11,7 @@ import projectBrainRouter from './project-brain/project-brain.routes.js';
 import taskRouter from './tasks/task.routes.js';
 import executionRouter from './execution/execution.routes.js';
 import workspaceRouter from './workspace/workspace.routes.js';
+import worktreeRouter from './git/worktree.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { config } from './config/index.js';
 
@@ -36,6 +37,7 @@ export const createApp = (): Express => {
   app.use('/', taskRouter);
   app.use('/', executionRouter);
   app.use('/', workspaceRouter);
+  app.use('/', worktreeRouter);
 
   app.use(errorHandler);
 

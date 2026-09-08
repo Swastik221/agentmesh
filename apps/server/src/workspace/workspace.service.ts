@@ -102,7 +102,29 @@ export class WorkspaceService {
     };
   }
 
-  async getExecutionContext(projectId: string, taskId: string): Promise<ExecutionContextDTO> {
+  async updateGitRepoPath(projectId: string, userId: string, gitRepoPath: string | null) {
+    await this.verifyProjectMembership(projectId, userId);
+
+    const workspace = await this.getWorkspace(projectId, userId);
+
+    if (gitRepoPath) {
+      const { worktreeService } = await import('../git/worktree.service.js');
+      worktreeService.assertPathContained(workspace.rootPath, gitRepoPath);
+      const { gitService } = await import('../git/git.service.js');
+      await gitService.validateRepository(gitRepoPath);
+    }
+
+    return await prisma.projectWorkspace.update({
+      where: { projectId },
+      data: { gitRepoPath },
+    });
+  }
+
+  async getExecutionContext(
+    projectId: string,
+    taskId: string,
+    executionId?: string,
+  ): Promise<ExecutionContextDTO> {
     const task = await prisma.task.findUnique({
       where: { id: taskId },
     });
@@ -120,8 +142,20 @@ export class WorkspaceService {
       update: {},
     });
 
-    // Safe working directory guarantee: workingDirectory ⊆ workspace rootPath
-    const workingDirectory = workspace.rootPath;
+    let workingDirectory = workspace.rootPath;
+
+    if (executionId) {
+      const activeWorktree = await prisma.gitWorktree.findFirst({
+        where: {
+          executionId,
+          status: 'ACTIVE',
+        },
+      });
+
+      if (activeWorktree) {
+        workingDirectory = activeWorktree.path;
+      }
+    }
 
     return {
       projectId,
