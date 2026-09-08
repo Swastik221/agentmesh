@@ -18,19 +18,19 @@ try {
     await page
       .locator('.product-canvas')
       .evaluate((element) => getComputedStyle(element).backgroundImage),
-    /rgb\(18, 63, 91\)/,
-  );
-  assert.match(
-    await page
-      .locator('.product-coordinator')
-      .evaluate((element) => getComputedStyle(element).backgroundColor),
     /203, 244, 122/,
   );
   assert.match(
     await page
+      .locator('.product-coordinator')
+      .evaluate((element) => getComputedStyle(element).backgroundImage),
+    /218, 250, 156/,
+  );
+  assert.match(
+    await page
       .locator('.product-artifact')
-      .evaluate((element) => getComputedStyle(element).backgroundColor),
-    /40, 31, 61/,
+      .evaluate((element) => getComputedStyle(element).backgroundImage),
+    /230, 224, 245/,
   );
   assert.equal(await page.locator('.canvas-legend span').count(), 3);
   assert.equal(await page.locator('.product-minimap').count(), 1);
@@ -44,6 +44,13 @@ try {
     .click();
   await page.locator('.canvas-context__tools').getByRole('button', { name: 'Inspector' }).click();
   await page.waitForTimeout(450);
+  const canvasBox = await page.locator('.product-canvas').boundingBox();
+  const inspectorBox = await page.locator('.workspace-inspector-panel').boundingBox();
+  const activityBox = await page.locator('.protocol-rail').boundingBox();
+  assert.ok(canvasBox && inspectorBox && activityBox);
+  assert.ok(inspectorBox.x >= canvasBox.x + canvasBox.width - 1);
+  assert.ok(activityBox.y >= canvasBox.y + canvasBox.height - 1);
+  assert.ok(activityBox.x + activityBox.width <= inspectorBox.x + 1);
   assert.equal(await page.locator('.protocol-events article').count(), 7);
   assert.match(await page.locator('.workspace-inspector-panel').innerText(), /Orion \/ Codex/);
   assert.match(
@@ -103,6 +110,19 @@ try {
   await page.waitForTimeout(100);
   assert.equal(await page.getByRole('button', { name: 'Reject' }).count(), 1);
   assert.equal(await page.getByRole('button', { name: 'Claim task' }).count(), 3);
+
+  await page.setViewportSize({ width: 760, height: 900 });
+  await page.waitForTimeout(320);
+  const compactCanvas = await page.locator('.product-canvas').boundingBox();
+  const compactInspector = await page.locator('.workspace-inspector-panel').boundingBox();
+  const compactActivity = await page.locator('.protocol-rail').boundingBox();
+  assert.ok(compactCanvas && compactInspector && compactActivity);
+  assert.ok(compactInspector.y >= compactCanvas.y + compactCanvas.height - 1);
+  assert.ok(compactActivity.y >= compactInspector.y + compactInspector.height - 1);
+  assert.equal(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    true,
+  );
   assert.deepEqual(errors, []);
   console.log(
     'PASS: product canvas layout, countdown, claim, inspector, drag, edges, approval and replay.',
