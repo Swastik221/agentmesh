@@ -255,10 +255,22 @@ export class CoordinatorService {
 
     const effectivePreferredAgentId = options?.preferredAgentId || task.preferredAgentId;
 
-    // 1. Human Preference Handling
+    // 1. Human Preference Handling (Must respect agent occupancy & availability)
     if (effectivePreferredAgentId) {
       const preferredAgent = await prisma.agent.findUnique({
         where: { id: effectivePreferredAgentId },
+        include: {
+          executions: {
+            where: {
+              status: { in: ['RUNNING', 'QUEUED'] },
+            },
+          },
+          taskResponsibilities: {
+            include: {
+              task: true,
+            },
+          },
+        },
       });
 
       if (!preferredAgent || preferredAgent.projectId !== projectId) {
@@ -269,7 +281,13 @@ export class CoordinatorService {
         };
       }
 
-      if (preferredAgent.status !== 'ONLINE') {
+      const isOccupied =
+        preferredAgent.executions.length > 0 ||
+        preferredAgent.taskResponsibilities.some(
+          (resp) => resp.task && resp.task.status === 'IN_PROGRESS',
+        );
+
+      if (preferredAgent.status !== 'ONLINE' || isOccupied) {
         return {
           assigned: false,
           taskId,
@@ -337,25 +355,20 @@ export class CoordinatorService {
       const agentCapStrings = agent.capabilities.map((c) => c.capability);
       const { score, matchedCapabilities, unmatchedCapabilities, categoryScores } =
         this.scoreCapabilities(agentCapStrings, task.requiredCapabilities);
-      const workload = agent.executions.length;
 
       return {
         agent,
         score,
-        workload,
         matchedCapabilities,
         unmatchedCapabilities,
         categoryScores,
       };
     });
 
-    // Deterministic Tie Breaking
+    // Deterministic Tie Breaking: score DESC -> createdAt ASC -> agent.id ASC
     scoredCandidates.sort((a, b) => {
       if (b.score !== a.score) {
         return b.score - a.score;
-      }
-      if (a.workload !== b.workload) {
-        return a.workload - b.workload;
       }
       if (a.agent.createdAt.getTime() !== b.agent.createdAt.getTime()) {
         return a.agent.createdAt.getTime() - b.agent.createdAt.getTime();
@@ -369,7 +382,6 @@ export class CoordinatorService {
       matchedCapabilities: winner.matchedCapabilities,
       unmatchedCapabilities: winner.unmatchedCapabilities,
       categoryScores: winner.categoryScores,
-      workload: winner.workload,
       reason: `Assigned via capability match (score: ${winner.score}%)`,
     };
 

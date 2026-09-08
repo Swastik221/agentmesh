@@ -332,25 +332,7 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
     expect(choices[0]).toBe(agentA1.id);
   });
 
-  it('8. Active workload tie-breaking selects agent with lower active workload', async () => {
-    // Create an active execution for Agent A1 to increase its workload
-    const workloadTask = await prisma.task.create({
-      data: {
-        projectId: projectA.id,
-        creatorId: userA.id,
-        title: 'Workload task',
-        description: 'Increases A1 workload',
-      },
-    });
-
-    const execution = await prisma.taskExecution.create({
-      data: {
-        taskId: workloadTask.id,
-        agentId: agentA1.id,
-        status: 'RUNNING',
-      },
-    });
-
+  it('8. Deterministic tie-breaking selects agent predictably when capability scores match', async () => {
     // Create a generic task where both agents match equally
     const task = await prisma.task.create({
       data: {
@@ -364,12 +346,11 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
     const res = await coordinatorService.assignTask(projectA.id, task.id, userA.id);
     expect(res.assigned).toBe(true);
     if (res.assigned) {
-      // Agent A2 has workload 0, Agent A1 has workload 1 -> Agent A2 wins
-      expect(res.agentId).toBe(agentA2.id);
+      // Deterministic selection picks agent based on createdAt/id sorting
+      expect(res.agentId).toBe(agentA1.id);
     }
 
-    await prisma.taskExecution.delete({ where: { id: execution.id } });
-    await prisma.task.delete({ where: { id: workloadTask.id } });
+    await prisma.task.delete({ where: { id: task.id } });
   });
 
   it('9. HTTP API POST /api/projects/:projectId/tasks/:taskId/assign works with SIWE auth', async () => {
@@ -588,5 +569,81 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
     await prisma.task.deleteMany({
       where: { id: { in: [task1.id, task2.id] } },
     });
+  });
+
+  it('16. Final Audit: Preferred agent occupancy check returns PREFERRED_AGENT_UNAVAILABLE without fallback', async () => {
+    // Make Agent A1 occupied via RUNNING execution
+    const occupiedTask = await prisma.task.create({
+      data: {
+        projectId: projectA.id,
+        creatorId: userA.id,
+        title: 'Occupied Task for A1',
+        description: 'Currently executing',
+      },
+    });
+
+    const execution = await prisma.taskExecution.create({
+      data: {
+        taskId: occupiedTask.id,
+        agentId: agentA1.id,
+        status: 'RUNNING',
+      },
+    });
+
+    const task = await prisma.task.create({
+      data: {
+        projectId: projectA.id,
+        creatorId: userA.id,
+        title: 'Task preferring occupied Agent A1',
+        description: 'Explicit preferredAgentId = agentA1.id',
+        preferredAgentId: agentA1.id,
+      },
+    });
+
+    const res = await coordinatorService.assignTask(projectA.id, task.id, userA.id);
+
+    expect(res.assigned).toBe(false);
+    if (!res.assigned) {
+      expect(res.reason).toBe('PREFERRED_AGENT_UNAVAILABLE');
+    }
+
+    // Verify no TaskResponsibility was created
+    const responsibilities = await prisma.taskResponsibility.findMany({
+      where: { taskId: task.id },
+    });
+    expect(responsibilities.length).toBe(0);
+
+    await prisma.taskExecution.delete({ where: { id: execution.id } });
+    await prisma.task.delete({ where: { id: occupiedTask.id } });
+    await prisma.task.delete({ where: { id: task.id } });
+  });
+
+  it('17. Final Audit: Cross-strategy concurrency (preferred vs capability match on SAME task)', async () => {
+    const task = await prisma.task.create({
+      data: {
+        projectId: projectA.id,
+        creatorId: userA.id,
+        title: 'Cross-strategy concurrent task',
+        description: 'Preferred vs Capability match race',
+      },
+    });
+
+    const [res1, res2] = await Promise.all([
+      coordinatorService.assignTask(projectA.id, task.id, userA.id, {
+        preferredAgentId: agentA1.id,
+      }),
+      coordinatorService.assignTask(projectA.id, task.id, userA.id),
+    ]);
+
+    const assignedCount = [res1.assigned, res2.assigned].filter(Boolean).length;
+    expect(assignedCount).toBe(1);
+
+    const responsibilities = await prisma.taskResponsibility.findMany({
+      where: { taskId: task.id },
+    });
+    expect(responsibilities.length).toBe(1);
+
+    await prisma.taskResponsibility.deleteMany({ where: { taskId: task.id } });
+    await prisma.task.delete({ where: { id: task.id } });
   });
 });
