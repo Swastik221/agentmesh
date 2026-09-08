@@ -27,6 +27,31 @@ export const createArtifact = async (
   }
 };
 
+export const reviewArtifact = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const projectId = req.params.projectId as string;
+    const artifactId = req.params.artifactId as string;
+    const userId = req.auth?.userId;
+    if (!userId) throw new UnauthorizedError();
+
+    const approved = req.body?.approved === true;
+    const note = typeof req.body?.note === 'string' ? req.body.note : undefined;
+
+    const result = await artifactService.reviewArtifact(projectId, artifactId, userId, {
+      approved,
+      note,
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const listArtifacts = async (
   req: AuthenticatedRequest,
   res: Response,

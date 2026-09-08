@@ -22,6 +22,7 @@ export const AgentMeshMessageType = {
   TASK_ASSIGNED: 'task.assigned',
   ARTIFACT_CREATED: 'artifact.created',
   ARTIFACT_AVAILABLE: 'artifact.available',
+  ACTIVITY_CREATED: 'activity.created',
   DEPENDENCY_DECLARED: 'dependency.declared',
   DEPENDENCY_AVAILABLE: 'dependency.available',
   WORKSPACE_DELTA: 'workspace.delta',

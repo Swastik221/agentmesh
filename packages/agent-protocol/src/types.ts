@@ -41,6 +41,8 @@ import {
   artifactCreatedMessageSchema,
   artifactAvailablePayloadSchema,
   artifactAvailableMessageSchema,
+  activityCreatedPayloadSchema,
+  activityCreatedMessageSchema,
   dependencyDeclaredPayloadSchema,
   dependencyDeclaredMessageSchema,
   dependencyAvailablePayloadSchema,
@@ -78,6 +80,7 @@ export type WorkspacePresenceChangedPayload = z.infer<typeof workspacePresenceCh
 export type TaskAssignedPayload = z.infer<typeof taskAssignedPayloadSchema>;
 export type ArtifactCreatedPayload = z.infer<typeof artifactCreatedPayloadSchema>;
 export type ArtifactAvailablePayload = z.infer<typeof artifactAvailablePayloadSchema>;
+export type ActivityCreatedPayload = z.infer<typeof activityCreatedPayloadSchema>;
 export type DependencyDeclaredPayload = z.infer<typeof dependencyDeclaredPayloadSchema>;
 export type DependencyAvailablePayload = z.infer<typeof dependencyAvailablePayloadSchema>;
 
@@ -106,6 +109,7 @@ export type WorkspacePresenceChangedMessage = z.infer<typeof workspacePresenceCh
 export type TaskAssignedMessage = z.infer<typeof taskAssignedMessageSchema>;
 export type ArtifactCreatedMessage = z.infer<typeof artifactCreatedMessageSchema>;
 export type ArtifactAvailableMessage = z.infer<typeof artifactAvailableMessageSchema>;
+export type ActivityCreatedMessage = z.infer<typeof activityCreatedMessageSchema>;
 export type DependencyDeclaredMessage = z.infer<typeof dependencyDeclaredMessageSchema>;
 export type DependencyAvailableMessage = z.infer<typeof dependencyAvailableMessageSchema>;
 export type WorkspaceDeltaMessage = z.infer<typeof workspaceDeltaMessageSchema>;

@@ -32,6 +32,7 @@ model User {
   brainEntries  ProjectBrainEntry[]
   createdTasks  Task[]
   artifacts     Artifact[]
+  artifactsReviewed Artifact[] @relation("ArtifactReviewer")
 
   @@map("users")
 }
@@ -54,6 +55,7 @@ model Project {
   workspace    ProjectWorkspace?
   artifacts    Artifact[]
   taskDependencies TaskDependency[]
+  activityEvents   ActivityEvent[]
 
   @@index([ownerId])
   @@map("projects")
@@ -167,6 +169,7 @@ model ProjectBrainEntry {
 enum TaskStatus {
   TODO
   IN_PROGRESS
+  PENDING_APPROVAL
   BLOCKED
   COMPLETED
   FAILED
@@ -253,6 +256,12 @@ model TaskDependency {
   @@map("task_dependencies")
 }
 
+enum ArtifactStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Artifact {
   id          String   @id @default(cuid())
   projectId   String
@@ -265,6 +274,11 @@ model Artifact {
   name        String
   version     Int      @default(1)
   payload     Json
+  status      ArtifactStatus @default(PENDING)
+  requiresReview Boolean     @default(false)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewNote     String?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -274,6 +288,7 @@ model Artifact {
   execution    TaskExecution?   @relation(fields: [executionId], references: [id], onDelete: SetNull)
   agent        Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
   ownerUser    User             @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  reviewedBy   User?            @relation("ArtifactReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   dependencies TaskDependency[]
 
   @@unique([taskId, name, version])
@@ -329,6 +344,24 @@ model ProjectWorkspace {
   worktrees GitWorktree[]
 
   @@map("project_workspaces")
+}
+
+model ActivityEvent {
+  id         String   @id @default(cuid())
+  projectId  String
+  type       String
+  actorType  String
+  actorId    String
+  actorName  String?
+  taskId     String?
+  artifactId String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("activity_events")
 }
 
 enum GitWorktreeStatus {

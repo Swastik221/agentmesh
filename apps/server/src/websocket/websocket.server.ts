@@ -127,76 +127,91 @@ export class AgentMeshWebSocketServer {
 
     ws.on('close', async () => {
       try {
-      logger.info(
-        `[WebSocket] Connection ${metadata.connectionId} closed for project ${projectId}`,
-      );
-      const isUser = Boolean(metadata.userId);
-      const userId = metadata.userId;
-      const isAgent = Boolean(metadata.agentId);
-      const agentId = metadata.agentId;
+        logger.info(
+          `[WebSocket] Connection ${metadata.connectionId} closed for project ${projectId}`,
+        );
+        const isUser = Boolean(metadata.userId);
+        const userId = metadata.userId;
+        const isAgent = Boolean(metadata.agentId);
+        const agentId = metadata.agentId;
 
-      if (isAgent) {
-        await handshakeService.handleDisconnection(metadata);
-        connectionManager.removeConnection(metadata.connectionId);
-        if (agentId && connectionManager.getActiveAgentConnectionsCount(agentId) === 0) {
-          const presenceMsg = createWorkspacePresenceChangedMessage(
-            {
+        if (isAgent) {
+          await handshakeService.handleDisconnection(metadata);
+          connectionManager.removeConnection(metadata.connectionId);
+          if (agentId && connectionManager.getActiveAgentConnectionsCount(agentId) === 0) {
+            const presenceMsg = createWorkspacePresenceChangedMessage(
+              {
+                projectId,
+                senderId: 'server',
+              },
+              {
+                entityType: 'agent',
+                entityId: agentId,
+                status: 'OFFLINE',
+              },
+            );
+            connectionManager.broadcastToProjectUsers(
               projectId,
-              senderId: 'server',
-            },
-            {
-              entityType: 'agent',
-              entityId: agentId,
-              status: 'OFFLINE',
-            },
-          );
-          connectionManager.broadcastToProjectUsers(
-            projectId,
-            presenceMsg as unknown as WebSocketMessage,
-          );
-          await deltaSequencerService.recordAndBroadcastDelta(projectId, [
-            {
-              entity: 'presence',
-              entityId: agentId,
-              operation: 'updated',
-              fields: { entityType: 'agent', status: 'OFFLINE' },
-            },
-          ]);
+              presenceMsg as unknown as WebSocketMessage,
+            );
+            await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+              {
+                entity: 'presence',
+                entityId: agentId,
+                operation: 'updated',
+                fields: { entityType: 'agent', status: 'OFFLINE' },
+              },
+            ]);
+          }
+        } else {
+          connectionManager.removeConnection(metadata.connectionId);
         }
-      } else {
-        connectionManager.removeConnection(metadata.connectionId);
-      }
 
-      if (isUser && userId) {
-        if (connectionManager.getActiveUserConnectionsCount(projectId, userId) === 0) {
-          const presenceMsg = createWorkspacePresenceChangedMessage(
-            {
+        if (isUser && userId) {
+          if (connectionManager.getActiveUserConnectionsCount(projectId, userId) === 0) {
+            const presenceMsg = createWorkspacePresenceChangedMessage(
+              {
+                projectId,
+                senderId: 'server',
+              },
+              {
+                entityType: 'user',
+                entityId: userId,
+                status: 'OFFLINE',
+              },
+            );
+            connectionManager.broadcastToProjectUsers(
               projectId,
-              senderId: 'server',
-            },
-            {
-              entityType: 'user',
-              entityId: userId,
-              status: 'OFFLINE',
-            },
-          );
-          connectionManager.broadcastToProjectUsers(
-            projectId,
-            presenceMsg as unknown as WebSocketMessage,
-          );
-          // Best-effort presence delta during close cleanup: the workspace may
-          // already be torn down (e.g. test teardown), so a failure here must not
-          // become an unhandled rejection that fails unrelated work.
-          await deltaSequencerService.recordAndBroadcastDelta(projectId, [
-            {
-              entity: 'presence',
-              entityId: userId,
-              operation: 'updated',
-              fields: { entityType: 'user', status: 'OFFLINE' },
-            },
-          ]);
+              presenceMsg as unknown as WebSocketMessage,
+            );
+            // Best-effort presence delta during close cleanup: the workspace may
+            // already be torn down (e.g. test teardown), so a failure here must not
+            // become an unhandled rejection that fails unrelated work.
+            await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+              {
+                entity: 'presence',
+                entityId: userId,
+                operation: 'updated',
+                fields: { entityType: 'user', status: 'OFFLINE' },
+              },
+            ]);
+          }
         }
-      }
+
+        try {
+          if (agentId) {
+            const { activityService } = await import('../services/activity.service.js');
+            await activityService.recordActivity(projectId, {
+              type: 'agent.disconnected',
+              actorType: 'agent',
+              actorId: agentId,
+              message: 'Agent disconnected',
+              payload: { connectionId: metadata.connectionId },
+            });
+          }
+        } catch {
+          // Best-effort activity during teardown.
+        }
       } catch (err) {
         logger.error(
           `[WebSocket] Error during close cleanup for connection ${metadata.connectionId}:`,
@@ -438,6 +453,13 @@ export class AgentMeshWebSocketServer {
             fields: { entityType: 'agent', status: 'ONLINE' },
           },
         ]);
+        const { activityService } = await import('../services/activity.service.js');
+        await activityService.recordActivity(metadata.projectId, {
+          type: 'agent.connected',
+          actorType: 'agent',
+          actorId: metadata.agentId,
+          message: 'Agent connected',
+        });
       }
       return;
     }
@@ -515,8 +537,13 @@ export class AgentMeshWebSocketServer {
             payload: artifactPayload,
             executionId,
             agentId: metadata.agentId,
+            requiresReview: true,
           },
         );
+
+        // Agent-published artifacts enter the human review gate.
+        const { taskService } = await import('../tasks/task.service.js');
+        await taskService.markPendingApproval(metadata.projectId, taskId, metadata.agentId);
 
         this.sendJson(metadata.socket, {
           type: AgentMeshMessageType.ARTIFACT_CREATED,

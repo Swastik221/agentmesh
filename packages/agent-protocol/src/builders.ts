@@ -44,6 +44,8 @@ import {
   TaskAssignedPayload,
   ArtifactCreatedPayload,
   ArtifactAvailablePayload,
+  ActivityCreatedPayload,
+  ActivityCreatedMessage,
   DependencyDeclaredPayload,
   DependencyAvailablePayload,
   WorkspaceDeltaPayload,
@@ -357,6 +359,17 @@ export function createArtifactAvailableMessage(
       MessageKind.EVENT,
     ),
     type: AgentMeshMessageType.ARTIFACT_AVAILABLE,
+    payload,
+  };
+}
+
+export function createActivityCreatedMessage(
+  options: BaseBuilderOptions,
+  payload: ActivityCreatedPayload,
+): ActivityCreatedMessage {
+  return {
+    ...buildEnvelope(options, MessageKind.EVENT),
+    type: AgentMeshMessageType.ACTIVITY_CREATED,
     payload,
   };
 }
