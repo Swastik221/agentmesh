@@ -16,7 +16,7 @@ export interface PlaceholderAgent {
   id: string;
   name: string;
   vendor: string;
-  status: string;
+  status: 'offline';
 }
 
 /** One line of explorer-style agent output: block height, tx-ish hash, message. */
@@ -26,7 +26,7 @@ export interface AgentLogLine {
   message: string;
 }
 
-export type AgentConnectionStatus = 'connected' | 'idle';
+export type AgentConnectionStatus = 'connected' | 'idle' | 'working';
 
 export interface AgentNodeFields extends Record<string, unknown> {
   name: string;
@@ -58,18 +58,3 @@ export interface TaskBoardNodeFields extends Record<string, unknown> {
 export type AgentFlowNode = Node<AgentNodeFields, 'agent'>;
 export type TaskBoardFlowNode = Node<TaskBoardNodeFields, 'taskBoard'>;
 export type WorkspaceNode = AgentFlowNode | TaskBoardFlowNode;
-
-export interface ArtifactSummary {
-  id: string;
-  name: string;
-  type: string;
-  version: number;
-}
-
-export interface TaskDependencySummary {
-  id: string;
-  dependencyType: string;
-  available: boolean;
-  dependsOnTaskId?: string;
-  artifactId?: string;
-}

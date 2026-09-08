@@ -1,0 +1,333 @@
+.landing:not([data-intro-complete='true']) > .landing-header,
+.landing:not([data-intro-complete='true']) > .chapter-rail {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.mesh-intro {
+  --intro-coder: 1;
+  --intro-canvas: 0;
+  --intro-cards: 1;
+  --intro-docked-opacity: 0;
+  position: relative;
+  width: 100%;
+  height: 100svh;
+  overflow: hidden;
+  isolation: isolate;
+  background: #0a0e17;
+  color: #e2e8f0;
+  scroll-margin-top: 0;
+}
+.intro-coder {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(44vw, 75svh, 800px);
+  aspect-ratio: 520 / 600;
+  transform: translate(-50%, -50%);
+  opacity: var(--intro-coder);
+  z-index: 2;
+  pointer-events: none;
+}
+.flat-coder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.intro-agent {
+  position: absolute;
+  top: 37%;
+  width: 31%;
+  max-width: 590px;
+  z-index: 4;
+  opacity: var(--intro-cards);
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.intro-agent--left {
+  left: 2.5%;
+}
+.intro-agent--right {
+  right: 2.5%;
+}
+.intro-agent .mini-agent {
+  width: 100%;
+}
+.intro-agent .mini-terminal {
+  background: #0d1117;
+  border: 1px solid #232c40;
+  border-radius: 9px;
+  box-shadow: none;
+}
+.intro-agent .mini-title {
+  min-height: 68px;
+  padding: 16px 22px;
+  gap: 10px;
+  border-color: #232c40;
+}
+.intro-agent .mini-title strong {
+  font-size: clamp(18px, 1.6vw, 25px);
+}
+.intro-agent .mini-title > span {
+  font-size: clamp(11px, 1vw, 16px);
+}
+.intro-agent .mini-title .hero-agent-status {
+  font-size: clamp(9px, 0.85vw, 13px);
+}
+.intro-agent .mini-code {
+  padding: 23px 22px 25px;
+  font-size: clamp(11px, 1.05vw, 17px);
+  line-height: 2.3;
+}
+.intro-agent .mini-owner {
+  margin-bottom: 14px;
+  gap: 10px;
+  font-size: clamp(12px, 1.1vw, 17px);
+}
+.intro-agent .mini-owner > span:last-child {
+  font-size: clamp(9px, 0.9vw, 14px);
+}
+.intro-agent .owner-dot {
+  width: 30px;
+  height: 30px;
+  border-color: #a78bfa;
+}
+.intro-agent .terminal-caret {
+  animation: none;
+}
+.intro-wires {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  z-index: 3;
+  pointer-events: none;
+}
+.intro-wire,
+.intro-wire-ember {
+  fill: none;
+  stroke: #22d3ee;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.intro-wire-ember {
+  stroke: #f0b458;
+  stroke-width: 4;
+  stroke-dasharray: 0.12 0.88;
+  opacity: 0;
+}
+.intro-border {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.intro-border rect {
+  fill: none;
+  stroke: #f0b458;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 0.16 0.84;
+  opacity: 0;
+}
+.intro-border .intro-ember-core {
+  stroke: #ffe7bc;
+  stroke-width: 1;
+}
+.intro-burst {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 200vmax;
+  height: 200vmax;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0);
+  background: radial-gradient(
+    circle,
+    #eafaff 0%,
+    #a7edf2c9 5%,
+    #22d3ee59 17%,
+    #3ddc971a 35%,
+    transparent 60%
+  );
+  border-radius: 50%;
+}
+.intro-workspace {
+  position: absolute;
+  inset: 10% 1.5%;
+  opacity: var(--intro-canvas);
+  clip-path: circle(0% at 50% 50%);
+  z-index: 1;
+}
+.intro-workspace .react-flow__node-agent {
+  opacity: var(--intro-docked-opacity);
+}
+.intro-workspace .am-addr__hash:empty {
+  display: none;
+}
+.intro-workspace .react-flow__node {
+  cursor: grab;
+}
+.intro-workspace .am-node {
+  background: #0d1117;
+  border-color: #232c40;
+}
+.intro-workspace .react-flow__attribution {
+  background: #0d1117;
+  color: #8b98ad;
+}
+.intro-workspace .react-flow__attribution a {
+  color: inherit;
+}
+.landing-introduction {
+  min-height: 600px;
+  padding: 150px 6% 110px;
+  background: #0a0e17;
+  text-align: center;
+}
+.landing-introduction .hero-copy {
+  width: 100%;
+  max-width: 1100px;
+  margin-inline: auto;
+}
+.landing-introduction .eyebrow,
+.landing-introduction .hero-caption {
+  justify-content: center;
+}
+.landing-introduction h1 {
+  font-size: clamp(60px, 7.5vw, 112px);
+}
+.landing-introduction h1 em {
+  color: #a78bfa;
+}
+.landing-introduction .hero-copy > p {
+  max-width: 600px;
+  margin: 25px auto 32px;
+}
+
+@media (min-width: 700px) and (max-width: 1099px) {
+  .intro-agent {
+    width: 32%;
+    top: 40%;
+  }
+  .intro-agent--left {
+    left: 1.5%;
+  }
+  .intro-agent--right {
+    right: 1.5%;
+  }
+  .intro-agent .mini-title {
+    min-height: 51px;
+    padding: 12px;
+    gap: 7px;
+  }
+  .intro-agent .mini-code {
+    padding: 17px 12px;
+    font-size: 10px;
+  }
+  .intro-agent .mini-title strong {
+    font-size: 17px;
+  }
+  .intro-agent .mini-title > svg {
+    width: 14px;
+  }
+  .intro-agent .mini-owner {
+    gap: 6px;
+    font-size: 11px;
+  }
+  .intro-agent .mini-owner > span:last-child {
+    font-size: 8px;
+  }
+}
+@media (max-width: 699px) {
+  .intro-coder {
+    width: min(93vw, 50svh);
+    top: 29%;
+  }
+  .intro-agent {
+    top: 56%;
+    width: 46%;
+  }
+  .intro-agent--left {
+    left: 3%;
+  }
+  .intro-agent--right {
+    right: 3%;
+  }
+  .intro-agent .mini-title {
+    padding: 10px;
+    gap: 6px;
+    min-height: 49px;
+    flex-wrap: wrap;
+  }
+  .intro-agent .mini-title > svg {
+    display: none;
+  }
+  .intro-agent .mini-title strong {
+    font-size: 15px;
+  }
+  .intro-agent .mini-title > span {
+    font-size: 9px;
+  }
+  .intro-agent .mini-title .hero-agent-status {
+    font-size: 8px;
+  }
+  .intro-agent .mini-code {
+    font-size: 8px;
+    padding: 14px 10px;
+    line-height: 2.15;
+    overflow-wrap: anywhere;
+  }
+  .intro-agent .mini-owner {
+    font-size: 10px;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 9px;
+  }
+  .intro-agent .mini-owner > span:last-child {
+    font-size: 7px;
+  }
+  .intro-agent .owner-dot {
+    width: 20px;
+    height: 20px;
+  }
+  .intro-workspace {
+    inset: 8% 0;
+  }
+  .landing-introduction {
+    padding: 110px 20px 80px;
+    min-height: 560px;
+  }
+  .landing-introduction h1 {
+    font-size: 59px;
+  }
+  .landing-introduction h1 em {
+    display: block;
+  }
+  .landing-introduction .hero-copy > p {
+    font-size: 14px;
+  }
+  .landing-introduction .eyebrow {
+    font-size: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mesh-intro .intro-coder,
+  .mesh-intro .intro-wires,
+  .mesh-intro .intro-agent,
+  .mesh-intro .intro-burst {
+    display: none;
+  }
+  .mesh-intro .intro-workspace {
+    opacity: 1;
+    clip-path: none !important;
+  }
+}
