@@ -35,14 +35,47 @@ export class ConnectionManager {
     return metadata;
   }
 
-  getActiveAgentConnectionsCount(agentId: string): number {
+  getActiveAgentConnectionsCount(agentId: string, excludingConnectionId?: string): number {
     let count = 0;
     for (const conn of this.connections.values()) {
+      if (excludingConnectionId && conn.connectionId === excludingConnectionId) {
+        continue;
+      }
       if (conn.authenticated && conn.agentId === agentId) {
         count++;
       }
     }
     return count;
+  }
+
+  getActiveUserConnectionsCount(
+    projectId: string,
+    userId: string,
+    excludingConnectionId?: string,
+  ): number {
+    let count = 0;
+    for (const conn of this.connections.values()) {
+      if (excludingConnectionId && conn.connectionId === excludingConnectionId) {
+        continue;
+      }
+      if (conn.authenticated && conn.projectId === projectId && conn.userId === userId) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  isUserConnected(projectId: string, userId: string): boolean {
+    return this.getActiveUserConnectionsCount(projectId, userId) > 0;
+  }
+
+  isAgentConnected(projectId: string, agentId: string): boolean {
+    for (const conn of this.connections.values()) {
+      if (conn.authenticated && conn.projectId === projectId && conn.agentId === agentId) {
+        return true;
+      }
+    }
+    return false;
   }
 
   getAuthenticatedAgentConnections(agentId: string): ConnectionMetadata[] {
@@ -101,6 +134,24 @@ export class ConnectionManager {
         continue;
       }
       if (conn.socket.readyState === conn.socket.OPEN) {
+        conn.socket.send(dataToSend);
+      }
+    }
+  }
+
+  broadcastToProjectUsers(
+    projectId: string,
+    message: WebSocketMessage | string,
+    senderConnectionId?: string,
+  ): void {
+    const connections = this.getProjectConnections(projectId);
+    const dataToSend = typeof message === 'string' ? message : JSON.stringify(message);
+
+    for (const conn of connections) {
+      if (senderConnectionId && conn.connectionId === senderConnectionId) {
+        continue;
+      }
+      if (conn.userId && !conn.agentId && conn.socket.readyState === conn.socket.OPEN) {
         conn.socket.send(dataToSend);
       }
     }

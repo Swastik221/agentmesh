@@ -16,6 +16,8 @@ import {
   errorPayloadSchema,
   pingPayloadSchema,
   pongPayloadSchema,
+  workspaceSnapshotPayloadSchema,
+  workspacePresenceChangedPayloadSchema,
   agentHandshakeMessageSchema,
   agentHandshakeAcceptedMessageSchema,
   agentHandshakeRejectedMessageSchema,
@@ -31,6 +33,8 @@ import {
   errorMessageSchema,
   pingMessageSchema,
   pongMessageSchema,
+  workspaceSnapshotMessageSchema,
+  workspacePresenceChangedMessageSchema,
   agentMeshMessageSchema,
 } from './schemas.js';
 import { PROTOCOL_VERSION, ParticipantType, MessageKind } from './constants.js';
@@ -52,6 +56,8 @@ export type TaskFailedPayload = z.infer<typeof taskFailedPayloadSchema>;
 export type ErrorPayload = z.infer<typeof errorPayloadSchema>;
 export type PingPayload = z.infer<typeof pingPayloadSchema>;
 export type PongPayload = z.infer<typeof pongPayloadSchema>;
+export type WorkspaceSnapshotPayload = z.infer<typeof workspaceSnapshotPayloadSchema>;
+export type WorkspacePresenceChangedPayload = z.infer<typeof workspacePresenceChangedPayloadSchema>;
 
 export type AgentHandshakeMessage = z.infer<typeof agentHandshakeMessageSchema>;
 export type AgentHandshakeAcceptedMessage = z.infer<typeof agentHandshakeAcceptedMessageSchema>;
@@ -68,6 +74,8 @@ export type TaskFailedMessage = z.infer<typeof taskFailedMessageSchema>;
 export type ErrorMessage = z.infer<typeof errorMessageSchema>;
 export type PingMessage = z.infer<typeof pingMessageSchema>;
 export type PongMessage = z.infer<typeof pongMessageSchema>;
+export type WorkspaceSnapshotMessage = z.infer<typeof workspaceSnapshotMessageSchema>;
+export type WorkspacePresenceChangedMessage = z.infer<typeof workspacePresenceChangedMessageSchema>;
 
 export type AgentMeshMessage = z.infer<typeof agentMeshMessageSchema>;
 

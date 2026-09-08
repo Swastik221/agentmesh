@@ -25,7 +25,7 @@ export class HandshakeService {
     rawMessage: unknown,
   ): Promise<HandshakeResult> {
     // Rule 12: Duplicate handshake on the same connection
-    if (connection.authenticated) {
+    if (connection.authenticated && connection.agentId) {
       return {
         success: false,
         message: this.createRejection(
@@ -157,6 +157,9 @@ export class HandshakeService {
     }
 
     // Step 7: Verify project membership
+    const project = await prisma.project.findUnique({
+      where: { id: connection.projectId },
+    });
     const member = await prisma.projectMember.findUnique({
       where: {
         projectId_userId: {
@@ -166,7 +169,7 @@ export class HandshakeService {
       },
     });
 
-    if (!member) {
+    if (!member && project?.ownerId !== session.user.id) {
       return {
         success: false,
         message: this.createRejection(
@@ -243,6 +246,7 @@ export class HandshakeService {
 
     const remainingActiveConnections = connectionManager.getActiveAgentConnectionsCount(
       connection.agentId,
+      connection.connectionId,
     );
 
     if (remainingActiveConnections === 0) {

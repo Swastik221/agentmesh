@@ -16,7 +16,7 @@ export interface PlaceholderAgent {
   id: string;
   name: string;
   vendor: string;
-  status: 'offline';
+  status: string;
 }
 
 /** One line of explorer-style agent output: block height, tx-ish hash, message. */
