@@ -90,10 +90,10 @@ const seedNodes: ProductNode[] = [
 const edgeBase = {
   type: 'smoothstep' as const,
   animated: true,
-  markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: '#69c8d6' },
-  style: { stroke: '#69c8d6', strokeWidth: 1.6 },
-  labelStyle: { fill: '#dcecf0', fontSize: 10 },
-  labelBgStyle: { fill: '#10283b', stroke: '#4f7b8c' },
+  markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: '#648b83' },
+  style: { stroke: '#648b83', strokeWidth: 1.6 },
+  labelStyle: { fill: '#344b47', fontSize: 10 },
+  labelBgStyle: { fill: '#fbfdf7', stroke: '#b7c9bd' },
   labelBgPadding: [5, 4] as [number, number],
 };
 const initialEdges: Edge[] = [
@@ -136,10 +136,12 @@ function Inspector({
   selected,
   tasks,
   events,
+  onClose,
 }: {
   selected: ProductNode | undefined;
   tasks: ProductTask[];
   events: ProtocolEvent[];
+  onClose: () => void;
 }) {
   const title =
     selected?.type === 'productAgent'
@@ -159,8 +161,14 @@ function Inspector({
   return (
     <aside className="workspace-inspector-panel">
       <header>
-        <span>INSPECTOR</span>
-        <b>Selected</b>
+        <div>
+          <span>INSPECTOR</span>
+          <b>Selected node</b>
+        </div>
+        <button type="button" className="workspace-panel__close" onClick={onClose}>
+          <X size={14} />
+          <span className="sr-only">Close inspector</span>
+        </button>
       </header>
       <section>
         <small>{selected?.type ?? 'coordinator'}</small>
@@ -229,14 +237,20 @@ function Inspector({
   );
 }
 
-function ActivityRail({ events }: { events: ProtocolEvent[] }) {
+function ActivityRail({ events, onClose }: { events: ProtocolEvent[]; onClose: () => void }) {
   return (
     <section className="protocol-rail">
       <header>
         <div>
           <i /> LIVE PROTOCOL ACTIVITY
         </div>
-        <span>{events.length} events · structured messages</span>
+        <div className="protocol-rail__actions">
+          <span>{events.length} events · structured messages</span>
+          <button type="button" className="workspace-panel__close" onClick={onClose}>
+            <X size={14} />
+            <span className="sr-only">Close activity</span>
+          </button>
+        </div>
       </header>
       <div className="protocol-events">
         {events.slice(-9).map((event) => (
@@ -365,9 +379,16 @@ function Canvas() {
 
   useEffect(() => {
     const frame = requestAnimationFrame(() =>
-      fitView({ padding: 0.08, maxZoom: 0.82, duration: 360 }),
+      fitView({ padding: 0.1, maxZoom: 0.82, duration: 280 }),
     );
-    return () => cancelAnimationFrame(frame);
+    const settled = window.setTimeout(
+      () => fitView({ padding: 0.1, maxZoom: 0.82, duration: 420 }),
+      260,
+    );
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(settled);
+    };
   }, [activityOpen, fitView, inspectorOpen]);
 
   const nodes = useMemo<ProductNode[]>(
@@ -506,7 +527,7 @@ function Canvas() {
           fitView
           fitViewOptions={{ padding: 0.08, maxZoom: 0.82 }}
         >
-          <Background color="#79a6b7" gap={28} size={1} />
+          <Background color="#9bae9e" gap={28} size={1} />
           <Controls showInteractive={false} position="bottom-right" />
           <MiniMap
             className="product-minimap"
@@ -519,7 +540,7 @@ function Canvas() {
                     ? '#f0b458'
                     : '#69c8d6'
             }
-            maskColor="rgb(5 22 39 / 68%)"
+            maskColor="rgb(238 246 230 / 72%)"
             pannable
             zoomable
             position="bottom-right"
@@ -567,9 +588,16 @@ function Canvas() {
         <div className="canvas-navigation-hint">DRAG TO PAN · SCROLL TO ZOOM</div>
       </div>
       {inspectorOpen && (
-        <Inspector selected={selected} tasks={workspace.tasks} events={workspace.events} />
+        <Inspector
+          selected={selected}
+          tasks={workspace.tasks}
+          events={workspace.events}
+          onClose={() => setInspectorOpen(false)}
+        />
       )}
-      {activityOpen && <ActivityRail events={workspace.events} />}
+      {activityOpen && (
+        <ActivityRail events={workspace.events} onClose={() => setActivityOpen(false)} />
+      )}
     </div>
   );
 }
