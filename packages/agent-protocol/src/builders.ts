@@ -23,6 +23,9 @@ import {
   ArtifactAvailableMessage,
   DependencyDeclaredMessage,
   DependencyAvailableMessage,
+  WorkspaceDeltaMessage,
+  WorkspaceResyncRequestMessage,
+  WorkspaceResyncRequiredMessage,
   AgentHandshakePayload,
   AgentHandshakeAcceptedPayload,
   AgentHandshakeRejectedPayload,
@@ -43,6 +46,9 @@ import {
   ArtifactAvailablePayload,
   DependencyDeclaredPayload,
   DependencyAvailablePayload,
+  WorkspaceDeltaPayload,
+  WorkspaceResyncRequestPayload,
+  WorkspaceResyncRequiredPayload,
 } from './types.js';
 
 export interface BaseBuilderOptions {
@@ -385,6 +391,39 @@ export function createDependencyAvailableMessage(
       MessageKind.EVENT,
     ),
     type: AgentMeshMessageType.DEPENDENCY_AVAILABLE,
+    payload,
+  };
+}
+
+export function createWorkspaceDeltaMessage(
+  options: BaseBuilderOptions,
+  payload: WorkspaceDeltaPayload,
+): WorkspaceDeltaMessage {
+  return {
+    ...buildEnvelope(options, MessageKind.EVENT),
+    type: AgentMeshMessageType.WORKSPACE_DELTA,
+    payload,
+  };
+}
+
+export function createWorkspaceResyncRequestMessage(
+  options: BaseBuilderOptions,
+  payload: WorkspaceResyncRequestPayload,
+): WorkspaceResyncRequestMessage {
+  return {
+    ...buildEnvelope(options, MessageKind.REQUEST),
+    type: AgentMeshMessageType.WORKSPACE_RESYNC_REQUEST,
+    payload,
+  };
+}
+
+export function createWorkspaceResyncRequiredMessage(
+  options: BaseBuilderOptions,
+  payload: WorkspaceResyncRequiredPayload,
+): WorkspaceResyncRequiredMessage {
+  return {
+    ...buildEnvelope(options, MessageKind.EVENT),
+    type: AgentMeshMessageType.WORKSPACE_RESYNC_REQUIRED,
     payload,
   };
 }

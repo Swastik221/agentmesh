@@ -16,6 +16,7 @@ import { validateFilePaths } from '../workspace/file-path.validator.js';
 import { assertNoFileConflicts } from '../workspace/conflict-detector.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
+import { deltaSequencerService } from '../services/delta-sequencer.service.js';
 
 const creatorSelect = {
   id: true,
@@ -49,7 +50,7 @@ export class TaskService {
     }
   }
 
-  public broadcastTaskStatusEvent(projectId: string, taskId: string, status: TaskStatus): void {
+  public async broadcastTaskStatusEvent(projectId: string, taskId: string, status: TaskStatus): Promise<void> {
     connectionManager.broadcastToProject(projectId, {
       type: AgentMeshMessageType.TASK_STATUS,
       payload: {
@@ -57,6 +58,15 @@ export class TaskService {
         status,
       },
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'task',
+        entityId: taskId,
+        operation: 'updated',
+        fields: { status },
+      },
+    ]);
   }
 
   async createTask(projectId: string, userId: string, data: CreateTaskInput) {
@@ -88,7 +98,26 @@ export class TaskService {
       },
     });
 
-    this.broadcastTaskStatusEvent(projectId, createdTask.id, createdTask.status);
+    connectionManager.broadcastToProject(projectId, {
+      type: AgentMeshMessageType.TASK_STATUS,
+      payload: {
+        taskId: createdTask.id,
+        status: createdTask.status,
+      },
+    });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'task',
+        entityId: createdTask.id,
+        operation: 'created',
+        fields: {
+          title: createdTask.title,
+          status: createdTask.status,
+          priority: createdTask.priority,
+        },
+      },
+    ]);
 
     return createdTask;
   }
@@ -251,6 +280,17 @@ export class TaskService {
     await prisma.task.delete({
       where: { id: taskId },
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'task',
+        entityId: taskId,
+        operation: 'removed',
+        fields: {
+          title: task.title,
+        },
+      },
+    ]);
   }
 
   // Task Responsibilities
@@ -295,7 +335,7 @@ export class TaskService {
       throw new ConflictError('Agent is already assigned to this task');
     }
 
-    return await prisma.$transaction(async (tx) => {
+    const responsibility = await prisma.$transaction(async (tx) => {
       // Execute PostgreSQL row lock on project tasks to guarantee concurrency safety
       await tx.$executeRaw`SELECT * FROM tasks WHERE "projectId" = ${projectId} FOR UPDATE`;
 
@@ -312,7 +352,7 @@ export class TaskService {
       await assertNoFileConflicts(projectId, taskId, freshTask.filePaths, tx);
 
       try {
-        const responsibility = await tx.taskResponsibility.create({
+        const resp = await tx.taskResponsibility.create({
           data: {
             taskId,
             agentId: data.agentId,
@@ -323,7 +363,7 @@ export class TaskService {
           },
         });
 
-        return responsibility;
+        return resp;
       } catch (error) {
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -334,6 +374,21 @@ export class TaskService {
         throw error;
       }
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'taskResponsibility',
+        entityId: `${taskId}_${data.agentId}`,
+        operation: 'created',
+        fields: {
+          taskId,
+          agentId: data.agentId,
+          role: data.role || null,
+        },
+      },
+    ]);
+
+    return responsibility;
   }
 
   async listResponsibilities(projectId: string, taskId: string, userId: string) {
@@ -393,6 +448,18 @@ export class TaskService {
         },
       },
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'taskResponsibility',
+        entityId: `${taskId}_${agentId}`,
+        operation: 'removed',
+        fields: {
+          taskId,
+          agentId,
+        },
+      },
+    ]);
   }
 
   // Task Dependencies

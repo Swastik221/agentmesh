@@ -24,6 +24,9 @@ export const AgentMeshMessageType = {
   ARTIFACT_AVAILABLE: 'artifact.available',
   DEPENDENCY_DECLARED: 'dependency.declared',
   DEPENDENCY_AVAILABLE: 'dependency.available',
+  WORKSPACE_DELTA: 'workspace.delta',
+  WORKSPACE_RESYNC_REQUEST: 'workspace.resync.request',
+  WORKSPACE_RESYNC_REQUIRED: 'workspace.resync.required',
 } as const;
 
 export type AgentMeshMessageType =

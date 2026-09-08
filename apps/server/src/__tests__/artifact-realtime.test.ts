@@ -113,6 +113,15 @@ describe('PRD-15 Realtime WebSocket & BYOA Artifact Integration Tests', () => {
         url += `&clientType=user`;
       }
       const client = new WebSocket(url, { headers });
+      (client as any)._msgBuffer = [];
+      client.on('message', (data: WebSocket.RawData) => {
+        try {
+          const parsed = JSON.parse(data.toString());
+          (client as any)._msgBuffer.push(parsed);
+        } catch {
+          // ignore non-json
+        }
+      });
       client.on('open', () => resolve(client));
       client.on('error', (err) => reject(err));
     });
@@ -123,6 +132,13 @@ describe('PRD-15 Realtime WebSocket & BYOA Artifact Integration Tests', () => {
     predicate: (msg: any) => boolean,
     timeoutMs = 5000,
   ): Promise<any> {
+    const buffer: any[] = (ws as any)._msgBuffer || [];
+    const existingIndex = buffer.findIndex(predicate);
+    if (existingIndex !== -1) {
+      const [found] = buffer.splice(existingIndex, 1);
+      return Promise.resolve(found);
+    }
+
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup();
