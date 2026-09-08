@@ -228,9 +228,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@agentmesh/agent-protocol':
-        specifier: workspace:*
-        version: link:../../packages/agent-protocol
       '@agentmesh/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -240,6 +237,9 @@ importers:
       '@xyflow/react':
         specifier: ^12.11.6
         version: 12.11.6(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      gsap:
+        specifier: ^3.15.0
+        version: 3.15.0
       lucide-react:
         specifier: ^1.41.0
         version: 1.41.0(react@19.2.8)
@@ -253,9 +253,6 @@ importers:
       '@agentmesh/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@types/node':
-        specifier: ^22.13.4
-        version: 22.20.1
       '@types/react':
         specifier: ^19.0.8
         version: 19.2.18
@@ -1788,6 +1785,9 @@ packages:
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
     engines: {node: '>= 0.4'}
+
+  gsap@3.15.0:
+    resolution: {integrity: sha512-dMW4CWBTUK1AEEDeZc1g4xpPGIrSf9fJF960qbTZmN/QwZIWY5wgliS6JWl9/25fpTGJrMRtSjGtOmPnfjZB+A==}
 
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
@@ -3923,6 +3923,8 @@ snapshots:
   globals@14.0.0: {}
 
   gopd@1.2.0: {}
+
+  gsap@3.15.0: {}
 
   has-flag@4.0.0: {}
 

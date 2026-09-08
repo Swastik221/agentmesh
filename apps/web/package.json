@@ -11,17 +11,16 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@agentmesh/agent-protocol": "workspace:*",
     "@agentmesh/shared": "workspace:*",
     "@agentmesh/ui": "workspace:*",
     "@xyflow/react": "^12.11.6",
+    "gsap": "^3.15.0",
     "lucide-react": "^1.41.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@agentmesh/config": "workspace:*",
-    "@types/node": "^22.13.4",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
