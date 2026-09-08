@@ -1,4 +1,5 @@
-export const AGENTMESH_PROTOCOL_VERSION = '0.1' as const;
+export const PROTOCOL_VERSION = '1.0' as const;
+export const AGENTMESH_PROTOCOL_VERSION = PROTOCOL_VERSION;
 
 export const AgentMeshMessageType = {
   AGENT_HANDSHAKE: 'agent.handshake',
@@ -14,6 +15,26 @@ export const AgentMeshMessageType = {
   TASK_COMPLETED: 'task.completed',
   TASK_FAILED: 'task.failed',
   ERROR: 'error',
+  PING: 'ping',
+  PONG: 'pong',
 } as const;
 
-export type AgentMeshMessageType = (typeof AgentMeshMessageType)[keyof typeof AgentMeshMessageType];
+export type AgentMeshMessageType =
+  (typeof AgentMeshMessageType)[keyof typeof AgentMeshMessageType];
+
+export const ParticipantType = {
+  AGENT: 'agent',
+  SERVER: 'server',
+  USER: 'user',
+  COORDINATOR: 'coordinator',
+} as const;
+
+export type ParticipantType = (typeof ParticipantType)[keyof typeof ParticipantType];
+
+export const MessageKind = {
+  REQUEST: 'request',
+  RESPONSE: 'response',
+  EVENT: 'event',
+} as const;
+
+export type MessageKind = (typeof MessageKind)[keyof typeof MessageKind];

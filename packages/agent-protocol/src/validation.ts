@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { AGENTMESH_PROTOCOL_VERSION, AgentMeshMessageType } from './constants.js';
+import { PROTOCOL_VERSION, AGENTMESH_PROTOCOL_VERSION, AgentMeshMessageType } from './constants.js';
 import { AgentMeshProtocolError, AgentMeshProtocolErrorCode } from './errors.js';
 import { agentMeshMessageSchema } from './schemas.js';
 import { AgentMeshMessage } from './types.js';
@@ -21,9 +21,9 @@ export function parseAgentMeshMessage(input: unknown): AgentMeshMessage {
     );
   }
 
-  if (raw.protocolVersion !== AGENTMESH_PROTOCOL_VERSION) {
+  if (raw.protocolVersion !== PROTOCOL_VERSION && raw.protocolVersion !== AGENTMESH_PROTOCOL_VERSION) {
     throw new AgentMeshProtocolError(
-      `Unsupported protocol version '${raw.protocolVersion}'. Expected '${AGENTMESH_PROTOCOL_VERSION}'`,
+      `Unsupported protocol version '${raw.protocolVersion}'. Expected '${PROTOCOL_VERSION}'`,
       AgentMeshProtocolErrorCode.INVALID_VERSION,
     );
   }
@@ -52,14 +52,14 @@ export function parseAgentMeshMessage(input: unknown): AgentMeshMessage {
       throw new AgentMeshProtocolError(
         `Invalid payload for message type '${raw.type}': ${issue.message}`,
         AgentMeshProtocolErrorCode.INVALID_PAYLOAD,
-        parseResult.error.issues,
+        { details: { issues: parseResult.error.issues } },
       );
     }
 
     throw new AgentMeshProtocolError(
       `Invalid message field '${path}': ${issue.message}`,
       AgentMeshProtocolErrorCode.INVALID_MESSAGE,
-      parseResult.error.issues,
+      { details: { issues: parseResult.error.issues } },
     );
   }
 
@@ -85,6 +85,9 @@ export interface CreateAgentMeshMessageInput<
   recipientId?: string;
   timestamp?: string;
   correlationId?: string;
+  causationId?: string;
+  taskId?: string;
+  executionId?: string;
   payload: Extract<AgentMeshMessage, { type: T }>['payload'];
 }
 
@@ -93,13 +96,16 @@ export function createAgentMeshMessage<T extends AgentMeshMessageType>(
 ): Extract<AgentMeshMessage, { type: T }> {
   const rawMessage = {
     id: input.id || crypto.randomUUID(),
-    protocolVersion: AGENTMESH_PROTOCOL_VERSION,
+    protocolVersion: PROTOCOL_VERSION,
     type: input.type,
     projectId: input.projectId,
     senderId: input.senderId,
     ...(input.recipientId !== undefined && { recipientId: input.recipientId }),
     timestamp: input.timestamp || new Date().toISOString(),
     ...(input.correlationId !== undefined && { correlationId: input.correlationId }),
+    ...(input.causationId !== undefined && { causationId: input.causationId }),
+    ...(input.taskId !== undefined && { taskId: input.taskId }),
+    ...(input.executionId !== undefined && { executionId: input.executionId }),
     payload: input.payload,
   };
 

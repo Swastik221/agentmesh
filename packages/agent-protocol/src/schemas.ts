@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { AgentMeshMessageType, AGENTMESH_PROTOCOL_VERSION } from './constants.js';
+import { AgentMeshMessageType, PROTOCOL_VERSION } from './constants.js';
+
+export const participantSchema = z.object({
+  type: z.enum(['agent', 'server', 'user', 'coordinator']),
+  id: z.string().trim().min(1, 'Participant ID is required'),
+});
 
 export const agentHandshakePayloadSchema = z
   .object({
@@ -95,16 +100,25 @@ export const errorPayloadSchema = z.object({
   details: z.record(z.unknown()).optional(),
 });
 
+export const pingPayloadSchema = z.object({}).optional();
+export const pongPayloadSchema = z.object({}).optional();
+
 export const baseEnvelopeSchema = z.object({
   id: z.string().trim().min(1, 'Message ID is required'),
-  protocolVersion: z.literal(AGENTMESH_PROTOCOL_VERSION, {
-    errorMap: () => ({ message: `Protocol version must be "${AGENTMESH_PROTOCOL_VERSION}"` }),
+  protocolVersion: z.enum(['1.0', '0.1'], {
+    errorMap: () => ({ message: `Protocol version must be "${PROTOCOL_VERSION}"` }),
   }),
   projectId: z.string().trim().min(1, 'Project ID is required'),
   senderId: z.string().trim().min(1, 'Sender ID is required'),
   recipientId: z.string().trim().min(1).optional(),
+  sender: participantSchema.optional(),
+  recipient: participantSchema.optional(),
   timestamp: z.string().datetime({ message: 'Timestamp must be a valid ISO-8601 datetime string' }),
   correlationId: z.string().trim().min(1).optional(),
+  causationId: z.string().trim().min(1).optional(),
+  taskId: z.string().trim().min(1).optional(),
+  executionId: z.string().trim().min(1).optional(),
+  kind: z.enum(['request', 'response', 'event']).optional(),
 });
 
 export const agentHandshakeMessageSchema = baseEnvelopeSchema.extend({
@@ -172,6 +186,16 @@ export const errorMessageSchema = baseEnvelopeSchema.extend({
   payload: errorPayloadSchema,
 });
 
+export const pingMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.PING),
+  payload: pingPayloadSchema.default({}),
+});
+
+export const pongMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.PONG),
+  payload: pongPayloadSchema.default({}),
+});
+
 export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   agentHandshakeMessageSchema,
   agentHandshakeAcceptedMessageSchema,
@@ -186,5 +210,6 @@ export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   taskCompletedMessageSchema,
   taskFailedMessageSchema,
   errorMessageSchema,
+  pingMessageSchema,
+  pongMessageSchema,
 ]);
-
