@@ -105,7 +105,7 @@ export const pongPayloadSchema = z.object({}).optional();
 
 export const baseEnvelopeSchema = z.object({
   id: z.string().trim().min(1, 'Message ID is required'),
-  protocolVersion: z.enum(['1.0', '0.1'], {
+  protocolVersion: z.literal(PROTOCOL_VERSION, {
     errorMap: () => ({ message: `Protocol version must be "${PROTOCOL_VERSION}"` }),
   }),
   projectId: z.string().trim().min(1, 'Project ID is required'),

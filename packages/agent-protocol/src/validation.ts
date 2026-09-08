@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { PROTOCOL_VERSION, AGENTMESH_PROTOCOL_VERSION, AgentMeshMessageType } from './constants.js';
+import { PROTOCOL_VERSION, AgentMeshMessageType } from './constants.js';
 import { AgentMeshProtocolError, AgentMeshProtocolErrorCode } from './errors.js';
 import { agentMeshMessageSchema } from './schemas.js';
 import { AgentMeshMessage } from './types.js';
@@ -21,7 +21,7 @@ export function parseAgentMeshMessage(input: unknown): AgentMeshMessage {
     );
   }
 
-  if (raw.protocolVersion !== PROTOCOL_VERSION && raw.protocolVersion !== AGENTMESH_PROTOCOL_VERSION) {
+  if (raw.protocolVersion !== PROTOCOL_VERSION) {
     throw new AgentMeshProtocolError(
       `Unsupported protocol version '${raw.protocolVersion}'. Expected '${PROTOCOL_VERSION}'`,
       AgentMeshProtocolErrorCode.INVALID_VERSION,

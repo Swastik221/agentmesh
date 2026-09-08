@@ -33,7 +33,7 @@ import {
   pongMessageSchema,
   agentMeshMessageSchema,
 } from './schemas.js';
-import { PROTOCOL_VERSION, AGENTMESH_PROTOCOL_VERSION, ParticipantType, MessageKind } from './constants.js';
+import { PROTOCOL_VERSION, ParticipantType, MessageKind } from './constants.js';
 
 export type MessageParticipant = z.infer<typeof participantSchema>;
 
@@ -71,5 +71,5 @@ export type PongMessage = z.infer<typeof pongMessageSchema>;
 
 export type AgentMeshMessage = z.infer<typeof agentMeshMessageSchema>;
 
-export type ProtocolVersion = typeof PROTOCOL_VERSION | typeof AGENTMESH_PROTOCOL_VERSION;
+export type ProtocolVersion = typeof PROTOCOL_VERSION;
 export { ParticipantType, MessageKind };
