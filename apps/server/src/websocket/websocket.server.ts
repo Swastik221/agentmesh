@@ -118,10 +118,15 @@ export class AgentMeshWebSocketServer {
     });
 
     ws.on('message', (data: RawData) => {
-      this.handleIncomingMessage(metadata, data);
+      // Fire-and-forget async boundary: never allow message handling to leak an
+      // unhandled rejection (e.g. delta recording racing workspace teardown).
+      this.handleIncomingMessage(metadata, data).catch((err: unknown) => {
+        logger.error(`[WebSocket] Error handling message on ${metadata.connectionId}:`, err);
+      });
     });
 
     ws.on('close', async () => {
+      try {
       logger.info(
         `[WebSocket] Connection ${metadata.connectionId} closed for project ${projectId}`,
       );
@@ -179,6 +184,9 @@ export class AgentMeshWebSocketServer {
             projectId,
             presenceMsg as unknown as WebSocketMessage,
           );
+          // Best-effort presence delta during close cleanup: the workspace may
+          // already be torn down (e.g. test teardown), so a failure here must not
+          // become an unhandled rejection that fails unrelated work.
           await deltaSequencerService.recordAndBroadcastDelta(projectId, [
             {
               entity: 'presence',
@@ -188,6 +196,12 @@ export class AgentMeshWebSocketServer {
             },
           ]);
         }
+      }
+      } catch (err) {
+        logger.error(
+          `[WebSocket] Error during close cleanup for connection ${metadata.connectionId}:`,
+          err,
+        );
       }
     });
 
