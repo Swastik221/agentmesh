@@ -54,13 +54,31 @@ export class DeltaSequencerService {
       throw new BadRequestError('Delta must contain at least one state change');
     }
 
-    let sequence: number;
-    try {
-      sequence = await this.allocateNextSequence(projectId);
-    } catch {
-      return null as unknown as WorkspaceDeltaMessage;
+    // 1. Construct candidate delta message for size validation BEFORE consuming a sequence number
+    const candidateDeltaMsg = createWorkspaceDeltaMessage(
+      {
+        projectId,
+        senderId: 'server',
+      },
+      {
+        sequence: 0,
+        changes,
+      },
+    );
+
+    const serializedCandidate = JSON.stringify(candidateDeltaMsg);
+    const candidateBytes = Buffer.byteLength(serializedCandidate, 'utf8');
+
+    if (candidateBytes > config.maxWorkspaceDeltaBytes) {
+      throw new BadRequestError(
+        `Delta payload size (${candidateBytes} bytes) exceeds limit of ${config.maxWorkspaceDeltaBytes} bytes`,
+      );
     }
 
+    // 2. Allocate sequence atomically (errors propagate naturally without swallowing)
+    const sequence = await this.allocateNextSequence(projectId);
+
+    // 3. Construct final workspace.delta message with allocated sequence
     const deltaMsg = createWorkspaceDeltaMessage(
       {
         projectId,
@@ -71,15 +89,6 @@ export class DeltaSequencerService {
         changes,
       },
     );
-
-    const serialized = JSON.stringify(deltaMsg);
-    const bytes = Buffer.byteLength(serialized, 'utf8');
-
-    if (bytes > config.maxWorkspaceDeltaBytes) {
-      throw new BadRequestError(
-        `Delta payload size (${bytes} bytes) exceeds limit of ${config.maxWorkspaceDeltaBytes} bytes`,
-      );
-    }
 
     // Buffer delta in workspace replay buffer
     let buffer = this.replayBuffers.get(projectId);
@@ -111,16 +120,31 @@ export class DeltaSequencerService {
   ): Promise<void> {
     const { projectId } = metadata;
     const currentSeq = await this.getCurrentSequence(projectId);
+
+    if (lastKnownSequence === currentSeq) {
+      return;
+    }
+
     const buffer = this.replayBuffers.get(projectId) || [];
 
-    // Check if missing deltas exist in buffer
+    // Check if missing deltas exist in buffer and are strictly contiguous
     const availableDeltas = buffer.filter((d) => d.payload.sequence > lastKnownSequence);
 
-    if (
+    let isContiguous =
       availableDeltas.length > 0 &&
       availableDeltas[0].payload.sequence === lastKnownSequence + 1 &&
-      availableDeltas[availableDeltas.length - 1].payload.sequence === currentSeq
-    ) {
+      availableDeltas[availableDeltas.length - 1].payload.sequence === currentSeq;
+
+    if (isContiguous) {
+      for (let i = 0; i < availableDeltas.length; i++) {
+        if (availableDeltas[i].payload.sequence !== lastKnownSequence + 1 + i) {
+          isContiguous = false;
+          break;
+        }
+      }
+    }
+
+    if (isContiguous) {
       // Replay missed deltas
       for (const delta of availableDeltas) {
         if (metadata.socket.readyState === metadata.socket.OPEN) {

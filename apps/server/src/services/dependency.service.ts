@@ -387,6 +387,17 @@ export class DependencyService {
     await prisma.taskDependency.delete({
       where: { id: dependencyId },
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'dependency',
+        entityId: dependencyId,
+        operation: 'removed',
+        fields: {
+          taskId,
+        },
+      },
+    ]);
   }
 }
 

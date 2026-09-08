@@ -152,7 +152,6 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
 
   beforeEach(async () => {
     connectionManager.clear();
-    await new Promise((r) => setTimeout(r, 50));
     // Reset agent statuses to OFFLINE
     await prisma.agent.updateMany({
       where: { id: { in: [agentA1.id, agentA2.id, agentB1.id] } },

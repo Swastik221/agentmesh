@@ -4,7 +4,7 @@ import { createApp } from '../app.js';
 import { prisma } from '../lib/prisma.js';
 import { sessionService } from '../auth/session.service.js';
 import { deltaSequencerService } from '../services/delta-sequencer.service.js';
-import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
+import { AgentMeshMessageType, WorkspaceDeltaChange } from '@agentmesh/agent-protocol';
 
 const app = createApp();
 
@@ -153,5 +153,60 @@ describe('PRD-16 Delta-State Broadcast & Resynchronization Tests', () => {
     expect(res.status).toBe(201);
     const currentSeq = await deltaSequencerService.getCurrentSequence(projectId);
     expect(currentSeq).toBe(1);
+  });
+
+  it('6. Failed sequence allocation propagates error and returns no null message', async () => {
+    await expect(
+      deltaSequencerService.recordAndBroadcastDelta('non-existent-project-id', [
+        {
+          entity: 'task',
+          entityId: 't1',
+          operation: 'created',
+        },
+      ]),
+    ).rejects.toThrow();
+  });
+
+  it('7. Oversized delta is rejected BEFORE sequence allocation and does NOT increment sequence', async () => {
+    const largePayload = 'X'.repeat(70000);
+    const oversizedChanges: WorkspaceDeltaChange[] = [
+      {
+        entity: 'task',
+        entityId: 't-oversized',
+        operation: 'created',
+        fields: { payload: largePayload },
+      },
+    ];
+
+    await expect(
+      deltaSequencerService.recordAndBroadcastDelta(projectId, oversizedChanges),
+    ).rejects.toThrow(/exceeds limit/);
+
+    const seqAfterFailure = await deltaSequencerService.getCurrentSequence(projectId);
+    expect(seqAfterFailure).toBe(0);
+
+    const validDelta = await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'task',
+        entityId: 't-valid',
+        operation: 'created',
+      },
+    ]);
+
+    expect(validDelta.payload.sequence).toBe(1);
+  });
+
+  it('8. Failed state mutation produces no delta', async () => {
+    const res = await request(app)
+      .post(`/api/projects/${projectId}/tasks`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        title: '', // empty title invalid
+        description: 'Invalid task',
+      });
+
+    expect(res.status).toBe(400);
+    const currentSeq = await deltaSequencerService.getCurrentSequence(projectId);
+    expect(currentSeq).toBe(0);
   });
 });
