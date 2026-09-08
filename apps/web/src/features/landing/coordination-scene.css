@@ -1,0 +1,295 @@
+/* Chapter III only. All values come from its one damped cover progress. */
+#coordination .chapter-runway {
+  height: 420svh;
+  min-height: 3400px;
+}
+#coordination .story-cover .chapter-heading h2 {
+  max-width: 43%;
+  font-size: clamp(58px, 6.1vw, 94px);
+}
+.scene--coordination .scene-orbit,
+.scene--coordination > .scene-stage {
+  opacity: 0;
+}
+.scene--coordination .coord-workflow {
+  color: #a78bfa;
+  opacity: var(--coord-presence, 0);
+}
+.scene--coordination .coord-workflow text {
+  font-family: var(--am-font-mono);
+}
+.coord-primary {
+  fill: #f8fafc;
+  font-size: 11px;
+}
+.coord-muted {
+  fill: #94a3b8;
+  font-size: 8px;
+}
+.coord-owner {
+  fill: #a78bfa;
+  font-size: 8px;
+}
+.coord-capability {
+  fill: #22d3ee;
+  font-size: 8px;
+}
+.coord-agent {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.coord-agent--orion {
+  scale: calc(1 + var(--coord-claimed-a, 0) * 0.018);
+}
+.coord-agent--vega {
+  scale: calc(1 + var(--coord-claimed-b, 0) * 0.018);
+}
+.coord-agent-idle,
+.coord-agent-working,
+.coord-agent-blocked {
+  font-size: 7px;
+  letter-spacing: 0.08em;
+}
+.coord-agent-idle {
+  fill: #94a3b8;
+  opacity: calc(1 - var(--coord-claim, 0));
+}
+.coord-agent-working {
+  fill: #3ddc97;
+  opacity: var(--coord-claim, 0);
+}
+.coord-agent--orion .coord-agent-working {
+  opacity: calc(var(--coord-claim, 0) - var(--coord-blocked, 0));
+}
+.coord-agent-blocked {
+  fill: #f0b458;
+  opacity: var(--coord-blocked, 0);
+}
+.coord-board {
+  opacity: var(--coord-presence, 0);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.coord-task-id {
+  fill: #64748b;
+  font-size: 7px;
+  letter-spacing: 0.06em;
+}
+.coord-task-title {
+  font-size: 8px;
+}
+.coord-status {
+  fill: transparent;
+  stroke: #232c40;
+}
+.coord-status-text {
+  fill: #94a3b8;
+  font-size: 6px;
+  letter-spacing: 0.05em;
+}
+.coord-status--waiting {
+  stroke: #f0b458;
+}
+.coord-status-text--waiting {
+  fill: #f0b458;
+}
+.coord-claimed-status {
+  opacity: var(--coord-claim, 0);
+}
+.coord-claimed-status rect {
+  fill: #0d1117;
+  stroke: #3ddc97;
+}
+.coord-claimed-status text {
+  fill: #3ddc97;
+  font-size: 6px;
+  letter-spacing: 0.05em;
+}
+.coord-proposal-line,
+.coord-dependency-base,
+.coord-dependency-live,
+.coord-artifact-path {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1.5;
+  stroke-dasharray: 1;
+  stroke-linecap: round;
+}
+.coord-proposal-line {
+  stroke: #22d3ee;
+  stroke-dashoffset: calc(1 - var(--coord-proposal, 0));
+  opacity: var(--coord-proposal, 0);
+}
+.coord-dependency-base {
+  stroke: #f0b458;
+  stroke-dasharray: 4 7;
+  stroke-dashoffset: calc(1 - var(--coord-dependency, 0));
+  opacity: var(--coord-dependency-amber, 0);
+}
+.coord-dependency-live {
+  stroke: #22d3ee;
+  stroke-dashoffset: calc(1 - var(--coord-complete, 0));
+  opacity: var(--coord-complete, 0);
+}
+.coord-artifact-path {
+  stroke: #22d3ee;
+  stroke-dashoffset: calc(1 - var(--coord-handoff, 0));
+  opacity: var(--coord-artifact-visible, 0);
+}
+.coord-cursor {
+  opacity: var(--coord-cursor-opacity, 0);
+  will-change: transform;
+}
+.coord-cursor--anand {
+  color: #a78bfa;
+}
+.coord-cursor--swastik {
+  color: #3ddc97;
+}
+.coord-cursor-label {
+  fill: #0a0e17;
+  font-size: 8px;
+}
+.coord-task-token {
+  opacity: var(--coord-task-token, 0);
+  will-change: transform;
+}
+.coord-task-token rect {
+  fill: #0d1117;
+  stroke: #a78bfa;
+}
+.coord-task-token--115 rect {
+  stroke: #3ddc97;
+}
+.coord-task-token text {
+  fill: #f8fafc;
+  font: 7px var(--am-font-mono);
+}
+.coord-dependency-chip,
+.coord-artifact,
+.coord-packet {
+  will-change: transform, opacity;
+}
+.coord-dependency-chip {
+  opacity: var(--coord-dependency-chip, 0);
+}
+.coord-dependency-chip rect {
+  fill: #201b13;
+  stroke: #f0b458;
+}
+.coord-dependency-chip text {
+  fill: #f0b458;
+  font: 7px var(--am-font-mono);
+  letter-spacing: 0.05em;
+}
+.coord-artifact {
+  opacity: var(--coord-artifact-visible, 0);
+}
+.coord-artifact rect {
+  fill: #0d1117;
+  stroke: #3ddc97;
+}
+.coord-artifact text {
+  fill: #b7f7d8;
+  font: 7px var(--am-font-mono);
+}
+.coord-artifact text:last-child {
+  fill: #94a3b8;
+  font-size: 6px;
+}
+.coord-packet {
+  fill: #22d3ee;
+  opacity: var(--coord-packet-opacity, 0);
+}
+.coord-chip {
+  opacity: 0;
+}
+.coord-chip rect {
+  fill: #0d1117;
+  stroke: #232c40;
+}
+.coord-chip text {
+  fill: #94a3b8;
+  font: 6px var(--am-font-mono);
+  letter-spacing: 0.04em;
+}
+.coord-event-proposal {
+  opacity: var(--coord-proposal-event, 0);
+}
+.coord-event-claim-a,
+.coord-event-claim-b {
+  opacity: var(--coord-claim-event, 0);
+}
+.coord-event-dependency {
+  opacity: var(--coord-dependency-event, 0);
+}
+.coord-event-artifact {
+  opacity: var(--coord-artifact-event, 0);
+}
+.coord-event-unblocked {
+  opacity: var(--coord-unblocked-event, 0);
+}
+.coord-event-claim-a rect,
+.coord-event-claim-b rect,
+.coord-event-unblocked rect {
+  stroke: #3ddc97;
+}
+.coord-event-dependency rect {
+  stroke: #f0b458;
+}
+.coord-event-artifact rect,
+.coord-event-proposal rect {
+  stroke: #22d3ee;
+}
+.coord-caption {
+  fill: #f8fafc;
+  font: 10px var(--am-font-sans);
+  opacity: 0;
+}
+.coord-caption-0 {
+  opacity: var(--coord-caption-0, 0);
+}
+.coord-caption-1 {
+  opacity: var(--coord-caption-1, 0);
+}
+.coord-caption-2 {
+  opacity: var(--coord-caption-2, 0);
+}
+.coord-caption-3 {
+  opacity: var(--coord-caption-3, 0);
+}
+.coord-caption-4 {
+  opacity: var(--coord-caption-4, 0);
+}
+.coord-caption-5 {
+  opacity: var(--coord-caption-5, 0);
+}
+.coord-caption-6 {
+  opacity: var(--coord-caption-6, 0);
+}
+@media (max-width: 699px) {
+  #coordination .chapter-runway {
+    height: 360svh;
+    min-height: 2850px;
+  }
+  #coordination .story-cover .chapter-heading h2 {
+    max-width: 100%;
+    font-size: clamp(39px, 10.5vw, 58px);
+  }
+  .scene--coordination .scene-objects {
+    width: 167%;
+    left: -67%;
+  }
+  .scene--coordination .coord-caption {
+    font-size: 9px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene--coordination .coord-cursor,
+  .scene--coordination .coord-task-token,
+  .scene--coordination .coord-dependency-chip,
+  .scene--coordination .coord-artifact,
+  .scene--coordination .coord-packet {
+    will-change: auto;
+  }
+}

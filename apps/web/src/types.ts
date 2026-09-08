@@ -26,7 +26,7 @@ export interface AgentLogLine {
   message: string;
 }
 
-export type AgentConnectionStatus = 'connected' | 'idle';
+export type AgentConnectionStatus = 'connected' | 'idle' | 'working';
 
 export interface AgentNodeFields extends Record<string, unknown> {
   name: string;

@@ -54,132 +54,6 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentmesh?schema=pub
 - **ProjectMember**: Membership association with composite constraint `(projectId, userId)` and roles (`OWNER`, `MEMBER`).
 - **Agent**: AI agent representation (`id` CUID, `projectId`, `ownerId`, `name`, `provider`, `status` enum `OFFLINE` | `ONLINE` | `BUSY`).
 
-## API Endpoints (PRD #8)
-
-### Health Check
-
-- `GET /health` -> `200 OK`
-  ```json
-  {
-    "status": "ok",
-    "service": "agentmesh-server",
-    "database": "connected"
-  }
-  ```
-
-### Wallet Authentication API (PRD #8)
-
-- `GET /auth/nonce` -> Generate single-use cryptographic SIWE nonce (`200 OK`)
-  ```json
-  { "nonce": "random-nonce-string" }
-  ```
-- `POST /auth/verify` -> Verify EIP-4361 SIWE signature, create/find user with lowercased address, issue session cookie (`200 OK`, `401 Unauthorized` if invalid signature/nonce/domain)
-  ```json
-  { "message": "SIWE message", "signature": "0x..." }
-  ```
-- `GET /auth/me` -> Get authenticated user from session cookie or Bearer token (`200 OK` or `401 Unauthorized`)
-- `POST /auth/logout` -> Invalidate session and clear session cookie (`204 No Content`)
-
-### Users API
-
-- `POST /users` -> Create user (`201 Created`)
-  ```json
-  { "walletAddress": "0x123...", "displayName": "Swastik" }
-  ```
-- `GET /users/:userId` -> Get user by ID (`200 OK` or `404 Not Found`)
-- `GET /users/wallet/:walletAddress` -> Lookup user by wallet (`200 OK` or `404 Not Found`)
-- `PATCH /users/:userId` -> Update display name (`200 OK` or `404 Not Found`)
-  ```json
-  { "displayName": "New Name" }
-  ```
-- `GET /users/:userId/projects` -> List user's project memberships (`200 OK` or `404 Not Found`)
-
-### Projects API
-
-- `POST /projects` -> Create project (`201 Created`)
-  - Automatically creates a `ProjectMember` record with role `OWNER` inside a transaction.
-  ```json
-  { "name": "AgentMesh", "description": "Collaborative AI workspace", "ownerId": "user-id" }
-  ```
-- `GET /projects/:projectId` -> Get project details with owner, members, agents (`200 OK` or `404 Not Found`)
-- `PATCH /projects/:projectId` -> Update project name or description (`200 OK` or `404 Not Found`)
-  ```json
-  { "name": "Updated Name", "description": "Updated Description" }
-  ```
-- `DELETE /projects/:projectId` -> Delete project and cascade members/agents (`200 OK` or `404 Not Found`)
-
-### Project Membership API
-
-- `POST /projects/:projectId/members` -> Add member to project (`201 Created`, `404 Not Found` if user/project missing, `409 Conflict` if duplicate)
-  ```json
-  { "userId": "user-id", "role": "MEMBER" }
-  ```
-- `GET /projects/:projectId/members` -> List members for project (`200 OK` or `404 Not Found`)
-- `PATCH /projects/:projectId/members/:userId` -> Update member role (`200 OK`, `409 Conflict` if attempting to demote the only OWNER)
-  ```json
-  { "role": "OWNER" }
-  ```
-- `DELETE /projects/:projectId/members/:userId` -> Remove member from project (`200 OK`, `409 Conflict` if attempting to remove the only OWNER)
-
-### Agent Registry API (PRD #4)
-
-- `POST /projects/:projectId/agents` -> Register agent (`201 Created`, `404 Not Found` if project or owner missing, `403 Forbidden` if owner isn't a project member, `400 Bad Request` if invalid body)
-  - Agent is always initialized with `status = OFFLINE`.
-  ```json
-  { "ownerId": "user-id", "name": "Claude Dev", "provider": "claude" }
-  ```
-- `GET /projects/:projectId/agents` -> List project agents (`200 OK` or `404 Not Found` if project missing)
-  - Supports optional capability query filter: `GET /projects/:projectId/agents?capability=backend`
-- `GET /agents/:agentId` -> Get individual agent details (`200 OK` or `404 Not Found`)
-- `PATCH /agents/:agentId` -> Update agent (`200 OK`, `400 Bad Request` if invalid status or empty update payload, `404 Not Found`)
-  ```json
-  { "name": "Claude Backend", "provider": "claude", "status": "ONLINE" }
-  ```
-  Valid status values: `OFFLINE`, `ONLINE`, `BUSY`.
-- `DELETE /agents/:agentId` -> Delete agent (`204 No Content` or `404 Not Found`)
-
-### Agent Capabilities API (PRD #5)
-
-- `POST /agents/:agentId/capabilities` -> Add capability to agent (`201 Created`, `409 Conflict` if duplicate capability, `400 Bad Request` if invalid capability format, `404 Not Found` if agent missing)
-  - Capabilities are normalized (trimmed, lowercased, 2-50 chars, matching `^[a-z0-9]+(?:[-_][a-z0-9]+)*$`).
-  ```json
-  { "capability": "backend" }
-  ```
-- `GET /agents/:agentId/capabilities` -> List capabilities attached to agent (`200 OK` or `404 Not Found`)
-  ```json
-  {
-    "agentId": "agent-id",
-    "capabilities": ["backend", "code-review", "debugging"]
-  }
-  ```
-- `DELETE /agents/:agentId/capabilities/:capability` -> Remove capability from agent (`204 No Content`, `404 Not Found` if agent or capability missing)
-
-### WebSocket Infrastructure (PRD #6)
-
-Real-time transport layer with in-memory connection manager and project room isolation.
-
-- **Endpoint**: `ws://localhost:<PORT>/ws?projectId=<project-id>`
-- **Validation**: `projectId` is required and must reference an existing project; missing or invalid project connections are rejected immediately (`400 Bad Request` / `404 Not Found`).
-- **Authentication**: Not implemented yet (authentication layer comes in a future PRD).
-- **Transport Events**:
-  - `ping` -> `{ "type": "ping", "payload": {} }` (Server responds with `{ "type": "pong", "payload": {} }`)
-  - `pong` -> `{ "type": "pong", "payload": {} }` (Server updates heartbeat timestamp)
-  - `error` -> `{ "type": "error", "payload": { "code": "INVALID_MESSAGE", "message": "Invalid WebSocket message" } }`
-- **Heartbeat & Liveness**: 30s server-side ping frame interval for tracking active sockets and terminating stale connections.
-- **Room Isolation**: `ConnectionManager.broadcastToProject(projectId, message)` delivers messages strictly to connections belonging to the target project.
-
-### Error Response Format
-
-All API errors return standardized JSON responses:
-
-```json
-{
-  "error": "VALIDATION_ERROR | NOT_FOUND | FORBIDDEN | CONFLICT | INTERNAL_SERVER_ERROR",
-  "message": "Error description message",
-  "details": []
-}
-```
-
 ## Database Commands
 
 - **Generate Client**: `pnpm db:generate`
@@ -204,5 +78,46 @@ Run specific target applications:
 - **Typecheck**: `pnpm typecheck`
 - **Lint**: `pnpm lint`
 - **Format**: `pnpm format`
-- **Test**: `pnpm test` (includes API and database integration suites)
+- **Test**: `pnpm test` (includes PostgreSQL integration suite)
 - **Build**: `pnpm build`
+
+## Health Endpoint
+
+Backend exposes a health check endpoint verifying application and database connectivity:
+
+```http
+GET /health
+```
+
+Expected response (`HTTP 200`):
+
+```json
+{
+  "status": "ok",
+  "service": "agentmesh-server",
+  "database": "connected"
+}
+```
+
+## Public landing page
+
+The marketing page is available at `http://localhost:5173/` (including
+`/#workspace` for the interactive preview). The workspace shell is available at
+`/canvas`. Both routes use the frontend command above; the marketing page
+does not require the backend, database, wallet, or provider credentials.
+
+The landing page opens with a scroll-driven SVG coder connection, then reveals
+its headline and one shared React Flow canvas. Named cursors grab and carry
+Orion and Vega, release them to claim tasks, and exchange an illustrative schema.
+The entire sequence reverses with scrolling. Manual node dragging becomes
+available at completion; reduced motion displays the completed workspace.
+Five topic-specific vector scenes follow, with approval controls and FAQ content.
+All examples are local previews; no backend or wallet is required.
+
+Run the timeline checks with Node 22.6 or later:
+
+```bash
+node --experimental-strip-types --test apps/web/tests/workspace-timeline.test.mjs
+```
+
+See `docs/landing-page.md` for implementation and verification notes.

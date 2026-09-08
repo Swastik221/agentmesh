@@ -10,7 +10,7 @@ import type { AgentFlowNode } from '../../types';
  * ledger of work rather than a log viewer.
  */
 export function AgentNode({ data }: NodeProps<AgentFlowNode>) {
-  const isConnected = data.status === 'connected';
+  const isConnected = data.status === 'connected' || data.status === 'working';
 
   return (
     <div className="am-node am-node--agent">
@@ -30,9 +30,12 @@ export function AgentNode({ data }: NodeProps<AgentFlowNode>) {
           <TruncatedAddress address={data.address} label={data.ens} />
         </div>
 
+        {/* Keyed on the block alone. A line whose message changes must update
+            in place: re-keying it on the text remounts the row, and under a
+            scrubbed scroll that reads as the terminal blinking. */}
         <div className="am-agent__log">
           {data.log.map((line) => (
-            <div className="am-agent__line" key={`${line.block}-${line.hash}`}>
+            <div className="am-agent__line" key={line.block}>
               <span className="am-agent__block">{line.block}</span>
               <span className="am-agent__hash">{line.hash}</span>
               <span className="am-agent__msg">{line.message}</span>
