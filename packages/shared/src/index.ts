@@ -129,6 +129,7 @@ export interface ProjectBrainListResponseDTO {
 export type TaskStatus =
   | 'TODO'
   | 'IN_PROGRESS'
+  | 'PENDING_APPROVAL'
   | 'BLOCKED'
   | 'COMPLETED'
   | 'FAILED'

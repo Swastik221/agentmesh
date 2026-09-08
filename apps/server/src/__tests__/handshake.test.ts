@@ -173,15 +173,32 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
     });
   };
 
-  const receiveMessage = (ws: WebSocket): Promise<Record<string, unknown>> => {
+  /**
+   * Waits for the next agent.handshake.accepted / agent.handshake.rejected
+   * reply, skipping unrelated live events (e.g. activity.created broadcasts
+   * from the project-level event feed).
+   */
+  const receiveHandshakeReply = (ws: WebSocket): Promise<Record<string, unknown>> => {
     return new Promise((resolve, reject) => {
-      ws.once('message', (data) => {
+      let skipGuard = 0;
+      const onMessage = (data: WebSocket.RawData): void => {
         try {
-          resolve(JSON.parse(data.toString()));
+          const msg = JSON.parse(data.toString()) as Record<string, unknown>;
+          if (msg.type !== 'agent.handshake.accepted' && msg.type !== 'agent.handshake.rejected') {
+            skipGuard += 1;
+            if (skipGuard > 100) {
+              reject(new Error('Gave up waiting for a handshake reply'));
+              return;
+            }
+            ws.once('message', onMessage);
+            return;
+          }
+          resolve(msg);
         } catch (err) {
           reject(err);
         }
-      });
+      };
+      ws.once('message', onMessage);
     });
   };
 
@@ -196,7 +213,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentA1.id },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res = await responsePromise;
 
@@ -215,7 +232,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentA1.id },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res = await responsePromise;
 
@@ -245,7 +262,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         },
       };
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(invalidMsg));
       const res = await responsePromise;
 
@@ -268,7 +285,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentA1.id },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res = await responsePromise;
 
@@ -287,7 +304,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentB1.id },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res = await responsePromise;
 
@@ -312,7 +329,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentB1.id },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res = await responsePromise;
 
@@ -348,7 +365,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: tempAgent.id },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res = await responsePromise;
 
@@ -371,7 +388,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentA1.id, capabilities: ['frontend', 'typescript'] },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res = await responsePromise;
 
@@ -390,7 +407,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentA1.id, capabilities: ['frontend', 'unregistered-capability'] },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res = await responsePromise;
 
@@ -409,7 +426,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentA1.id, capabilities: [' FRONTEND ', 'TypeScript'] },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res = await responsePromise;
 
@@ -430,7 +447,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentA1.id },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       await responsePromise;
 
@@ -451,7 +468,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentA1.id },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       await responsePromise;
 
@@ -484,11 +501,11 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
       });
 
       // Perform handshake on both connections for same agent
-      const p1 = receiveMessage(ws1);
+      const p1 = receiveHandshakeReply(ws1);
       ws1.send(JSON.stringify(handshakeMsg1));
       await p1;
 
-      const p2 = receiveMessage(ws2);
+      const p2 = receiveHandshakeReply(ws2);
       ws2.send(JSON.stringify(handshakeMsg2));
       await p2;
 
@@ -519,13 +536,13 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
       });
 
       // First handshake
-      const p1 = receiveMessage(ws);
+      const p1 = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res1 = await p1;
       expect(res1.type).toBe('agent.handshake.accepted');
 
       // Second handshake on same connection
-      const p2 = receiveMessage(ws);
+      const p2 = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(handshakeMsg));
       const res2 = await p2;
 
@@ -550,7 +567,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         },
       });
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(appMsg));
       const res = await responsePromise;
 
@@ -575,7 +592,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: {}, // Missing required agentId
       };
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(malformedMsg));
       const res = await responsePromise;
 
@@ -598,7 +615,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         payload: { agentId: agentA1.id },
       };
 
-      const responsePromise = receiveMessage(ws);
+      const responsePromise = receiveHandshakeReply(ws);
       ws.send(JSON.stringify(invalidVersionMsg));
       const res = await responsePromise;
 

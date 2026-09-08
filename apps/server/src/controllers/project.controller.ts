@@ -4,6 +4,24 @@ import { projectService } from '../services/project.service.js';
 import { createProjectSchema, updateProjectSchema } from '../schemas/project.schema.js';
 import { AuthenticatedRequest } from '../auth/auth.types.js';
 
+export const listProjects = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = req.auth?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const projects = await projectService.getUserProjects(userId);
+    res.status(200).json({ projects });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const createProject = async (
   req: AuthenticatedRequest,
   res: Response,

@@ -9,6 +9,7 @@ import {
 import { connectionManager } from '../websocket/connection.manager.js';
 import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
 import { deltaSequencerService } from './delta-sequencer.service.js';
+import { activityService } from './activity.service.js';
 
 import crypto from 'node:crypto';
 
@@ -18,6 +19,7 @@ export interface CreateArtifactInput {
   payload: unknown;
   executionId?: string;
   agentId?: string;
+  requiresReview?: boolean;
 }
 
 export interface ListArtifactsQuery {
@@ -198,6 +200,7 @@ export class ArtifactService {
               name: data.name.trim(),
               version,
               payload: normalizedPayload as Prisma.InputJsonValue,
+              requiresReview: data.requiresReview ?? false,
             },
           });
         });
@@ -284,6 +287,15 @@ export class ArtifactService {
       });
     }
 
+    await activityService.recordActivity(projectId, {
+      type: 'artifact.created',
+      actorType: 'agent',
+      actorId: artifact.agentId,
+      taskId,
+      artifactId: artifact.id,
+      message: `${artifact.type} artifact '${artifact.name}' v${artifact.version} created`,
+    });
+
     return artifactWithHash;
   }
 
@@ -330,6 +342,101 @@ export class ArtifactService {
     return {
       ...artifact,
       contentHash,
+    };
+  }
+
+  async reviewArtifact(
+    projectId: string,
+    artifactId: string,
+    reviewerUserId: string,
+    decision: { approved: boolean; note?: string },
+  ) {
+    await this.verifyProjectMembership(projectId, reviewerUserId);
+
+    const artifact = await prisma.artifact.findUnique({
+      where: { id: artifactId },
+      include: { task: true },
+    });
+
+    if (!artifact || artifact.projectId !== projectId) {
+      throw new NotFoundError('Artifact not found');
+    }
+
+    if (!artifact.requiresReview) {
+      throw new BadRequestError('Artifact does not require review');
+    }
+
+    if (artifact.status !== 'PENDING') {
+      throw new BadRequestError('Artifact has already been reviewed');
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT * FROM artifacts WHERE id = ${artifactId} AND "projectId" = ${projectId} FOR UPDATE`;
+
+      const fresh = await tx.artifact.findUnique({ where: { id: artifactId } });
+      if (!fresh || fresh.projectId !== projectId) {
+        throw new NotFoundError('Artifact not found');
+      }
+      if (fresh.status !== 'PENDING') {
+        throw new BadRequestError('Artifact has already been reviewed');
+      }
+
+      const updatedArtifact = await tx.artifact.update({
+        where: { id: artifactId },
+        data: {
+          status: decision.approved ? 'APPROVED' : 'REJECTED',
+          reviewedById: reviewerUserId,
+          reviewedAt: new Date(),
+          reviewNote: decision.note ?? null,
+        },
+      });
+
+      const targetStatus = decision.approved ? 'COMPLETED' : 'IN_PROGRESS';
+      const updatedTask = await tx.task.update({
+        where: { id: artifact.taskId },
+        data: { status: targetStatus },
+      });
+
+      return { updatedArtifact, updatedTask };
+    });
+
+    connectionManager.broadcastToProject(projectId, {
+      type: AgentMeshMessageType.TASK_STATUS,
+      payload: {
+        taskId: artifact.taskId,
+        status: updated.updatedTask.status,
+      },
+    });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'artifact',
+        entityId: artifactId,
+        operation: 'updated',
+        fields: { status: updated.updatedArtifact.status },
+      },
+      {
+        entity: 'task',
+        entityId: artifact.taskId,
+        operation: 'updated',
+        fields: { status: updated.updatedTask.status },
+      },
+    ]);
+
+    await activityService.recordActivity(projectId, {
+      type: decision.approved ? 'artifact.approved' : 'artifact.rejected',
+      actorType: 'human',
+      actorId: reviewerUserId,
+      taskId: artifact.taskId,
+      artifactId: artifact.id,
+      message: decision.approved
+        ? `Artifact '${artifact.name}' approved — task completed`
+        : `Artifact '${artifact.name}' rejected — task reopened`,
+    });
+
+    return {
+      artifact: updated.updatedArtifact,
+      task: updated.updatedTask,
     };
   }
 

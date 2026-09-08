@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  listProjects,
   createProject,
   getProjectById,
   updateProject,
@@ -11,11 +12,12 @@ import {
   updateMemberRole,
   removeMember,
 } from '../controllers/member.controller.js';
-import { optionalAuth } from '../auth/auth.middleware.js';
+import { optionalAuth, requireAuth } from '../auth/auth.middleware.js';
 
 const router: Router = Router();
 
 // Project Endpoints
+router.get('/projects', requireAuth, listProjects);
 router.post('/projects', optionalAuth, createProject);
 
 router.get('/projects/:projectId', getProjectById);

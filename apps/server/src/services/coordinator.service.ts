@@ -4,6 +4,7 @@ import { ForbiddenError, NotFoundError } from '../errors/app-error.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import { WebSocketMessage } from '../websocket/websocket.types.js';
 import { createTaskAssignedMessage } from '@agentmesh/agent-protocol';
+import { activityService } from './activity.service.js';
 
 export type AssignmentSource = 'HUMAN_PREFERENCE' | 'CAPABILITY_MATCH';
 
@@ -467,6 +468,16 @@ export class CoordinatorService {
           projectId,
           assignedMsg as unknown as WebSocketMessage,
         );
+
+        await activityService.recordActivity(projectId, {
+          type: 'task.assigned',
+          actorType: 'coordinator',
+          actorId: 'coordinator',
+          actorName: 'Task Coordinator',
+          taskId,
+          message: `Task assigned to agent via ${source.toLowerCase().replace(/_/g, ' ')}`,
+          payload: { agentId, source, score },
+        });
       }
 
       return result;

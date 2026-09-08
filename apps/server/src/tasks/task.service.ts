@@ -17,6 +17,7 @@ import { assertNoFileConflicts } from '../workspace/conflict-detector.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
 import { deltaSequencerService } from '../services/delta-sequencer.service.js';
+import { activityService } from '../services/activity.service.js';
 
 const creatorSelect = {
   id: true,
@@ -118,6 +119,14 @@ export class TaskService {
         },
       },
     ]);
+
+    await activityService.recordActivity(projectId, {
+      type: 'task.created',
+      actorType: 'human',
+      actorId: userId,
+      taskId: createdTask.id,
+      message: `Task '${createdTask.title}' created`,
+    });
 
     return createdTask;
   }
@@ -501,6 +510,44 @@ export class TaskService {
     }
 
     await dependencyService.removeDependency(projectId, taskId, dep.id, userId);
+  }
+
+  /**
+   * Moves a task to PENDING_APPROVAL after an agent publishes a reviewable
+   * artifact. No-op for terminal states or if already pending.
+   */
+  async markPendingApproval(
+    projectId: string,
+    taskId: string,
+    agentId?: string,
+  ): Promise<TaskStatus | null> {
+    const task = await prisma.task.findUnique({ where: { id: taskId } });
+    if (!task || task.projectId !== projectId) return null;
+    if (
+      task.status === 'COMPLETED' ||
+      task.status === 'CANCELLED' ||
+      task.status === 'FAILED' ||
+      task.status === 'PENDING_APPROVAL'
+    ) {
+      return task.status;
+    }
+
+    const updated = await prisma.task.update({
+      where: { id: taskId },
+      data: { status: 'PENDING_APPROVAL' },
+    });
+
+    this.broadcastTaskStatusEvent(projectId, taskId, 'PENDING_APPROVAL').catch(() => {});
+
+    await activityService.recordActivity(projectId, {
+      type: 'task.pending_approval',
+      actorType: 'agent',
+      actorId: agentId ?? 'server',
+      taskId,
+      message: `Task awaiting artifact review`,
+    });
+
+    return updated.status;
   }
 }
 

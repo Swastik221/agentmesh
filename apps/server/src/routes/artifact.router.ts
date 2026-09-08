@@ -4,6 +4,7 @@ import {
   createArtifact,
   listArtifacts,
   getArtifact,
+  reviewArtifact,
 } from '../controllers/artifact.controller.js';
 
 export const artifactRouter: Router = Router({ mergeParams: true });
@@ -16,4 +17,5 @@ for (const prefix of prefixes) {
   artifactRouter.post(`${prefix}/tasks/:taskId/artifacts`, createArtifact);
   artifactRouter.get(`${prefix}/tasks/:taskId/artifacts`, listArtifacts);
   artifactRouter.get(`${prefix}/artifacts/:artifactId`, getArtifact);
+  artifactRouter.post(`${prefix}/artifacts/:artifactId/review`, reviewArtifact);
 }
