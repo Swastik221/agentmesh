@@ -18,6 +18,7 @@ import {
   PongMessage,
   WorkspaceSnapshotMessage,
   WorkspacePresenceChangedMessage,
+  TaskAssignedMessage,
   AgentHandshakePayload,
   AgentHandshakeAcceptedPayload,
   AgentHandshakeRejectedPayload,
@@ -33,6 +34,7 @@ import {
   ErrorPayload,
   WorkspaceSnapshotPayload,
   WorkspacePresenceChangedPayload,
+  TaskAssignedPayload,
 } from './types.js';
 
 export interface BaseBuilderOptions {
@@ -289,6 +291,23 @@ export function createWorkspacePresenceChangedMessage(
   return {
     ...buildEnvelope(options, MessageKind.EVENT),
     type: AgentMeshMessageType.WORKSPACE_PRESENCE_CHANGED,
+    payload,
+  };
+}
+
+export function createTaskAssignedMessage(
+  options: BaseBuilderOptions,
+  payload: TaskAssignedPayload,
+): TaskAssignedMessage {
+  return {
+    ...buildEnvelope(
+      {
+        ...options,
+        taskId: options.taskId || payload.taskId,
+      },
+      MessageKind.EVENT,
+    ),
+    type: AgentMeshMessageType.TASK_ASSIGNED,
     payload,
   };
 }

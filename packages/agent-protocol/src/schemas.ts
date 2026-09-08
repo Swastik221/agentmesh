@@ -143,6 +143,14 @@ export const workspacePresenceChangedPayloadSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+export const taskAssignedPayloadSchema = z.object({
+  taskId: z.string().trim().min(1, 'Task ID is required'),
+  agentId: z.string().trim().min(1, 'Agent ID is required'),
+  assignmentSource: z.enum(['HUMAN_PREFERENCE', 'CAPABILITY_MATCH']),
+  score: z.number().optional(),
+  explanation: z.record(z.unknown()).optional(),
+});
+
 export const baseEnvelopeSchema = z.object({
   id: z.string().trim().min(1, 'Message ID is required'),
   protocolVersion: z.literal(PROTOCOL_VERSION, {
@@ -246,6 +254,11 @@ export const workspacePresenceChangedMessageSchema = baseEnvelopeSchema.extend({
   payload: workspacePresenceChangedPayloadSchema,
 });
 
+export const taskAssignedMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.TASK_ASSIGNED),
+  payload: taskAssignedPayloadSchema,
+});
+
 export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   agentHandshakeMessageSchema,
   agentHandshakeAcceptedMessageSchema,
@@ -264,4 +277,5 @@ export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   pongMessageSchema,
   workspaceSnapshotMessageSchema,
   workspacePresenceChangedMessageSchema,
+  taskAssignedMessageSchema,
 ]);

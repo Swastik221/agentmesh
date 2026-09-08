@@ -19,6 +19,7 @@ export const AgentMeshMessageType = {
   PONG: 'pong',
   WORKSPACE_SNAPSHOT: 'workspace.snapshot',
   WORKSPACE_PRESENCE_CHANGED: 'workspace.presence.changed',
+  TASK_ASSIGNED: 'task.assigned',
 } as const;
 
 export type AgentMeshMessageType =
