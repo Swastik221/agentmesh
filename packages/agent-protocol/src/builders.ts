@@ -16,6 +16,8 @@ import {
   ErrorMessage,
   PingMessage,
   PongMessage,
+  WorkspaceSnapshotMessage,
+  WorkspacePresenceChangedMessage,
   AgentHandshakePayload,
   AgentHandshakeAcceptedPayload,
   AgentHandshakeRejectedPayload,
@@ -29,6 +31,8 @@ import {
   TaskFailedPayload,
   TaskStatusPayload,
   ErrorPayload,
+  WorkspaceSnapshotPayload,
+  WorkspacePresenceChangedPayload,
 } from './types.js';
 
 export interface BaseBuilderOptions {
@@ -264,5 +268,27 @@ export function createPongMessage(options: BaseBuilderOptions): PongMessage {
     ...buildEnvelope(options, MessageKind.RESPONSE),
     type: AgentMeshMessageType.PONG,
     payload: {},
+  };
+}
+
+export function createWorkspaceSnapshotMessage(
+  options: BaseBuilderOptions,
+  payload: WorkspaceSnapshotPayload,
+): WorkspaceSnapshotMessage {
+  return {
+    ...buildEnvelope(options, MessageKind.EVENT),
+    type: AgentMeshMessageType.WORKSPACE_SNAPSHOT,
+    payload,
+  };
+}
+
+export function createWorkspacePresenceChangedMessage(
+  options: BaseBuilderOptions,
+  payload: WorkspacePresenceChangedPayload,
+): WorkspacePresenceChangedMessage {
+  return {
+    ...buildEnvelope(options, MessageKind.EVENT),
+    type: AgentMeshMessageType.WORKSPACE_PRESENCE_CHANGED,
+    payload,
   };
 }

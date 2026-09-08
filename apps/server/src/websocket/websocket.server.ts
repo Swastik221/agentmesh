@@ -1,13 +1,18 @@
 import type { Server as HTTPServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, WebSocket, RawData } from 'ws';
-import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
+import {
+  AgentMeshMessageType,
+  createWorkspaceSnapshotMessage,
+  createWorkspacePresenceChangedMessage,
+} from '@agentmesh/agent-protocol';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
 import { connectionManager } from './connection.manager.js';
 import { ConnectionMetadata, WebSocketMessage, WSMessageType } from './websocket.types.js';
 import { handshakeService, HandshakeErrorCode } from '../handshake/index.js';
 import { messagingService } from '../messaging/index.js';
+import { sessionService } from '../auth/session.service.js';
 
 function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
   const cookieHeader = req.headers.cookie;
@@ -95,7 +100,11 @@ export class AgentMeshWebSocketServer {
     }
   }
 
-  private handleConnection(ws: WebSocket, req: IncomingMessage, projectId: string): void {
+  private async handleConnection(
+    ws: WebSocket,
+    req: IncomingMessage,
+    projectId: string,
+  ): Promise<void> {
     const httpSessionId = extractSessionIdFromReq(req);
     const metadata = connectionManager.addConnection(projectId, ws, httpSessionId);
     logger.info(
@@ -115,8 +124,54 @@ export class AgentMeshWebSocketServer {
       logger.info(
         `[WebSocket] Connection ${metadata.connectionId} closed for project ${projectId}`,
       );
-      connectionManager.removeConnection(metadata.connectionId);
-      await handshakeService.handleDisconnection(metadata);
+      const isUser = Boolean(metadata.userId);
+      const userId = metadata.userId;
+      const isAgent = Boolean(metadata.agentId);
+      const agentId = metadata.agentId;
+
+      if (isAgent) {
+        await handshakeService.handleDisconnection(metadata);
+        connectionManager.removeConnection(metadata.connectionId);
+        if (agentId && connectionManager.getActiveAgentConnectionsCount(agentId) === 0) {
+          const presenceMsg = createWorkspacePresenceChangedMessage(
+            {
+              projectId,
+              senderId: 'server',
+            },
+            {
+              entityType: 'agent',
+              entityId: agentId,
+              status: 'OFFLINE',
+            },
+          );
+          connectionManager.broadcastToProjectUsers(
+            projectId,
+            presenceMsg as unknown as WebSocketMessage,
+          );
+        }
+      } else {
+        connectionManager.removeConnection(metadata.connectionId);
+      }
+
+      if (isUser && userId) {
+        if (connectionManager.getActiveUserConnectionsCount(projectId, userId) === 0) {
+          const presenceMsg = createWorkspacePresenceChangedMessage(
+            {
+              projectId,
+              senderId: 'server',
+            },
+            {
+              entityType: 'user',
+              entityId: userId,
+              status: 'OFFLINE',
+            },
+          );
+          connectionManager.broadcastToProjectUsers(
+            projectId,
+            presenceMsg as unknown as WebSocketMessage,
+          );
+        }
+      }
     });
 
     ws.on('error', (err) => {
@@ -126,6 +181,164 @@ export class AgentMeshWebSocketServer {
         ws.close();
       }
     });
+
+    // Handle user session authentication & workspace authorization for User UI clients
+    const parsedUrl = new URL(req.url || '', 'http://localhost');
+    const tokenParam = parsedUrl.searchParams.get('token');
+    const clientTypeParam = parsedUrl.searchParams.get('clientType');
+    const isUserClient = Boolean((tokenParam && tokenParam.trim() !== '') || clientTypeParam === 'user');
+
+    if (isUserClient && httpSessionId) {
+      try {
+        const session = await sessionService.validateSession(httpSessionId);
+        if (session && session.userId) {
+          const project = await prisma.project.findUnique({
+            where: { id: projectId },
+            include: { members: true },
+          });
+
+          const isOwner = project?.ownerId === session.userId;
+          const isMember = project?.members.some((m) => m.userId === session.userId);
+
+          if (!isOwner && !isMember) {
+            logger.warn(
+              `[WebSocket] Access denied for user ${session.userId} to project ${projectId}`,
+            );
+            this.sendError(ws, 'FORBIDDEN', 'User is not a member of this workspace');
+            ws.close(4003, 'Forbidden');
+            connectionManager.removeConnection(metadata.connectionId);
+            return;
+          }
+
+          metadata.userId = session.userId;
+          metadata.authenticated = true;
+
+          // Send bounded workspace snapshot
+          if (project) {
+            await this.sendWorkspaceSnapshot(metadata, project);
+          }
+
+          // Broadcast user ONLINE presence if this is user's first connection
+          if (
+            connectionManager.getActiveUserConnectionsCount(projectId, session.userId) === 1
+          ) {
+            const presenceMsg = createWorkspacePresenceChangedMessage(
+              {
+                projectId,
+                senderId: 'server',
+              },
+              {
+                entityType: 'user',
+                entityId: session.userId,
+                status: 'ONLINE',
+                metadata: {
+                  displayName: session.user.displayName,
+                  walletAddress: session.user.walletAddress,
+                },
+              },
+            );
+            connectionManager.broadcastToProjectUsers(
+              projectId,
+              presenceMsg as unknown as WebSocketMessage,
+              metadata.connectionId,
+            );
+          }
+        }
+      } catch (err) {
+        logger.info(
+          `[WebSocket] Session validation for connection ${metadata.connectionId}:`,
+          err,
+        );
+      }
+    }
+  }
+
+  private async sendWorkspaceSnapshot(
+    metadata: ConnectionMetadata,
+    project: { id: string; name: string; ownerId: string },
+  ): Promise<void> {
+    const members = await prisma.projectMember.findMany({
+      where: { projectId: metadata.projectId },
+      include: { user: true },
+    });
+
+    const owner = await prisma.user.findUnique({
+      where: { id: project.ownerId },
+    });
+
+    const memberList = members.map((m) => ({
+      userId: m.userId,
+      displayName: m.user.displayName,
+      walletAddress: m.user.walletAddress,
+      role: m.role,
+      status: connectionManager.isUserConnected(metadata.projectId, m.userId)
+        ? ('ONLINE' as const)
+        : ('OFFLINE' as const),
+    }));
+
+    if (owner && !memberList.some((m) => m.userId === owner.id)) {
+      memberList.unshift({
+        userId: owner.id,
+        displayName: owner.displayName,
+        walletAddress: owner.walletAddress,
+        role: 'OWNER',
+        status: connectionManager.isUserConnected(metadata.projectId, owner.id)
+          ? ('ONLINE' as const)
+          : ('OFFLINE' as const),
+      });
+    }
+
+    const agents = await prisma.agent.findMany({
+      where: { projectId: metadata.projectId },
+    });
+
+    const agentList = agents.map((a) => {
+      let status: 'ONLINE' | 'OFFLINE' | 'BUSY' = a.status === 'BUSY' ? 'BUSY' : 'OFFLINE';
+      if (status !== 'BUSY') {
+        status = connectionManager.isAgentConnected(metadata.projectId, a.id)
+          ? 'ONLINE'
+          : 'OFFLINE';
+      }
+      return {
+        agentId: a.id,
+        name: a.name,
+        ownerId: a.ownerId,
+        provider: a.provider,
+        status,
+      };
+    });
+
+    const tasks = await prisma.task.findMany({
+      where: { projectId: metadata.projectId },
+      take: 20,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const taskList = tasks.map((t) => ({
+      taskId: t.id,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+    }));
+
+    const snapshotMsg = createWorkspaceSnapshotMessage(
+      {
+        projectId: metadata.projectId,
+        senderId: 'server',
+        ...(metadata.userId && { recipientId: metadata.userId }),
+      },
+      {
+        workspace: {
+          id: project.id,
+          name: project.name,
+        },
+        members: memberList,
+        agents: agentList,
+        tasks: taskList,
+      },
+    );
+
+    this.sendJson(metadata.socket, snapshotMsg as unknown as WebSocketMessage);
   }
 
   private async handleIncomingMessage(
@@ -158,6 +371,24 @@ export class AgentMeshWebSocketServer {
     if (message.type === AgentMeshMessageType.AGENT_HANDSHAKE) {
       const handshakeResult = await handshakeService.processHandshake(metadata, parsed);
       this.sendJson(metadata.socket, handshakeResult.message as unknown as WebSocketMessage);
+
+      if (handshakeResult.success && metadata.agentId) {
+        const presenceMsg = createWorkspacePresenceChangedMessage(
+          {
+            projectId: metadata.projectId,
+            senderId: 'server',
+          },
+          {
+            entityType: 'agent',
+            entityId: metadata.agentId,
+            status: 'ONLINE',
+          },
+        );
+        connectionManager.broadcastToProjectUsers(
+          metadata.projectId,
+          presenceMsg as unknown as WebSocketMessage,
+        );
+      }
       return;
     }
 

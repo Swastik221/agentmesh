@@ -17,6 +17,8 @@ export const AgentMeshMessageType = {
   ERROR: 'error',
   PING: 'ping',
   PONG: 'pong',
+  WORKSPACE_SNAPSHOT: 'workspace.snapshot',
+  WORKSPACE_PRESENCE_CHANGED: 'workspace.presence.changed',
 } as const;
 
 export type AgentMeshMessageType =

@@ -103,6 +103,46 @@ export const errorPayloadSchema = z.object({
 export const pingPayloadSchema = z.object({}).optional();
 export const pongPayloadSchema = z.object({}).optional();
 
+export const workspaceMemberSchema = z.object({
+  userId: z.string().trim().min(1),
+  displayName: z.string().nullable().optional(),
+  walletAddress: z.string().nullable().optional(),
+  role: z.string(),
+  status: z.enum(['ONLINE', 'OFFLINE']),
+});
+
+export const workspaceAgentSchema = z.object({
+  agentId: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  ownerId: z.string().trim().min(1),
+  provider: z.string(),
+  status: z.enum(['ONLINE', 'OFFLINE', 'BUSY']),
+});
+
+export const workspaceTaskSummarySchema = z.object({
+  taskId: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  status: z.string(),
+  priority: z.string(),
+});
+
+export const workspaceSnapshotPayloadSchema = z.object({
+  workspace: z.object({
+    id: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+  }),
+  members: z.array(workspaceMemberSchema),
+  agents: z.array(workspaceAgentSchema),
+  tasks: z.array(workspaceTaskSummarySchema),
+});
+
+export const workspacePresenceChangedPayloadSchema = z.object({
+  entityType: z.enum(['user', 'agent']),
+  entityId: z.string().trim().min(1),
+  status: z.enum(['ONLINE', 'OFFLINE', 'BUSY']),
+  metadata: z.record(z.unknown()).optional(),
+});
+
 export const baseEnvelopeSchema = z.object({
   id: z.string().trim().min(1, 'Message ID is required'),
   protocolVersion: z.literal(PROTOCOL_VERSION, {
@@ -196,6 +236,16 @@ export const pongMessageSchema = baseEnvelopeSchema.extend({
   payload: pongPayloadSchema.default({}),
 });
 
+export const workspaceSnapshotMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.WORKSPACE_SNAPSHOT),
+  payload: workspaceSnapshotPayloadSchema,
+});
+
+export const workspacePresenceChangedMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.WORKSPACE_PRESENCE_CHANGED),
+  payload: workspacePresenceChangedPayloadSchema,
+});
+
 export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   agentHandshakeMessageSchema,
   agentHandshakeAcceptedMessageSchema,
@@ -212,4 +262,6 @@ export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   errorMessageSchema,
   pingMessageSchema,
   pongMessageSchema,
+  workspaceSnapshotMessageSchema,
+  workspacePresenceChangedMessageSchema,
 ]);

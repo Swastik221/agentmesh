@@ -26,6 +26,7 @@ export const navItems: NavItem[] = [
 
 /** Placeholder project. There is no project switching yet. */
 export const currentProject = {
+  id: 'agentmesh-demo',
   name: 'AgentMesh Demo Project',
   slug: 'agentmesh-demo',
 } as const;
