@@ -31,6 +31,7 @@ model User {
   authSessions  AuthSession[]
   brainEntries  ProjectBrainEntry[]
   createdTasks  Task[]
+  artifacts     Artifact[]
 
   @@map("users")
 }
@@ -50,6 +51,8 @@ model Project {
   brainEntries ProjectBrainEntry[]
   tasks        Task[]
   workspace    ProjectWorkspace?
+  artifacts    Artifact[]
+  taskDependencies TaskDependency[]
 
   @@index([ownerId])
   @@map("projects")
@@ -88,6 +91,7 @@ model Agent {
   executions           TaskExecution[]
   worktrees            GitWorktree[]
   preferredTasks       Task[]               @relation("PreferredAgentTasks")
+  artifacts            Artifact[]
 
   @@index([projectId])
   @@index([ownerId])
@@ -197,6 +201,7 @@ model Task {
   dependents       TaskDependency[]     @relation("TaskDependents")
   executions       TaskExecution[]
   worktrees        GitWorktree[]
+  artifacts        Artifact[]
 
   @@index([projectId])
   @@index([projectId, status])
@@ -226,17 +231,57 @@ model TaskResponsibility {
 
 model TaskDependency {
   id              String   @id @default(cuid())
+  projectId       String
   taskId          String
-  dependsOnTaskId String
+  dependsOnTaskId String?
+  artifactId      String?
+  dependencyType  String   @default("TASK_COMPLETION")
   createdAt       DateTime @default(now())
 
-  task          Task @relation("TaskDependencies", fields: [taskId], references: [id], onDelete: Cascade)
-  dependsOnTask Task @relation("TaskDependents", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task          Task      @relation("TaskDependencies", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnTask Task?     @relation("TaskDependents", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+  artifact      Artifact? @relation(fields: [artifactId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, dependsOnTaskId])
+  @@unique([taskId, artifactId])
+  @@index([projectId])
   @@index([taskId])
   @@index([dependsOnTaskId])
+  @@index([artifactId])
   @@map("task_dependencies")
+}
+
+model Artifact {
+  id          String   @id @default(cuid())
+  projectId   String
+  taskId      String
+  executionId String?
+  agentId     String
+  ownerUserId String
+
+  type        String
+  name        String
+  version     Int      @default(1)
+  payload     Json
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task         Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  execution    TaskExecution?   @relation(fields: [executionId], references: [id], onDelete: SetNull)
+  agent        Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  ownerUser    User             @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  dependencies TaskDependency[]
+
+  @@unique([taskId, name, version])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([agentId])
+  @@index([executionId])
+  @@index([ownerUserId])
+  @@map("artifacts")
 }
 
 enum ExecutionStatus {
@@ -263,6 +308,7 @@ model TaskExecution {
   task     Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
   agent    Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
   worktree GitWorktree?
+  artifacts Artifact[]
 
   @@index([taskId])
   @@index([agentId])

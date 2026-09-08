@@ -20,6 +20,10 @@ export const AgentMeshMessageType = {
   WORKSPACE_SNAPSHOT: 'workspace.snapshot',
   WORKSPACE_PRESENCE_CHANGED: 'workspace.presence.changed',
   TASK_ASSIGNED: 'task.assigned',
+  ARTIFACT_CREATED: 'artifact.created',
+  ARTIFACT_AVAILABLE: 'artifact.available',
+  DEPENDENCY_DECLARED: 'dependency.declared',
+  DEPENDENCY_AVAILABLE: 'dependency.available',
 } as const;
 
 export type AgentMeshMessageType =

@@ -1,7 +1,6 @@
 import { Prisma, TaskStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import {
-  BadRequestError,
   ConflictError,
   ForbiddenError,
   NotFoundError,
@@ -403,74 +402,13 @@ export class TaskService {
     userId: string,
     data: CreateDependencyInput,
   ) {
-    await this.verifyProjectMembership(projectId, userId);
-
-    if (taskId === data.dependsOnTaskId) {
-      throw new BadRequestError('A task cannot depend on itself');
-    }
-
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-    });
-
-    if (!task || task.projectId !== projectId) {
-      throw new NotFoundError('Task not found');
-    }
-
-    const dependsOnTask = await prisma.task.findUnique({
-      where: { id: data.dependsOnTaskId },
-    });
-
-    if (!dependsOnTask || dependsOnTask.projectId !== projectId) {
-      throw new NotFoundError('Dependent task not found in this project');
-    }
-
-    const existing = await prisma.taskDependency.findUnique({
-      where: {
-        taskId_dependsOnTaskId: {
-          taskId,
-          dependsOnTaskId: data.dependsOnTaskId,
-        },
-      },
-    });
-
-    if (existing) {
-      throw new ConflictError('Dependency already exists');
-    }
-
-    try {
-      return await prisma.taskDependency.create({
-        data: {
-          taskId,
-          dependsOnTaskId: data.dependsOnTaskId,
-        },
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        throw new ConflictError('Dependency already exists');
-      }
-      throw error;
-    }
+    const { dependencyService } = await import('../services/dependency.service.js');
+    return await dependencyService.createDependency(projectId, taskId, userId, data);
   }
 
   async listDependencies(projectId: string, taskId: string, userId: string) {
-    await this.verifyProjectMembership(projectId, userId);
-
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-    });
-
-    if (!task || task.projectId !== projectId) {
-      throw new NotFoundError('Task not found');
-    }
-
-    return await prisma.taskDependency.findMany({
-      where: { taskId },
-      orderBy: { createdAt: 'asc' },
-    });
+    const { dependencyService } = await import('../services/dependency.service.js');
+    return await dependencyService.listDependencies(projectId, taskId, userId);
   }
 
   async removeDependency(
@@ -479,37 +417,23 @@ export class TaskService {
     dependsOnTaskId: string,
     userId: string,
   ): Promise<void> {
-    await this.verifyProjectMembership(projectId, userId);
-
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-    });
-
-    if (!task || task.projectId !== projectId) {
-      throw new NotFoundError('Task not found');
-    }
-
-    const dependency = await prisma.taskDependency.findUnique({
+    const { dependencyService } = await import('../services/dependency.service.js');
+    const dep = await prisma.taskDependency.findFirst({
       where: {
-        taskId_dependsOnTaskId: {
-          taskId,
-          dependsOnTaskId,
-        },
+        projectId,
+        taskId,
+        OR: [
+          { dependsOnTaskId },
+          { id: dependsOnTaskId },
+        ],
       },
     });
 
-    if (!dependency) {
+    if (!dep) {
       throw new NotFoundError('Dependency not found');
     }
 
-    await prisma.taskDependency.delete({
-      where: {
-        taskId_dependsOnTaskId: {
-          taskId,
-          dependsOnTaskId,
-        },
-      },
-    });
+    await dependencyService.removeDependency(projectId, taskId, dep.id, userId);
   }
 }
 

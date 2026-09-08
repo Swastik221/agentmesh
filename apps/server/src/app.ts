@@ -13,6 +13,8 @@ import executionRouter from './execution/execution.routes.js';
 import workspaceRouter from './workspace/workspace.routes.js';
 import worktreeRouter from './git/worktree.routes.js';
 import coordinatorRouter from './routes/coordinator.router.js';
+import { artifactRouter } from './routes/artifact.router.js';
+import { dependencyRouter } from './routes/dependency.router.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { config } from './config/index.js';
 
@@ -25,7 +27,7 @@ export const createApp = (): Express => {
       credentials: true,
     }),
   );
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
   app.use(cookieParser());
 
   app.use('/', healthRouter);
@@ -40,6 +42,8 @@ export const createApp = (): Express => {
   app.use('/', workspaceRouter);
   app.use('/', worktreeRouter);
   app.use('/', coordinatorRouter);
+  app.use('/', artifactRouter);
+  app.use('/', dependencyRouter);
 
   app.use(errorHandler);
 
