@@ -182,19 +182,37 @@ export class ExecutionService {
         return;
       }
 
-      // 1. Atomic/conditional transition QUEUED -> RUNNING
-      const updateResult = await prisma.taskExecution.updateMany({
-        where: {
-          id: executionId,
-          status: ExecutionStatus.QUEUED,
-        },
-        data: {
-          status: ExecutionStatus.RUNNING,
-          startedAt: new Date(),
-        },
+      // 1. Atomic/conditional transition QUEUED -> RUNNING (and Task -> IN_PROGRESS if latest)
+      let queuedToRunningCount = 0;
+      await prisma.$transaction(async (tx) => {
+        const updateResult = await tx.taskExecution.updateMany({
+          where: {
+            id: executionId,
+            status: ExecutionStatus.QUEUED,
+          },
+          data: {
+            status: ExecutionStatus.RUNNING,
+            startedAt: new Date(),
+          },
+        });
+
+        queuedToRunningCount = updateResult.count;
+
+        if (queuedToRunningCount > 0) {
+          const latestAtStart = await tx.taskExecution.findFirst({
+            where: { taskId: execution.taskId },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (latestAtStart && latestAtStart.id === executionId) {
+            await tx.task.update({
+              where: { id: execution.taskId },
+              data: { status: 'IN_PROGRESS' },
+            });
+          }
+        }
       });
 
-      if (updateResult.count === 0) {
+      if (queuedToRunningCount === 0) {
         // Conditional update affected 0 rows (execution is no longer QUEUED)
         const currentExec = await prisma.taskExecution.findUnique({
           where: { id: executionId },
@@ -204,18 +222,6 @@ export class ExecutionService {
           await this.syncAgentStatus(execution.agentId);
         }
         return;
-      }
-
-      // Update Task status -> IN_PROGRESS if latest execution
-      const latestAtStart = await prisma.taskExecution.findFirst({
-        where: { taskId: execution.taskId },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (latestAtStart && latestAtStart.id === executionId) {
-        await prisma.task.update({
-          where: { id: execution.taskId },
-          data: { status: 'IN_PROGRESS' },
-        });
       }
 
       // Update Agent status -> BUSY
@@ -262,45 +268,52 @@ export class ExecutionService {
         return;
       }
 
-      // 4. Atomic/conditional transition RUNNING -> COMPLETED or FAILED
+      // 4. Atomic/conditional transition RUNNING -> COMPLETED or FAILED (and Task -> COMPLETED or FAILED if latest)
       const targetStatus =
         result.status === 'COMPLETED' ? ExecutionStatus.COMPLETED : ExecutionStatus.FAILED;
 
-      const finishUpdateResult = await prisma.taskExecution.updateMany({
-        where: {
-          id: executionId,
-          status: ExecutionStatus.RUNNING,
-        },
-        data: {
-          status: targetStatus,
-          output:
-            result.output !== undefined && result.output !== null
-              ? (result.output as Prisma.InputJsonValue)
-              : Prisma.JsonNull,
-          error: result.error || null,
-          completedAt: new Date(),
-        },
+      let finishCount = 0;
+      await prisma.$transaction(async (tx) => {
+        const finishUpdateResult = await tx.taskExecution.updateMany({
+          where: {
+            id: executionId,
+            status: ExecutionStatus.RUNNING,
+          },
+          data: {
+            status: targetStatus,
+            output:
+              result.output !== undefined && result.output !== null
+                ? (result.output as Prisma.InputJsonValue)
+                : Prisma.JsonNull,
+            error: result.error || null,
+            completedAt: new Date(),
+          },
+        });
+
+        finishCount = finishUpdateResult.count;
+
+        if (finishCount > 0) {
+          // Task State Integration: check if this execution is the latest execution for the task
+          const latestExecution = await tx.taskExecution.findFirst({
+            where: { taskId: execution.taskId },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (latestExecution && latestExecution.id === executionId) {
+            await tx.task.update({
+              where: { id: execution.taskId },
+              data: {
+                status: targetStatus === ExecutionStatus.COMPLETED ? 'COMPLETED' : 'FAILED',
+              },
+            });
+          }
+        }
       });
 
-      if (finishUpdateResult.count === 0) {
+      if (finishCount === 0) {
         // Conditional update affected 0 rows (execution was cancelled concurrently)
         await this.syncAgentStatus(execution.agentId);
         return;
-      }
-
-      // Task State Integration: check if this execution is the latest execution for the task
-      const latestExecution = await prisma.taskExecution.findFirst({
-        where: { taskId: execution.taskId },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      if (latestExecution && latestExecution.id === executionId) {
-        await prisma.task.update({
-          where: { id: execution.taskId },
-          data: {
-            status: targetStatus === ExecutionStatus.COMPLETED ? 'COMPLETED' : 'FAILED',
-          },
-        });
       }
 
       // Agent Status Integration: check if agent has remaining active executions
@@ -319,30 +332,34 @@ export class ExecutionService {
         ) {
           const errorMessage =
             err instanceof Error ? err.message : 'Execution failed unexpectedly';
-          await prisma.taskExecution.updateMany({
-            where: {
-              id: executionId,
-              status: ExecutionStatus.RUNNING,
-            },
-            data: {
-              status: ExecutionStatus.FAILED,
-              error: errorMessage,
-              completedAt: new Date(),
-            },
-          });
 
-          // Sync task if latest
-          const latestExecution = await prisma.taskExecution.findFirst({
-            where: { taskId: currentExec.taskId },
-            orderBy: { createdAt: 'desc' },
-          });
-
-          if (latestExecution && latestExecution.id === executionId) {
-            await prisma.task.update({
-              where: { id: currentExec.taskId },
-              data: { status: 'FAILED' },
+          await prisma.$transaction(async (tx) => {
+            const finishUpdateResult = await tx.taskExecution.updateMany({
+              where: {
+                id: executionId,
+                status: ExecutionStatus.RUNNING,
+              },
+              data: {
+                status: ExecutionStatus.FAILED,
+                error: errorMessage,
+                completedAt: new Date(),
+              },
             });
-          }
+
+            if (finishUpdateResult.count > 0) {
+              const latestExecution = await tx.taskExecution.findFirst({
+                where: { taskId: currentExec.taskId },
+                orderBy: { createdAt: 'desc' },
+              });
+
+              if (latestExecution && latestExecution.id === executionId) {
+                await tx.task.update({
+                  where: { id: currentExec.taskId },
+                  data: { status: 'FAILED' },
+                });
+              }
+            }
+          });
 
           // Sync agent
           await this.syncAgentStatus(currentExec.agentId);
@@ -379,27 +396,42 @@ export class ExecutionService {
 
     this.validateStateTransition(execution.status, ExecutionStatus.CANCELLED);
 
-    const cancelUpdateResult = await prisma.taskExecution.updateMany({
-      where: {
-        id: executionId,
-        status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
-      },
-      data: {
-        status: ExecutionStatus.CANCELLED,
-        completedAt: new Date(),
-      },
-    });
-
-    if (cancelUpdateResult.count === 0) {
-      // Execution was no longer QUEUED or RUNNING (e.g., completed concurrently)
-      const currentExec = await prisma.taskExecution.findUnique({
-        where: { id: executionId },
+    await prisma.$transaction(async (tx) => {
+      const cancelUpdateResult = await tx.taskExecution.updateMany({
+        where: {
+          id: executionId,
+          status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
+        },
+        data: {
+          status: ExecutionStatus.CANCELLED,
+          completedAt: new Date(),
+        },
       });
 
-      throw new ConflictError(
-        `Invalid execution state transition from '${currentExec?.status || execution.status}' to 'CANCELLED'`,
-      );
-    }
+      if (cancelUpdateResult.count === 0) {
+        // Execution was no longer QUEUED or RUNNING (e.g., completed concurrently)
+        const currentExec = await tx.taskExecution.findUnique({
+          where: { id: executionId },
+        });
+
+        throw new ConflictError(
+          `Invalid execution state transition from '${currentExec?.status || execution.status}' to 'CANCELLED'`,
+        );
+      }
+
+      // Sync task state if latest
+      const latestExecution = await tx.taskExecution.findFirst({
+        where: { taskId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (latestExecution && latestExecution.id === executionId) {
+        await tx.task.update({
+          where: { id: taskId },
+          data: { status: 'CANCELLED' },
+        });
+      }
+    });
 
     const updated = await prisma.taskExecution.findUniqueOrThrow({
       where: { id: executionId },
@@ -408,19 +440,6 @@ export class ExecutionService {
         task: true,
       },
     });
-
-    // Sync task state if latest
-    const latestExecution = await prisma.taskExecution.findFirst({
-      where: { taskId },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (latestExecution && latestExecution.id === executionId) {
-      await prisma.task.update({
-        where: { id: taskId },
-        data: { status: 'CANCELLED' },
-      });
-    }
 
     // Sync agent status
     await this.syncAgentStatus(execution.agentId);
@@ -455,40 +474,44 @@ export class ExecutionService {
 
     this.validateStateTransition(execution.status, targetStatus);
 
-    const updated = await prisma.taskExecution.update({
-      where: { id: executionId },
-      data: {
-        status: targetStatus,
-        ...(targetStatus === ExecutionStatus.RUNNING && { startedAt: new Date() }),
-        ...((targetStatus === ExecutionStatus.COMPLETED ||
-          targetStatus === ExecutionStatus.FAILED ||
-          targetStatus === ExecutionStatus.CANCELLED) && {
-          completedAt: new Date(),
-        }),
-      },
-      include: {
-        agent: true,
-        task: true,
-      },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedExec = await tx.taskExecution.update({
+        where: { id: executionId },
+        data: {
+          status: targetStatus,
+          ...(targetStatus === ExecutionStatus.RUNNING && { startedAt: new Date() }),
+          ...((targetStatus === ExecutionStatus.COMPLETED ||
+            targetStatus === ExecutionStatus.FAILED ||
+            targetStatus === ExecutionStatus.CANCELLED) && {
+            completedAt: new Date(),
+          }),
+        },
+        include: {
+          agent: true,
+          task: true,
+        },
+      });
 
-    // Apply Task state sync if latest
-    const latestExecution = await prisma.taskExecution.findFirst({
-      where: { taskId },
-      orderBy: { createdAt: 'desc' },
-    });
+      // Apply Task state sync if latest
+      const latestExecution = await tx.taskExecution.findFirst({
+        where: { taskId },
+        orderBy: { createdAt: 'desc' },
+      });
 
-    if (latestExecution && latestExecution.id === executionId) {
-      if (targetStatus === ExecutionStatus.RUNNING) {
-        await prisma.task.update({ where: { id: taskId }, data: { status: 'IN_PROGRESS' } });
-      } else if (targetStatus === ExecutionStatus.COMPLETED) {
-        await prisma.task.update({ where: { id: taskId }, data: { status: 'COMPLETED' } });
-      } else if (targetStatus === ExecutionStatus.FAILED) {
-        await prisma.task.update({ where: { id: taskId }, data: { status: 'FAILED' } });
-      } else if (targetStatus === ExecutionStatus.CANCELLED) {
-        await prisma.task.update({ where: { id: taskId }, data: { status: 'CANCELLED' } });
+      if (latestExecution && latestExecution.id === executionId) {
+        if (targetStatus === ExecutionStatus.RUNNING) {
+          await tx.task.update({ where: { id: taskId }, data: { status: 'IN_PROGRESS' } });
+        } else if (targetStatus === ExecutionStatus.COMPLETED) {
+          await tx.task.update({ where: { id: taskId }, data: { status: 'COMPLETED' } });
+        } else if (targetStatus === ExecutionStatus.FAILED) {
+          await tx.task.update({ where: { id: taskId }, data: { status: 'FAILED' } });
+        } else if (targetStatus === ExecutionStatus.CANCELLED) {
+          await tx.task.update({ where: { id: taskId }, data: { status: 'CANCELLED' } });
+        }
       }
-    }
+
+      return updatedExec;
+    });
 
     // Apply Agent status sync
     await this.syncAgentStatus(execution.agentId);
