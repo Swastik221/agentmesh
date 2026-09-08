@@ -1,0 +1,1239 @@
+/* A single vector vocabulary, with a different action in every chapter. */
+.landing .chapter-runway {
+  position: relative;
+  height: 175svh;
+  min-height: 1120px;
+}
+.landing .story-cover {
+  position: sticky;
+  top: 86px;
+  height: calc(100svh - 106px);
+  min-height: 520px;
+  max-height: 920px;
+  padding: 34px 38px;
+  border: 1px solid #232c40;
+  background: #0a0e17;
+  color: #e2e8f0;
+}
+.landing .story-cover .chapter-heading h2 {
+  color: #e2e8f0;
+  font-size: clamp(65px, 7.2vw, 112px);
+  max-width: 80%;
+}
+.landing .story-cover .chapter-heading h2 sup {
+  color: #a78bfa;
+}
+.landing .story-cover .chapter-heading > .eyebrow {
+  color: #8b98ad;
+}
+.story-cover .chapter-cover-line {
+  width: 38%;
+  left: 38px;
+  bottom: 52px;
+}
+.story-cover .chapter-cover-line h3 {
+  color: #dce4f0;
+  font-size: clamp(30px, 3vw, 46px);
+}
+.story-cover .chapter-cover-line > span {
+  color: #8b98ad;
+  font-size: 9px;
+  line-height: 1.8;
+}
+.story-cover .cover-figure {
+  display: none;
+}
+.chapter-scene {
+  --scene-progress: 0;
+  --scene-first: 0;
+  --scene-second: 0;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.scene-objects {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.scene-objects text {
+  font-family: var(--am-font-mono);
+}
+.coder-eyes-open,
+.coder-eyes-closed {
+  animation-duration: 4.8s;
+  animation-timing-function: step-end;
+  animation-iteration-count: infinite;
+}
+.coder-eyes-open {
+  animation-name: coder-eyes-open;
+}
+.coder-eyes-closed {
+  opacity: 0;
+  animation-name: coder-eyes-closed;
+}
+.scene-character-second .coder-eyes-open,
+.scene-character-second .coder-eyes-closed {
+  animation-delay: -2.35s;
+}
+@keyframes coder-eyes-open {
+  0%,
+  52%,
+  55%,
+  58%,
+  100% {
+    opacity: 1;
+  }
+  53%,
+  56% {
+    opacity: 0;
+  }
+}
+@keyframes coder-eyes-closed {
+  0%,
+  52%,
+  55%,
+  58%,
+  100% {
+    opacity: 0;
+  }
+  53%,
+  56% {
+    opacity: 1;
+  }
+}
+.scene-character {
+  position: absolute;
+  width: 39%;
+  left: 54%;
+  top: 19%;
+  transform: translateY(calc((1 - var(--scene-progress)) * 32px));
+}
+.scene--coordination .scene-character {
+  width: 38%;
+  left: 41%;
+  top: 32%;
+  transform: translateY(calc((1 - var(--scene-progress)) * 25px))
+    rotate(calc(var(--scene-progress) * -9deg));
+  transform-origin: 50% 80%;
+}
+.scene--control .scene-character {
+  width: 34%;
+  left: 65%;
+  top: 30%;
+}
+.landing #control .chapter-runway {
+  height: auto;
+  min-height: 0;
+}
+.landing #control .story-cover {
+  position: relative;
+  top: auto;
+}
+.scene--control {
+  --control-settle: 0;
+  --control-travel: 0;
+  --control-scope: 0;
+  --control-boundary: 0;
+  --control-approval: 0;
+  --control-human: 0;
+  --control-path: 0;
+  --control-notice: 0;
+  --control-reach: 0;
+  --control-press: 0;
+}
+.scene--control .scene-character {
+  opacity: calc(0.82 + var(--control-settle) * 0.18);
+  transform: translate3d(0, calc((1 - var(--control-settle)) * 12px), 0);
+}
+.scene--control .control-scope {
+  opacity: calc(0.48 + var(--control-scope) * 0.52);
+  transform: translate3d(0, calc((1 - var(--control-scope)) * 12px), 0);
+}
+.scene--control .control-check-path {
+  opacity: calc(0.18 + var(--control-path) * 0.72);
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--control-path));
+}
+.scene--control .control-boundary-ghost {
+  opacity: calc(0.18 + var(--control-boundary) * 0.16);
+}
+.scene--control .control-boundary {
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--control-boundary));
+  opacity: calc(0.28 + var(--control-boundary) * 0.72);
+  filter: drop-shadow(0 0 calc(var(--control-press) * 5px) rgb(240 180 88 / 70%));
+}
+.scene--control .control-boundary-label {
+  opacity: calc(0.18 + var(--control-boundary) * 0.82);
+  transform: translate3d(calc((1 - var(--control-boundary)) * 8px), 0, 0);
+}
+.scene--control .scene-request {
+  opacity: calc(0.72 + var(--control-settle) * 0.28);
+  transform-box: view-box;
+  transform-origin: center;
+  will-change: transform;
+}
+.scene--control .scene-request circle {
+  opacity: calc(0.45 + var(--control-boundary) * 0.55);
+}
+.scene--control .control-human-token {
+  opacity: calc(0.12 + var(--control-human) * 0.88);
+  transform: translate3d(calc((1 - var(--control-human)) * 12px), 0, 0);
+}
+.scene--control .control-approval-state {
+  opacity: var(--control-approval);
+  transform: translate3d(446px, calc(446px + (1 - var(--control-approval)) * 10px), 0);
+}
+.scene--control .coder-head {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: rotate(calc(var(--control-notice) * 4deg));
+}
+.scene--control .coder-control-console {
+  opacity: calc(0.58 + var(--control-notice) * 0.42);
+}
+.scene--control .coder-control-console > rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translateY(calc(var(--control-press) * 2px));
+}
+.scene--control .coder-control-light {
+  opacity: calc(0.45 + var(--control-press) * 0.55);
+  filter: drop-shadow(0 0 calc(var(--control-press) * 6px) #f0b458);
+}
+.scene--identity .scene-character {
+  width: 23%;
+  left: 77%;
+  top: 31%;
+  opacity: calc(0.72 + var(--identity-wallet, 0) * 0.28);
+  transform: translate3d(calc((1 - var(--identity-wallet, 0)) * 10px), 0, 0);
+}
+.landing #identity .chapter-runway {
+  height: auto;
+  min-height: 0;
+}
+.landing #identity .story-cover {
+  position: relative;
+  top: auto;
+}
+.scene--identity {
+  --identity-wallet: 0;
+  --identity-resolve-line: 0;
+  --identity-owner: 0;
+  --identity-verified: 0;
+  --identity-branch: 0;
+  --identity-agent: 0;
+  --identity-cap-1: 0;
+  --identity-cap-2: 0;
+  --identity-cap-3: 0;
+  --identity-cap-4: 0;
+  --identity-settled: 0;
+}
+.scene--identity .scene-orbit {
+  opacity: calc(0.16 + var(--identity-settled) * 0.18);
+  transform: none;
+}
+.scene--identity .identity-wallet {
+  opacity: var(--identity-wallet);
+  transform: translate3d(0, calc((1 - var(--identity-wallet)) * 10px), 0);
+}
+.scene--identity .identity-resolve-line,
+.scene--identity .identity-branch-line {
+  stroke-dasharray: 1;
+  stroke-linecap: round;
+}
+.scene--identity .identity-resolve-line {
+  opacity: var(--identity-resolve-line);
+  stroke-dashoffset: calc(1 - var(--identity-resolve-line));
+}
+.scene--identity .identity-owner {
+  opacity: var(--identity-owner);
+  transform: translate3d(0, calc((1 - var(--identity-owner)) * -8px), 0);
+}
+.scene--identity .identity-verified {
+  opacity: var(--identity-verified);
+}
+.scene--identity .identity-branch-line {
+  opacity: var(--identity-branch);
+  stroke-dashoffset: calc(1 - var(--identity-branch));
+}
+.scene--identity .identity-branch-node {
+  opacity: var(--identity-branch);
+}
+.scene--identity .identity-agent {
+  opacity: var(--identity-agent);
+  transform: translate3d(0, calc((1 - var(--identity-agent)) * -8px), 0);
+}
+.scene--identity .identity-capability-1 {
+  opacity: var(--identity-cap-1);
+}
+.scene--identity .identity-capability-2 {
+  opacity: var(--identity-cap-2);
+}
+.scene--identity .identity-capability-3 {
+  opacity: var(--identity-cap-3);
+}
+.scene--identity .identity-capability-4,
+.scene--identity .identity-scope-note {
+  opacity: var(--identity-cap-4);
+}
+.scene--identity .identity-capability {
+  transform-box: fill-box;
+  transform-origin: left center;
+  transform: translate3d(calc((1 - var(--identity-agent)) * -5px), 0, 0);
+}
+.scene--developers .scene-character {
+  width: 30%;
+  left: 39%;
+  top: 32%;
+  opacity: calc(0.74 + var(--developers-editor, 0) * 0.26);
+  transform: translate3d(0, calc((1 - var(--developers-editor, 0)) * 10px), 0);
+}
+#developers .story-cover .chapter-heading h2 {
+  max-width: 43%;
+  font-size: clamp(65px, 5.2vw, 82px);
+}
+.landing #developers .chapter-runway {
+  height: auto;
+  min-height: 0;
+}
+.landing #developers .story-cover {
+  position: relative;
+  top: auto;
+}
+.scene--developers {
+  --developers-editor: 0;
+  --developers-code-1: 0;
+  --developers-code-2: 0;
+  --developers-code-3: 0;
+  --developers-editor-link: 0;
+  --developers-origin: 0;
+  --developers-spine: 0;
+  --developers-event-1: 0;
+  --developers-event-2: 0;
+  --developers-event-3: 0;
+  --developers-trace: 0;
+}
+.scene--developers .scene-orbit {
+  opacity: calc(0.14 + var(--developers-trace) * 0.2);
+  transform: none;
+}
+.scene--developers .developer-editor {
+  opacity: var(--developers-editor);
+  transform: translate3d(0, calc((1 - var(--developers-editor)) * 10px), 0);
+}
+.scene--developers .developer-code {
+  transform: translate3d(-4px, 0, 0);
+}
+.scene--developers .developer-code-1 {
+  opacity: var(--developers-code-1);
+}
+.scene--developers .developer-code-2 {
+  opacity: var(--developers-code-2);
+}
+.scene--developers .developer-code-3 {
+  opacity: var(--developers-code-3);
+}
+.scene--developers .developer-editor-link,
+.scene--developers .developer-origin-link,
+.scene--developers .developer-event-spine {
+  stroke-dasharray: 1;
+  stroke-linecap: round;
+}
+.scene--developers .developer-editor-link {
+  opacity: var(--developers-editor-link);
+  stroke-dashoffset: calc(1 - var(--developers-editor-link));
+}
+.scene--developers .developer-origin-link {
+  opacity: var(--developers-origin);
+  stroke-dashoffset: calc(1 - var(--developers-origin));
+}
+.scene--developers .developer-event-spine {
+  opacity: var(--developers-spine);
+  stroke-dashoffset: calc(1 - var(--developers-spine));
+}
+.scene--developers .developer-event {
+  transform: translate3d(calc((1 - var(--developers-origin)) * 8px), 0, 0);
+}
+.scene--developers .developer-event-1 {
+  opacity: var(--developers-event-1);
+}
+.scene--developers .developer-event-2 {
+  opacity: var(--developers-event-2);
+}
+.scene--developers .developer-event-3 {
+  opacity: var(--developers-event-3);
+}
+.scene--developers .developer-trace {
+  opacity: var(--developers-trace);
+  transform: translate3d(0, calc((1 - var(--developers-trace)) * 9px), 0);
+}
+.coder--audit .coder-torso > path:first-child {
+  fill: #1d5147;
+  stroke: #39806b;
+}
+.coder--deploy .coder-chair,
+.coder--deploy .coder-desk,
+.coder--deploy .coder-laptop,
+.coder--repair .coder-desk,
+.coder--repair .coder-laptop {
+  display: none;
+}
+.coder--typing .coder-torso > path:first-child {
+  fill: #3a3150;
+  stroke: #766496;
+}
+.coder--review .coder-torso > path:first-child {
+  fill: #49402d;
+  stroke: #806d42;
+}
+.coder--identity .coder-torso > path:first-child {
+  fill: #344461;
+  stroke: #697d99;
+}
+.coder--deploy .coder-torso > path:first-child {
+  fill: #1d5147;
+  stroke: #39806b;
+}
+.coder--repair .coder-torso > path:first-child {
+  fill: #383d52;
+  stroke: #6c7695;
+}
+.coder--typing .coder-head {
+  transform-origin: 50% 30%;
+  transform: translateY(calc((1 - var(--agents-settle, 0)) * -2px))
+    rotate(calc(var(--agents-typing, 0) * 1.25deg));
+}
+.scene-orbit {
+  opacity: 0.5;
+  transform-origin: 735px 340px;
+  transform: rotate(calc(var(--scene-progress) * 22deg));
+}
+.scene-draw,
+.scene-code-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--scene-first));
+}
+/* ---------------------------------------- II / the connected workshop.
+   One damped scroll value drives the whole chapter through overlapping 0-1
+   ramps set in paintScene. Nothing here has an on state: the two looping
+   animations run from page load and are revealed by opacity, and their
+   amplitude is multiplied by a ramp, so neither can switch on mid-scroll. */
+
+.scene--agents .scene-orbit {
+  /* Background circle: a very slow drift on the scene's clock, so the canvas
+     is never completely static once everything has settled, and never fast
+     enough to read as motion in its own right. */
+  opacity: calc(0.2 + var(--agents-settle, 0) * 0.3);
+  transform: rotate(calc(var(--scene-progress, 0) * 4deg + var(--agents-drift, 0) * 1.6deg))
+    translate3d(calc(var(--agents-drift, 0) * 5px), calc(var(--agents-drift, 0) * -3px), 0);
+}
+.scene--agents .scene-character {
+  opacity: calc(0.72 + var(--agents-settle, 0) * 0.28);
+  transform: translate3d(0, calc((1 - var(--agents-settle, 0)) * 26px), 0);
+}
+.scene--agents .scene-float-a {
+  opacity: calc(0.5 + var(--agents-settle, 0) * 0.5);
+  transform: translate3d(0, calc((1 - var(--agents-settle, 0)) * 18px), 0);
+}
+/* The hands are posed by paintWorkshop on the scene's own clock — a real
+   alternating rhythm through the arm geometry — so there is no CSS loop here
+   to fight it. */
+.scene--agents .scene-code-line {
+  stroke-dasharray: 1;
+  stroke-linecap: round;
+}
+.scene--agents .scene-code-line-0 {
+  stroke-dashoffset: calc(1 - var(--agents-line-1, 0));
+}
+.scene--agents .scene-code-line-1 {
+  stroke-dashoffset: calc(1 - var(--agents-line-2, 0));
+}
+.scene--agents .scene-code-line-2 {
+  stroke-dashoffset: calc(1 - var(--agents-line-3, 0));
+}
+.scene--agents .scene-code-line-3 {
+  stroke-dashoffset: calc(1 - var(--agents-line-4, 0));
+}
+/* Wrapper carries the ramp, the caret carries the blink: the opacities
+   multiply, so the caret is already blinking before it is visible. */
+.scene--agents .scene-caret-wrap {
+  transform: translateX(var(--agents-caret-x, 0px));
+  opacity: calc(var(--agents-typing, 0) * 0.9);
+}
+.scene--agents .scene-editor-caret {
+  animation: agents-caret 1.15s steps(1, end) infinite;
+}
+@keyframes agents-caret {
+  50% {
+    opacity: 0.3;
+  }
+}
+.scene--agents .scene-agent-connection {
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--agents-connection, 0));
+  opacity: var(--agents-wire, 0);
+}
+.scene--agents .scene-float-b {
+  opacity: calc(0.28 + var(--agents-card, 0) * 0.72);
+  transform: translate3d(0, calc((1 - var(--agents-card, 0)) * 16px), 0);
+}
+.scene--agents .scene-agent-border {
+  opacity: var(--agents-border, 0);
+}
+.scene--agents .scene-agent-waiting {
+  opacity: var(--agents-waiting, 1);
+}
+.scene--agents .scene-agent-ready {
+  opacity: var(--agents-ready, 0);
+}
+.scene--agents .scene-agent-capabilities,
+.scene--agents .scene-agent-indicator {
+  opacity: var(--agents-response, 0);
+}
+.scene--agents .scene-agent-indicator {
+  transform-origin: 934px 410px;
+  transform: scale(calc(0.75 + var(--agents-response, 0) * 0.25));
+}
+.scene--agents .scene-data-packet {
+  will-change: transform, opacity;
+}
+.scene--agents .scene-data-loop {
+  opacity: calc(var(--agents-traffic, 0) * 0.9);
+}
+@media (prefers-reduced-motion: reduce) {
+  .coder-eyes-open,
+  .coder-eyes-closed {
+    animation: none;
+  }
+  .coder-eyes-open {
+    opacity: 1;
+  }
+  .coder-eyes-closed {
+    opacity: 0;
+  }
+  .scene--agents .scene-editor-caret {
+    animation: none;
+  }
+  /* The looping packet is SMIL, so it is hidden rather than stopped. */
+  .scene--agents .scene-data-loop {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 699px) {
+  .landing #control .chapter-runway {
+    height: auto;
+    min-height: 0;
+  }
+}
+/* Chapter II drives its code lines individually; this generic pairing would
+   otherwise tie on specificity and win by order, leaving two of the four
+   reading from a different ramp than the two beside them. */
+.chapter-scene:not(.scene--agents) .scene-code-line:nth-child(2n) {
+  stroke-dashoffset: calc(1 - var(--scene-second));
+}
+.scene-float-a {
+  transform: translateY(calc((1 - var(--scene-first)) * 60px));
+  opacity: calc(0.15 + var(--scene-first) * 0.85);
+}
+.scene-float-b {
+  transform: translateY(calc((1 - var(--scene-second)) * -50px));
+  opacity: calc(0.1 + var(--scene-second) * 0.9);
+}
+.scene-before {
+  opacity: calc(1 - var(--scene-second));
+}
+.scene-after {
+  opacity: var(--scene-second);
+}
+.scene-event {
+  opacity: var(--scene-first);
+}
+.scene-event-0 {
+  transform: translateY(calc((1 - var(--scene-progress)) * 120px));
+}
+.scene-event-1 {
+  transform: translateY(calc((1 - var(--scene-progress)) * 180px));
+}
+.scene-event-2 {
+  transform: translateY(calc((1 - var(--scene-progress)) * 240px));
+}
+.scene-launch {
+  transform: translate(
+    calc(var(--scene-progress) * 55px),
+    calc((1 - var(--scene-progress)) * 310px)
+  );
+  opacity: var(--scene-second);
+}
+.scene-parcel {
+  opacity: var(--scene-first);
+}
+.scene-stage {
+  position: absolute;
+  bottom: 24px;
+  right: 25px;
+  font: 8px var(--am-font-mono);
+  letter-spacing: 0.14em;
+  color: #91a3b9;
+}
+.detail-columns[data-scroll-visual] > *,
+.workflow-list[data-scroll-visual] > *,
+.payment-flow[data-scroll-visual] > *,
+.setup-strip[data-scroll-visual] > * {
+  transform: translateY(calc((1 - var(--visual-progress, 1)) * 35px));
+  opacity: calc(0.25 + var(--visual-progress, 1) * 0.75);
+}
+.detail-columns[data-scroll-visual] > :nth-child(2) {
+  transform: translateY(calc((1 - var(--visual-progress, 1)) * 65px));
+}
+.detail-columns[data-scroll-visual] > :nth-child(3) {
+  transform: translateY(calc((1 - var(--visual-progress, 1)) * 95px));
+}
+.faq-layout > div:first-child {
+  position: relative;
+}
+.faq-layout .chapter-scene {
+  position: relative;
+  height: 260px;
+  width: 100%;
+}
+.scene--questions .scene-character {
+  width: 60%;
+  left: 28%;
+  top: 0;
+}
+.scene--questions .scene-objects {
+  width: 150%;
+  left: -32%;
+}
+.landing-closing .chapter-scene {
+  position: relative;
+  width: min(840px, 100%);
+  height: 350px;
+  margin: 0 auto 20px;
+}
+.scene--closing .scene-character {
+  width: 34%;
+  left: 6%;
+  top: 0;
+}
+.scene--closing .scene-character-second {
+  left: 60%;
+}
+.scene--closing .scene-orbit {
+  display: none;
+}
+.scene-mesh {
+  transform-origin: 500px 310px;
+  transform: scale(calc(0.35 + var(--scene-progress) * 0.65));
+  opacity: var(--scene-progress);
+}
+.landing-closing > h2,
+.landing-closing > p,
+.landing-closing > .button-row {
+  transform: translateY(calc((1 - var(--chapter-progress, 1)) * 35px));
+}
+
+/* Opening resolves into the headline; the one shared canvas is the next scene. */
+.intro-headline {
+  position: absolute;
+  inset: 0;
+  opacity: var(--intro-canvas);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.intro-headline .landing-introduction {
+  min-height: 0;
+  width: 100%;
+  background: transparent;
+  padding: 90px 6%;
+}
+.landing[data-intro-complete='false'] .intro-headline {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro-headline {
+    opacity: 1;
+    clip-path: none !important;
+  }
+}
+
+/* Native React Flow coordinates drive both the nodes and the named cursors. */
+.landing .workspace-scroll {
+  height: 100svh;
+  min-height: 600px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  background: #0a0e17;
+  color: #e2e8f0;
+  scroll-margin-top: 0;
+}
+.workspace-story-heading {
+  position: absolute;
+  top: 106px;
+  left: 5%;
+  right: 5%;
+  display: flex;
+  align-items: baseline;
+  gap: 23px;
+}
+.workspace-story-heading h2 {
+  font-size: clamp(29px, 3.1vw, 48px);
+  letter-spacing: -0.055em;
+  font-weight: 500;
+}
+.workspace-story-heading h2 em {
+  color: #a78bfa;
+}
+.workspace-story-heading .eyebrow {
+  color: #8b98ad;
+}
+.workspace-local {
+  margin-left: auto;
+  font: 10px var(--am-font-mono);
+  color: #8b98ad;
+}
+.workspace-local i {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #3ddc97;
+  margin-right: 6px;
+}
+.scroll-canvas {
+  position: absolute;
+  inset: 185px 2% 110px;
+}
+.scroll-canvas .am-node--board {
+  min-height: 215px;
+}
+.scroll-canvas .am-addr__hash:empty {
+  display: none;
+}
+.scroll-canvas .react-flow__attribution {
+  background: #0d1117;
+  color: #8b98ad;
+}
+.scroll-canvas .react-flow__attribution a {
+  color: inherit;
+}
+/* Transform and opacity are written by the damped follower in ScrollWorkspace,
+   so nothing here may transition them — the smoothing already lives in JS. */
+.workspace-cursor {
+  --cursor-hold: 0;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 1px;
+  pointer-events: none;
+  color: #a78bfa;
+  z-index: 10;
+  font: 13px var(--am-font-sans);
+  transform-origin: 5px 5px;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 6px 14px rgb(6 10 18 / 55%));
+}
+.workspace-cursor span {
+  margin-top: 16px;
+  padding: 4px 9px;
+  background: #a78bfa;
+  color: #131a27;
+  border-radius: 4px;
+  white-space: nowrap;
+  transform: translate(calc(var(--cursor-hold) * -3px), calc(var(--cursor-hold) * -2px));
+  box-shadow: 0 0 0 calc(var(--cursor-hold) * 3px) rgb(167 139 250 / 22%);
+}
+.workspace-cursor small {
+  font-size: 10px;
+}
+.workspace-cursor.cursor-1 {
+  color: #3ddc97;
+}
+.workspace-cursor.cursor-1 span {
+  background: #3ddc97;
+  box-shadow: 0 0 0 calc(var(--cursor-hold) * 3px) rgb(61 220 151 / 22%);
+}
+.canvas-schema-packet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 9px 13px;
+  border: 1px solid #3ddc97;
+  border-radius: 5px;
+  background: #17362f;
+  color: #c3eddf;
+  font: 11px var(--am-font-mono);
+  pointer-events: none;
+}
+.workspace-story-footer {
+  position: absolute;
+  bottom: 27px;
+  left: 26%;
+  right: 26%;
+  text-align: center;
+}
+.workspace-story-footer p {
+  margin: 0 0 5px;
+  font-size: 15px;
+}
+.workspace-story-footer > span {
+  color: #8b98ad;
+  font: 9px var(--am-font-mono);
+}
+.workspace-story-footer > div {
+  background: #232c40;
+  height: 2px;
+  margin-top: 16px;
+}
+.workspace-story-footer i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #22d3ee;
+  transform-origin: left;
+}
+.workspace-inspector {
+  position: absolute;
+  bottom: 32px;
+  right: 3%;
+  z-index: 12;
+  font-size: 11px;
+}
+.workspace-inspector summary {
+  cursor: pointer;
+  color: #9ba8bc;
+}
+.workspace-inspector pre {
+  position: absolute;
+  bottom: 30px;
+  right: 0;
+  padding: 20px;
+  background: #101b2b;
+  border: 1px solid #31435a;
+  border-radius: 8px;
+  color: #9cdbc7;
+  font-size: 11px;
+}
+@media (max-width: 999px) {
+  .workspace-story-heading {
+    top: 95px;
+    flex-wrap: wrap;
+    gap: 6px 15px;
+  }
+  .workspace-story-heading > .eyebrow {
+    width: 100%;
+    font-size: 8px;
+  }
+  .scroll-canvas {
+    top: 180px;
+  }
+  .story-cover .chapter-cover-line {
+    width: 42%;
+  }
+}
+@media (max-width: 699px) {
+  .landing .chapter-runway {
+    height: 155svh;
+    min-height: 1080px;
+  }
+  .landing .story-cover {
+    top: 74px;
+    height: calc(100svh - 90px);
+    min-height: 560px;
+    padding: 24px 20px;
+    margin-inline: -10px;
+  }
+  .landing .story-cover .chapter-heading h2 {
+    font-size: clamp(39px, 10.5vw, 65px);
+    max-width: 100%;
+    margin-top: 16px;
+  }
+  .story-cover .chapter-cover-line {
+    left: 20px;
+    bottom: 25px;
+    width: auto;
+    right: 20px;
+  }
+  .story-cover .chapter-cover-line h3 {
+    font-size: 29px;
+    max-width: 320px;
+    margin-bottom: 12px;
+  }
+  .story-cover .chapter-cover-line > span {
+    font-size: 7px;
+  }
+  .chapter-scene {
+    inset: 110px 0 125px;
+  }
+  .scene-objects {
+    width: 190%;
+    left: -90%;
+  }
+  .scene-character {
+    width: 84%;
+    left: 17%;
+    top: 15%;
+  }
+  .scene--coordination .scene-character {
+    width: 80%;
+    left: -2%;
+    top: 33%;
+  }
+  .scene--control .scene-character {
+    width: 78%;
+    left: 34%;
+    top: 20%;
+  }
+  .scene--identity .scene-character {
+    width: 54%;
+    left: 55%;
+    top: 35%;
+  }
+  .scene--identity .scene-objects {
+    left: -64%;
+  }
+  .scene--developers .scene-character {
+    width: 55%;
+    left: 8%;
+    top: 34%;
+  }
+  #developers .story-cover .chapter-heading h2 {
+    max-width: 100%;
+    font-size: clamp(39px, 10.5vw, 65px);
+  }
+  .scene-stage {
+    display: none;
+  }
+  .workspace-story-heading {
+    left: 20px;
+    right: 20px;
+    top: 86px;
+  }
+  .workspace-story-heading h2 {
+    font-size: 30px;
+  }
+  .workspace-local {
+    font-size: 7px;
+  }
+  .scroll-canvas {
+    inset: 150px 0 115px;
+  }
+  .workspace-story-footer {
+    left: 20px;
+    right: 20px;
+    bottom: 44px;
+  }
+  .workspace-story-footer p {
+    font-size: 12px;
+  }
+  .workspace-story-footer > span {
+    font-size: 8px;
+  }
+  .workspace-inspector {
+    bottom: 10px;
+    right: 20px;
+    font-size: 9px;
+  }
+  .intro-headline .landing-introduction {
+    padding: 85px 20px;
+  }
+  .landing-closing .chapter-scene {
+    height: 245px;
+    inset: auto;
+    width: 100%;
+  }
+  .scene--closing .scene-character {
+    width: 47%;
+    left: -2%;
+  }
+  .scene--closing .scene-character-second {
+    left: 54%;
+  }
+  .scene--closing .scene-objects {
+    width: 100%;
+    left: 0;
+  }
+  .faq-layout .chapter-scene {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing .chapter-runway {
+    height: auto;
+    min-height: 0;
+  }
+  .landing .story-cover {
+    position: relative;
+    top: auto;
+  }
+  .chapter-scene *,
+  .landing [data-scroll-visual] > * {
+    transform: none;
+  }
+  .chapter-scene .scene-parcel {
+    transform: translate(795px, 270px);
+  }
+  .chapter-scene .scene-request {
+    transform: translate(580px, 377px);
+  }
+  .workspace-cursor {
+    display: none;
+  }
+}
+/* ------------------------------------------------ the canvas lights up */
+
+.scroll-canvas {
+  --link-a: 0;
+  --link-b: 0;
+  --linked: 0;
+}
+/* The wire layer the scene draws itself. It lives in the viewport portal so it
+   shares the canvas coordinate system, and sits behind the terminals — the
+   portal would otherwise stack it over them. */
+.scroll-canvas .canvas-wires {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  z-index: -1;
+  pointer-events: none;
+}
+/* A wire brightens as it lands, and keeps a quieter bloom afterwards. */
+.scroll-canvas .canvas-edge {
+  --draw: 0;
+  filter: drop-shadow(0 0 calc(var(--draw) * 7px) rgb(34 211 238 / 55%));
+}
+.scroll-canvas .canvas-drawing-edge {
+  stroke: #22d3ee;
+  stroke-width: 2;
+}
+.scroll-canvas .canvas-edge-pulse {
+  stroke: #b8f6ff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: calc(var(--draw) * var(--draw) * 0.85);
+}
+/* Sits behind the transparent React Flow pane: the room warms, not a layer. */
+.canvas-ambient-glow {
+  position: absolute;
+  inset: -12%;
+  pointer-events: none;
+  opacity: calc(0.2 + var(--linked) * 0.8);
+  background:
+    radial-gradient(
+      38% 46% at 34% 52%,
+      rgb(34 211 238 / calc(var(--link-a) * 13%)),
+      transparent 70%
+    ),
+    radial-gradient(
+      38% 46% at 68% 52%,
+      rgb(61 220 151 / calc(var(--link-b) * 12%)),
+      transparent 70%
+    ),
+    radial-gradient(70% 80% at 50% 55%, rgb(19 44 66 / calc(var(--linked) * 42%)), transparent 72%);
+}
+/* Bloom at the two handles where the wires meet the shared board. */
+.canvas-link-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 300px;
+  height: 300px;
+  margin: -150px 0 0 -150px;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    closest-side,
+    rgb(34 211 238 / 34%),
+    rgb(34 211 238 / 8%) 45%,
+    transparent 72%
+  );
+}
+/* Each terminal answers its own wire, so "connected" is visible on the node. */
+.scroll-canvas .react-flow__node .am-node {
+  box-shadow: 0 0 calc(var(--node-glow, 0) * 34px) rgb(34 211 238 / calc(var(--node-glow, 0) * 30%));
+}
+.scroll-canvas .react-flow__node[data-id='orion'] {
+  --node-glow: var(--link-a);
+}
+.scroll-canvas .react-flow__node[data-id='vega'] {
+  --node-glow: var(--link-b);
+}
+.scroll-canvas .react-flow__node[data-id='board'] {
+  --node-glow: var(--linked);
+}
+/* Nodes move as one painted block; only the wrapper is transformed. */
+.scroll-canvas .react-flow__node {
+  will-change: transform;
+}
+/* Log lines update in place. No entry animation: re-running one on every
+   text change is what made the terminals blink under a scrubbed scroll. */
+.landing .landing-header .landing-button.primary {
+  background: #f8f5ec;
+  color: #151e24;
+  opacity: 1;
+}
+.landing .landing-header.header-paper .landing-button.primary {
+  background: #151e24;
+  color: #f8f5ec;
+}
+.scene-before {
+  opacity: 1;
+}
+.scene-after {
+  opacity: 0;
+}
+.chapter-scene[data-resolved='true'] .scene-before {
+  opacity: 0;
+}
+.chapter-scene[data-resolved='true'] .scene-after {
+  opacity: 1;
+}
+.scene-float-b {
+  opacity: calc(0.4 + var(--scene-first) * 0.6);
+}
+.coder--review .coder-headphones,
+.coder--control .coder-headphones,
+.coder--identity .coder-headphones,
+.coder--audit .coder-headphones,
+.coder--deploy .coder-headphones,
+.coder--repair .coder-headphones {
+  display: none;
+}
+.coder--review .coder-torso > path:nth-child(2),
+.coder--control .coder-torso > path:nth-child(2),
+.coder--identity .coder-torso > path:nth-child(2),
+.coder--audit .coder-torso > path:nth-child(2),
+.coder--deploy .coder-torso > path:nth-child(2),
+.coder--repair .coder-torso > path:nth-child(2),
+.coder--review .coder-torso > path:nth-child(4),
+.coder--control .coder-torso > path:nth-child(4),
+.coder--identity .coder-torso > path:nth-child(4),
+.coder--audit .coder-torso > path:nth-child(4),
+.coder--deploy .coder-torso > path:nth-child(4),
+.coder--repair .coder-torso > path:nth-child(4) {
+  display: none;
+}
+.coder--repair .coder-chair {
+  display: none;
+}
+.faq-layout .faq-item {
+  transform: translateY(calc((1 - var(--visual-progress, 1)) * 35px));
+  opacity: calc(0.4 + var(--visual-progress, 1) * 0.6);
+}
+.faq-layout .faq-item:nth-child(2n) {
+  transform: translateY(calc((1 - var(--visual-progress, 1)) * 65px));
+}
+@media (max-width: 699px) {
+  .story-cover .scene-objects {
+    width: 160%;
+    left: -55%;
+  }
+  .story-cover .scene--identity .scene-objects {
+    left: -64%;
+  }
+  .story-cover .scene--developers .scene-objects {
+    left: -58%;
+  }
+  .scene--coordination .scene-character {
+    top: 22%;
+  }
+  .scene--control .scene-character {
+    width: 75%;
+    left: 30%;
+  }
+}
+
+/* A single cursor grip drives the terminal; selection adds no separate translation. */
+.scroll-canvas .scripted-agent {
+  transition: none !important;
+  --owner-color: #a78bfa;
+}
+.scroll-canvas .owner-swastik {
+  --owner-color: #3ddc97;
+}
+/* Held state is a 0-1 ring rather than a swapped border colour, so taking
+   hold of a terminal fades in with the grip instead of switching on. */
+.scroll-canvas .scripted-agent::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--owner-color);
+  border-radius: 9px;
+  opacity: var(--held, 0);
+  pointer-events: none;
+}
+/* Clear of the title bar the pointer grips, so a held terminal's own name
+   stays readable underneath it. */
+.scroll-canvas .workspace-cursor span {
+  position: absolute;
+  bottom: 58px;
+  left: 0;
+  margin: 0;
+  white-space: nowrap;
+}
+/* Attribution and receipts are always mounted; only opacity moves. Stacking
+   the variants in one grid cell keeps the width fixed, so neither the canvas
+   nor the caption reflows when the wording hands over. */
+.canvas-attribution {
+  position: absolute;
+  color: #a78bfa;
+  font: 11px monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.canvas-attribution.cursor-1 {
+  color: #3ddc97;
+}
+.canvas-attribution-lines,
+.canvas-task-event {
+  display: grid;
+  justify-items: start;
+}
+.canvas-attribution-lines > span,
+.canvas-task-event > span {
+  grid-area: 1 / 1;
+}
+.canvas-attribution-lines > span {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #0d1117;
+}
+.canvas-task-event {
+  position: absolute;
+  left: 20px;
+  bottom: 0;
+  color: #3ddc97;
+  font: 11px monospace;
+  pointer-events: none;
+}
+.scroll-canvas .am-node,
+.scroll-canvas .react-flow__node,
+.scroll-canvas .canvas-schema-packet {
+  box-shadow: none !important;
+  filter: none !important;
+}
+.scroll-canvas .canvas-edge-pulse {
+  display: none;
+}
+.scroll-canvas .canvas-edge,
+.scroll-canvas .workspace-cursor {
+  filter: none;
+}
+.scroll-canvas .workspace-cursor span {
+  box-shadow: none;
+}
