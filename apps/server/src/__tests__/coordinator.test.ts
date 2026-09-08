@@ -485,4 +485,108 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
     });
     expect(responsibilities.length).toBe(1);
   });
+
+  it('13. Corrective Audit: Category-level capability scoring and categoryScores explanation', () => {
+    const agentCaps = ['language:typescript', 'framework:react', 'tool:vite', 'domain:frontend', 'tasktype:ui'];
+    const reqCaps = [
+      'language:typescript',
+      'language:rust', // 1 of 2 matched in languages -> (1/2)*40 = 20
+      'framework:react', // 1 of 1 matched in frameworks -> (1/1)*25 = 25
+      'tool:vite', // 1 of 1 matched in tools -> (1/1)*15 = 15
+      'domain:backend', // 0 of 1 matched in domains -> 0
+      'tasktype:ui', // 1 of 1 matched in taskTypes -> (1/1)*10 = 10
+    ];
+
+    const result = coordinatorService.scoreCapabilities(agentCaps, reqCaps);
+
+    expect(result.categoryScores.languages).toBe(20);
+    expect(result.categoryScores.frameworks).toBe(25);
+    expect(result.categoryScores.tools).toBe(15);
+    expect(result.categoryScores.domains).toBe(0);
+    expect(result.categoryScores.taskTypes).toBe(10);
+
+    const expectedTotal = 20 + 25 + 15 + 0 + 10;
+    expect(result.score).toBe(expectedTotal);
+    expect(result.score).toBeLessThanOrEqual(100);
+    expect(result.score).toBeGreaterThanOrEqual(0);
+  });
+
+  it('14. Corrective Audit: Occupied agent with IN_PROGRESS task is excluded from assignment pool', async () => {
+    // Create an occupied agent (Agent A1 gets an IN_PROGRESS task)
+    const occupiedTask = await prisma.task.create({
+      data: {
+        projectId: projectA.id,
+        creatorId: userA.id,
+        title: 'Occupied Task',
+        description: 'Currently IN_PROGRESS',
+        status: 'IN_PROGRESS',
+      },
+    });
+
+    const responsibility = await prisma.taskResponsibility.create({
+      data: {
+        taskId: occupiedTask.id,
+        agentId: agentA1.id,
+      },
+    });
+
+    const newTask = await prisma.task.create({
+      data: {
+        projectId: projectA.id,
+        creatorId: userA.id,
+        title: 'New Task for Unoccupied Agent',
+        description: 'Should go to Agent A2 since A1 is occupied',
+      },
+    });
+
+    const res = await coordinatorService.assignTask(projectA.id, newTask.id, userA.id);
+
+    expect(res.assigned).toBe(true);
+    if (res.assigned) {
+      expect(res.agentId).toBe(agentA2.id); // Agent A2 selected because A1 is occupied
+    }
+
+    await prisma.taskResponsibility.delete({ where: { id: responsibility.id } });
+    await prisma.task.delete({ where: { id: occupiedTask.id } });
+    await prisma.task.delete({ where: { id: newTask.id } });
+  });
+
+  it('15. Corrective Audit: Concurrent assignments for DIFFERENT tasks in same project succeed without lock contention', async () => {
+    const task1 = await prisma.task.create({
+      data: {
+        projectId: projectA.id,
+        creatorId: userA.id,
+        title: 'Task 1 Concurrent',
+        description: 'Target task 1',
+        preferredAgentId: agentA1.id,
+      },
+    });
+
+    const task2 = await prisma.task.create({
+      data: {
+        projectId: projectA.id,
+        creatorId: userA.id,
+        title: 'Task 2 Concurrent',
+        description: 'Target task 2',
+        preferredAgentId: agentA2.id,
+      },
+    });
+
+    const [res1, res2] = await Promise.all([
+      coordinatorService.assignTask(projectA.id, task1.id, userA.id),
+      coordinatorService.assignTask(projectA.id, task2.id, userA.id),
+    ]);
+
+    expect(res1.assigned).toBe(true);
+    expect(res2.assigned).toBe(true);
+    if (res1.assigned) expect(res1.agentId).toBe(agentA1.id);
+    if (res2.assigned) expect(res2.agentId).toBe(agentA2.id);
+
+    await prisma.taskResponsibility.deleteMany({
+      where: { taskId: { in: [task1.id, task2.id] } },
+    });
+    await prisma.task.deleteMany({
+      where: { id: { in: [task1.id, task2.id] } },
+    });
+  });
 });

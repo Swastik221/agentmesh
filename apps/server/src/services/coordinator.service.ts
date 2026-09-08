@@ -68,6 +68,30 @@ export class CoordinatorService {
     }
   }
 
+  public getCategoryKey(
+    rawCap: string,
+  ): 'languages' | 'frameworks' | 'tools' | 'domains' | 'taskTypes' {
+    const norm = rawCap.trim().toLowerCase();
+    if (norm.includes(':')) {
+      const prefix = norm.split(':')[0];
+      if (prefix === 'language' || prefix === 'languages' || prefix === 'lang') return 'languages';
+      if (prefix === 'framework' || prefix === 'frameworks') return 'frameworks';
+      if (prefix === 'tool' || prefix === 'tools') return 'tools';
+      if (prefix === 'domain' || prefix === 'domains') return 'domains';
+      if (prefix === 'tasktype' || prefix === 'tasktypes' || prefix === 'task_type')
+        return 'taskTypes';
+    }
+
+    const name = norm.includes(':') ? norm.split(':').slice(1).join(':') : norm;
+    if (['react', 'vue', 'angular', 'express', 'fastapi', 'next', 'django'].includes(name))
+      return 'frameworks';
+    if (['vite', 'docker', 'git', 'webpack', 'prisma'].includes(name)) return 'tools';
+    if (['frontend', 'backend', 'fullstack', 'database', 'devops'].includes(name))
+      return 'domains';
+    if (['ui', 'api', 'bugfix', 'refactor', 'test'].includes(name)) return 'taskTypes';
+    return 'languages';
+  }
+
   public scoreCapabilities(
     agentCapabilities: string[],
     requiredCapabilities: string[],
@@ -75,68 +99,122 @@ export class CoordinatorService {
     score: number;
     matchedCapabilities: string[];
     unmatchedCapabilities: string[];
+    categoryScores: {
+      languages: number;
+      frameworks: number;
+      tools: number;
+      domains: number;
+      taskTypes: number;
+    };
   } {
     const normalizedAgentCaps = agentCapabilities.map((c) => c.trim().toLowerCase());
+
+    const categoryWeights = {
+      languages: 40,
+      frameworks: 25,
+      tools: 15,
+      domains: 10,
+      taskTypes: 10,
+    };
 
     if (requiredCapabilities.length === 0) {
       return {
         score: 100,
         matchedCapabilities: [],
         unmatchedCapabilities: [],
+        categoryScores: {
+          languages: 40,
+          frameworks: 25,
+          tools: 15,
+          domains: 10,
+          taskTypes: 10,
+        },
       };
+    }
+
+    const reqsByCategory: Record<
+      'languages' | 'frameworks' | 'tools' | 'domains' | 'taskTypes',
+      string[]
+    > = {
+      languages: [],
+      frameworks: [],
+      tools: [],
+      domains: [],
+      taskTypes: [],
+    };
+
+    for (const rawReqCap of requiredCapabilities) {
+      const cat = this.getCategoryKey(rawReqCap);
+      reqsByCategory[cat].push(rawReqCap);
     }
 
     const matchedCapabilities: string[] = [];
     const unmatchedCapabilities: string[] = [];
-
-    const categoryWeights: Record<string, number> = {
-      language: 40,
-      framework: 25,
-      tool: 15,
-      domain: 10,
-      tasktype: 10,
+    const categoryScores = {
+      languages: 0,
+      frameworks: 0,
+      tools: 0,
+      domains: 0,
+      taskTypes: 0,
     };
 
-    let totalWeight = 0;
-    let earnedWeight = 0;
+    const categories: Array<'languages' | 'frameworks' | 'tools' | 'domains' | 'taskTypes'> = [
+      'languages',
+      'frameworks',
+      'tools',
+      'domains',
+      'taskTypes',
+    ];
 
-    for (const rawReqCap of requiredCapabilities) {
-      const normalizedReq = rawReqCap.trim().toLowerCase();
-      let category = 'general';
-      let capName = normalizedReq;
-
-      if (normalizedReq.includes(':')) {
-        const parts = normalizedReq.split(':');
-        category = parts[0];
-        capName = parts.slice(1).join(':');
+    for (const cat of categories) {
+      const reqs = reqsByCategory[cat];
+      if (reqs.length === 0) {
+        categoryScores[cat] = 0;
+        continue;
       }
 
-      const weight = categoryWeights[category] || 20;
-      totalWeight += weight;
+      let matchedInCat = 0;
+      for (const rawReqCap of reqs) {
+        const normalizedReq = rawReqCap.trim().toLowerCase();
+        const capName = normalizedReq.includes(':')
+          ? normalizedReq.split(':').slice(1).join(':')
+          : normalizedReq;
 
-      const isMatched = normalizedAgentCaps.some((agentCap) => {
-        if (agentCap === normalizedReq) return true;
-        if (agentCap.includes(':')) {
-          const agentCapName = agentCap.split(':').slice(1).join(':');
-          return agentCapName === capName || agentCapName === normalizedReq;
+        const isMatched = normalizedAgentCaps.some((agentCap) => {
+          if (agentCap === normalizedReq) return true;
+          if (agentCap.includes(':')) {
+            const agentCapName = agentCap.split(':').slice(1).join(':');
+            return agentCapName === capName || agentCapName === normalizedReq;
+          }
+          return agentCap === capName;
+        });
+
+        if (isMatched) {
+          matchedInCat++;
+          matchedCapabilities.push(rawReqCap);
+        } else {
+          unmatchedCapabilities.push(rawReqCap);
         }
-        return agentCap === capName;
-      });
-
-      if (isMatched) {
-        earnedWeight += weight;
-        matchedCapabilities.push(rawReqCap);
-      } else {
-        unmatchedCapabilities.push(rawReqCap);
       }
+
+      const catWeight = categoryWeights[cat];
+      categoryScores[cat] = Math.round((matchedInCat / reqs.length) * catWeight);
     }
 
-    const score = totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 0;
+    const rawFinalScore =
+      categoryScores.languages +
+      categoryScores.frameworks +
+      categoryScores.tools +
+      categoryScores.domains +
+      categoryScores.taskTypes;
+
+    const finalScore = Math.min(100, Math.max(0, rawFinalScore));
 
     return {
-      score,
+      score: finalScore,
       matchedCapabilities,
       unmatchedCapabilities,
+      categoryScores,
     };
   }
 
@@ -215,8 +293,8 @@ export class CoordinatorService {
       return result;
     }
 
-    // 2. Capability Matching
-    const eligibleAgents = await prisma.agent.findMany({
+    // 2. Capability Matching & Agent Eligibility Check
+    const candidates = await prisma.agent.findMany({
       where: {
         projectId,
         status: 'ONLINE',
@@ -225,10 +303,26 @@ export class CoordinatorService {
         capabilities: true,
         executions: {
           where: {
-            status: 'RUNNING',
+            status: { in: ['RUNNING', 'QUEUED'] },
+          },
+        },
+        taskResponsibilities: {
+          include: {
+            task: true,
           },
         },
       },
+    });
+
+    // Exclude occupied agents (running/queued executions or active IN_PROGRESS tasks)
+    const eligibleAgents = candidates.filter((agent) => {
+      if (agent.status !== 'ONLINE') return false;
+      if (agent.executions.length > 0) return false;
+      const hasActiveTask = agent.taskResponsibilities.some(
+        (resp) => resp.task && resp.task.status === 'IN_PROGRESS',
+      );
+      if (hasActiveTask) return false;
+      return true;
     });
 
     if (eligibleAgents.length === 0) {
@@ -241,10 +335,8 @@ export class CoordinatorService {
 
     const scoredCandidates = eligibleAgents.map((agent) => {
       const agentCapStrings = agent.capabilities.map((c) => c.capability);
-      const { score, matchedCapabilities, unmatchedCapabilities } = this.scoreCapabilities(
-        agentCapStrings,
-        task.requiredCapabilities,
-      );
+      const { score, matchedCapabilities, unmatchedCapabilities, categoryScores } =
+        this.scoreCapabilities(agentCapStrings, task.requiredCapabilities);
       const workload = agent.executions.length;
 
       return {
@@ -253,6 +345,7 @@ export class CoordinatorService {
         workload,
         matchedCapabilities,
         unmatchedCapabilities,
+        categoryScores,
       };
     });
 
@@ -275,6 +368,7 @@ export class CoordinatorService {
     const explanation: AssignmentExplanation = {
       matchedCapabilities: winner.matchedCapabilities,
       unmatchedCapabilities: winner.unmatchedCapabilities,
+      categoryScores: winner.categoryScores,
       workload: winner.workload,
       reason: `Assigned via capability match (score: ${winner.score}%)`,
     };
@@ -299,7 +393,8 @@ export class CoordinatorService {
   ): Promise<AssignmentResult> {
     try {
       const result = await prisma.$transaction(async (tx) => {
-        await tx.$executeRaw`SELECT * FROM tasks WHERE "projectId" = ${projectId} FOR UPDATE`;
+        // Target-task specific row lock (preserves concurrent non-conflicting task assignment)
+        await tx.$executeRaw`SELECT * FROM tasks WHERE id = ${taskId} AND "projectId" = ${projectId} FOR UPDATE`;
 
         const freshTask = await tx.task.findUnique({
           where: { id: taskId },
