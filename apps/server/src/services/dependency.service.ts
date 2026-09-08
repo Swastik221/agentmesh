@@ -41,26 +41,29 @@ export class DependencyService {
   }
 
   /**
-   * Bounded DAG cycle detection: Checks if adding a edge (sourceTaskId -> targetTaskId) creates a cycle
+   * Bounded DAG cycle detection: Checks if adding an edge (sourceTaskId -> targetTaskId) creates a cycle.
+   * Returns isInconclusive=true if depth bound is reached before proving cycle safety.
    */
   private async detectTaskCycle(
     sourceTaskId: string,
     targetTaskId: string,
     maxDepth: number,
-  ): Promise<boolean> {
+  ): Promise<{ hasCycle: boolean; isInconclusive: boolean }> {
     const queue: Array<{ taskId: string; depth: number }> = [
       { taskId: targetTaskId, depth: 1 },
     ];
     const visited = new Set<string>([targetTaskId]);
+    let hitDepthLimit = false;
 
     while (queue.length > 0) {
       const current = queue.shift()!;
 
       if (current.taskId === sourceTaskId) {
-        return true; // Cycle detected!
+        return { hasCycle: true, isInconclusive: false }; // Cycle detected!
       }
 
       if (current.depth >= maxDepth) {
+        hitDepthLimit = true;
         continue; // Bound depth traversal
       }
 
@@ -83,7 +86,7 @@ export class DependencyService {
       }
     }
 
-    return false;
+    return { hasCycle: false, isInconclusive: hitDepthLimit };
   }
 
   async createDependency(
@@ -133,14 +136,18 @@ export class DependencyService {
       }
 
       // Perform cycle check
-      const hasCycle = await this.detectTaskCycle(
+      const cycleCheck = await this.detectTaskCycle(
         taskId,
         dependsOnTaskId,
         config.maxDependencyTraversalDepth,
       );
 
-      if (hasCycle) {
+      if (cycleCheck.hasCycle) {
         throw new BadRequestError('Circular task dependency detected');
+      }
+
+      if (cycleCheck.isInconclusive) {
+        throw new BadRequestError('DEPENDENCY_GRAPH_TOO_DEEP');
       }
 
       // Check existing

@@ -9,6 +9,8 @@ import {
 import { connectionManager } from '../websocket/connection.manager.js';
 import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
 
+import crypto from 'node:crypto';
+
 export interface CreateArtifactInput {
   type: string;
   name: string;
@@ -21,6 +23,67 @@ export interface ListArtifactsQuery {
   page?: number;
   limit?: number;
   type?: string;
+}
+
+export function canonicalJsonStringify(val: unknown): string {
+  if (val === null || typeof val !== 'object') {
+    return JSON.stringify(val);
+  }
+  if (Array.isArray(val)) {
+    return '[' + val.map((item) => canonicalJsonStringify(item)).join(',') + ']';
+  }
+  const keys = Object.keys(val as Record<string, unknown>).sort();
+  const pairs = keys.map(
+    (k) => `${JSON.stringify(k)}:${canonicalJsonStringify((val as Record<string, unknown>)[k])}`,
+  );
+  return '{' + pairs.join(',') + '}';
+}
+
+export function validateAndSerializeJsonPayload(payload: unknown): {
+  payloadString: string;
+  payloadBytes: number;
+  contentHash: string;
+  normalizedPayload: unknown;
+} {
+  if (payload === undefined || payload === null) {
+    throw new BadRequestError('Artifact payload is required');
+  }
+
+  if (
+    typeof payload === 'function' ||
+    typeof payload === 'symbol' ||
+    typeof payload === 'bigint'
+  ) {
+    throw new BadRequestError('Invalid artifact payload: unsupported JSON data type');
+  }
+
+  let payloadString: string;
+  let normalizedPayload: unknown;
+  try {
+    const stringified = JSON.stringify(payload);
+    if (stringified === undefined) {
+      throw new BadRequestError('Invalid artifact payload: cannot be stringified to JSON');
+    }
+    normalizedPayload = JSON.parse(stringified);
+    payloadString = canonicalJsonStringify(normalizedPayload);
+  } catch (err) {
+    if (err instanceof BadRequestError) throw err;
+    throw new BadRequestError('Invalid artifact payload: JSON serialization failed or circular reference detected');
+  }
+
+  const payloadBytes = Buffer.byteLength(payloadString, 'utf8');
+  if (payloadBytes > config.maxArtifactPayloadBytes) {
+    throw new BadRequestError(
+      `Artifact payload size (${payloadBytes} bytes) exceeds limit of ${config.maxArtifactPayloadBytes} bytes`,
+    );
+  }
+
+  const contentHash = crypto
+    .createHash('sha256')
+    .update(payloadString, 'utf8')
+    .digest('hex');
+
+  return { payloadString, payloadBytes, contentHash, normalizedPayload };
 }
 
 export class ArtifactService {
@@ -63,18 +126,8 @@ export class ArtifactService {
       throw new BadRequestError('Artifact name is required');
     }
 
-    if (data.payload === undefined || data.payload === null) {
-      throw new BadRequestError('Artifact payload is required');
-    }
-
-    // Payload size validation
-    const payloadString = JSON.stringify(data.payload);
-    const payloadBytes = Buffer.byteLength(payloadString, 'utf8');
-    if (payloadBytes > config.maxArtifactPayloadBytes) {
-      throw new BadRequestError(
-        `Artifact payload size (${payloadBytes} bytes) exceeds limit of ${config.maxArtifactPayloadBytes} bytes`,
-      );
-    }
+    // Payload validation, UTF-8 size check, SHA-256 contentHash calculation
+    const { contentHash, normalizedPayload } = validateAndSerializeJsonPayload(data.payload);
 
     const task = await prisma.task.findUnique({
       where: { id: taskId },
@@ -112,34 +165,63 @@ export class ArtifactService {
       throw new BadRequestError('Producer agent ID is required for artifact creation');
     }
 
-    // Execute atomic transaction for versioning
-    const artifact = await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT * FROM tasks WHERE id = ${taskId} AND "projectId" = ${projectId} FOR UPDATE`;
+    // Execute atomic transaction for versioning with retry handling for concurrency
+    let attempts = 0;
+    const maxRetries = 10;
+    let artifact;
 
-      const existingArtifact = await tx.artifact.findFirst({
-        where: {
-          taskId,
-          name: data.name,
-        },
-        orderBy: { version: 'desc' },
-      });
+    while (attempts < maxRetries) {
+      attempts++;
+      try {
+        artifact = await prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT * FROM tasks WHERE id = ${taskId} AND "projectId" = ${projectId} FOR UPDATE`;
 
-      const version = existingArtifact ? existingArtifact.version + 1 : 1;
+          const existingArtifact = await tx.artifact.findFirst({
+            where: {
+              taskId,
+              name: data.name.trim(),
+            },
+            orderBy: { version: 'desc' },
+          });
 
-      return await tx.artifact.create({
-        data: {
-          projectId,
-          taskId,
-          executionId: data.executionId || null,
-          agentId: producerAgentId!,
-          ownerUserId: userId,
-          type: data.type.trim(),
-          name: data.name.trim(),
-          version,
-          payload: data.payload as Prisma.InputJsonValue,
-        },
-      });
-    });
+          const version = existingArtifact ? existingArtifact.version + 1 : 1;
+
+          return await tx.artifact.create({
+            data: {
+              projectId,
+              taskId,
+              executionId: data.executionId || null,
+              agentId: producerAgentId!,
+              ownerUserId: userId,
+              type: data.type.trim(),
+              name: data.name.trim(),
+              version,
+              payload: normalizedPayload as Prisma.InputJsonValue,
+            },
+          });
+        });
+        break;
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002' &&
+          attempts < maxRetries
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (!artifact) {
+      throw new BadRequestError('Failed to create artifact due to high concurrency. Please retry.');
+    }
+
+    // Attach calculated contentHash for return
+    const artifactWithHash = {
+      ...artifact,
+      contentHash,
+    };
 
     // Post-commit real-time broadcast
     connectionManager.broadcastToProject(projectId, {
@@ -186,7 +268,7 @@ export class ArtifactService {
       });
     }
 
-    return artifact;
+    return artifactWithHash;
   }
 
   async getArtifact(projectId: string, artifactId: string, userId: string) {
@@ -223,7 +305,16 @@ export class ArtifactService {
       throw new NotFoundError('Artifact not found');
     }
 
-    return artifact;
+    const payloadString = canonicalJsonStringify(artifact.payload);
+    const contentHash = crypto
+      .createHash('sha256')
+      .update(payloadString, 'utf8')
+      .digest('hex');
+
+    return {
+      ...artifact,
+      contentHash,
+    };
   }
 
   async listArtifacts(

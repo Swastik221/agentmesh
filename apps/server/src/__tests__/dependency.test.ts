@@ -226,4 +226,41 @@ describe('PRD-15 Dependency Service & Cycle Detection Tests', () => {
     expect(resAfter.body.available).toBe(1);
     expect(resAfter.body.total).toBe(1);
   });
+
+  it('8. Inconclusive deep graph traversal fails safely with DEPENDENCY_GRAPH_TOO_DEEP', async () => {
+    // Create chain of 11 tasks: T0 -> T1 -> T2 -> ... -> T10
+    const tasks = [taskAId];
+    for (let i = 1; i <= 10; i++) {
+      const t = await prisma.task.create({
+        data: {
+          projectId,
+          creatorId: userId,
+          title: `Chain Task ${i}`,
+          description: `Deep task ${i}`,
+        },
+      });
+      tasks.push(t.id);
+    }
+
+    // Link T(i) depends on T(i-1)
+    for (let i = 1; i < tasks.length; i++) {
+      await prisma.taskDependency.create({
+        data: {
+          projectId,
+          taskId: tasks[i],
+          dependsOnTaskId: tasks[i - 1],
+          dependencyType: 'TASK_COMPLETION',
+        },
+      });
+    }
+
+    // Attempting T0 depends on T10 (traversal from T10 -> ... -> T0 depth exceeds 10)
+    const resDeep = await request(app)
+      .post(`/api/projects/${projectId}/tasks/${tasks[0]}/dependencies`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ dependsOnTaskId: tasks[tasks.length - 1] });
+
+    expect(resDeep.status).toBe(400);
+    expect(resDeep.body.message).toMatch(/DEPENDENCY_GRAPH_TOO_DEEP/i);
+  });
 });

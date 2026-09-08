@@ -240,4 +240,104 @@ describe('PRD-15 Artifact Service & APIs', () => {
     expect(res.body.total).toBe(3);
     expect(res.body.page).toBe(1);
   });
+
+  it('6. Concurrency test: 10 concurrent artifact creations for same task & name yield versions 1..10', async () => {
+    const name = 'Concurrent Artifact';
+    const promises = Array.from({ length: 10 }, (_, i) =>
+      request(app)
+        .post(`/api/projects/${projectId}/tasks/${taskId}/artifacts`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          type: 'BUILD_OUTPUT',
+          name,
+          agentId,
+          payload: { index: i },
+        }),
+    );
+
+    const results = await Promise.all(promises);
+    for (const res of results) {
+      expect(res.status).toBe(201);
+    }
+
+    const artifacts = await prisma.artifact.findMany({
+      where: { taskId, name },
+      orderBy: { version: 'asc' },
+    });
+
+    expect(artifacts.length).toBe(10);
+    const versions = artifacts.map((a) => a.version);
+    expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it('7. Concurrency test: 25 concurrent artifact creations for same task & name yield versions 1..25', async () => {
+    const name = '25 Concurrent Artifact';
+    const promises = Array.from({ length: 25 }, (_, i) =>
+      request(app)
+        .post(`/api/projects/${projectId}/tasks/${taskId}/artifacts`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          type: 'LOG_OUTPUT',
+          name,
+          agentId,
+          payload: { index: i },
+        }),
+    );
+
+    const results = await Promise.all(promises);
+    for (const res of results) {
+      expect(res.status).toBe(201);
+    }
+
+    const artifacts = await prisma.artifact.findMany({
+      where: { taskId, name },
+      orderBy: { version: 'asc' },
+    });
+
+    expect(artifacts.length).toBe(25);
+    const versions = artifacts.map((a) => a.version);
+    expect(versions).toEqual(Array.from({ length: 25 }, (_, i) => i + 1));
+  });
+
+  it('8. UTF-8 multibyte characters handling & SHA-256 contentHash verification', async () => {
+    const payload = {
+      unicode: '🚀🔥🤖 AgentMesh Multi-byte Emoji',
+      latin: 'Hello World',
+    };
+
+    const res = await request(app)
+      .post(`/api/projects/${projectId}/tasks/${taskId}/artifacts`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        type: 'UNICODE_SPEC',
+        name: 'Unicode Artifact',
+        agentId,
+        payload,
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.contentHash).toBeDefined();
+
+    const fetchRes = await request(app)
+      .get(`/api/projects/${projectId}/artifacts/${res.body.id}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(fetchRes.status).toBe(200);
+    expect(fetchRes.body.contentHash).toBe(res.body.contentHash);
+    expect(fetchRes.body.payload).toEqual(payload);
+  });
+
+  it('9. Reject unsupported data types (function, symbol, undefined)', async () => {
+    const resFunc = await request(app)
+      .post(`/api/projects/${projectId}/tasks/${taskId}/artifacts`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        type: 'INVALID',
+        name: 'Invalid Payload',
+        agentId,
+        payload: undefined,
+      });
+
+    expect(resFunc.status).toBe(400);
+  });
 });
