@@ -151,6 +151,42 @@ export const taskAssignedPayloadSchema = z.object({
   explanation: z.record(z.unknown()).optional(),
 });
 
+export const artifactCreatedPayloadSchema = z.object({
+  artifactId: z.string().trim().min(1, 'Artifact ID is required'),
+  projectId: z.string().trim().min(1, 'Project ID is required'),
+  taskId: z.string().trim().min(1, 'Task ID is required'),
+  executionId: z.string().trim().optional(),
+  agentId: z.string().trim().min(1, 'Agent ID is required'),
+  type: z.string().trim().min(1, 'Artifact type is required'),
+  name: z.string().trim().min(1, 'Artifact name is required'),
+  version: z.number().int().positive('Version must be a positive integer'),
+});
+
+export const artifactAvailablePayloadSchema = z.object({
+  artifactId: z.string().trim().min(1, 'Artifact ID is required'),
+  projectId: z.string().trim().min(1, 'Project ID is required'),
+  taskId: z.string().trim().min(1, 'Task ID is required'),
+  consumerTaskId: z.string().trim().optional(),
+});
+
+export const dependencyDeclaredPayloadSchema = z.object({
+  dependencyId: z.string().trim().min(1, 'Dependency ID is required'),
+  projectId: z.string().trim().min(1, 'Project ID is required'),
+  taskId: z.string().trim().min(1, 'Task ID is required'),
+  dependencyType: z.string().trim().min(1, 'Dependency type is required'),
+  dependsOnTaskId: z.string().trim().optional(),
+  artifactId: z.string().trim().optional(),
+});
+
+export const dependencyAvailablePayloadSchema = z.object({
+  dependencyId: z.string().trim().min(1, 'Dependency ID is required'),
+  projectId: z.string().trim().min(1, 'Project ID is required'),
+  taskId: z.string().trim().min(1, 'Task ID is required'),
+  dependsOnTaskId: z.string().trim().optional(),
+  artifactId: z.string().trim().optional(),
+  available: z.boolean(),
+});
+
 export const baseEnvelopeSchema = z.object({
   id: z.string().trim().min(1, 'Message ID is required'),
   protocolVersion: z.literal(PROTOCOL_VERSION, {
@@ -259,6 +295,26 @@ export const taskAssignedMessageSchema = baseEnvelopeSchema.extend({
   payload: taskAssignedPayloadSchema,
 });
 
+export const artifactCreatedMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.ARTIFACT_CREATED),
+  payload: artifactCreatedPayloadSchema,
+});
+
+export const artifactAvailableMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.ARTIFACT_AVAILABLE),
+  payload: artifactAvailablePayloadSchema,
+});
+
+export const dependencyDeclaredMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.DEPENDENCY_DECLARED),
+  payload: dependencyDeclaredPayloadSchema,
+});
+
+export const dependencyAvailableMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.DEPENDENCY_AVAILABLE),
+  payload: dependencyAvailablePayloadSchema,
+});
+
 export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   agentHandshakeMessageSchema,
   agentHandshakeAcceptedMessageSchema,
@@ -278,4 +334,8 @@ export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   workspaceSnapshotMessageSchema,
   workspacePresenceChangedMessageSchema,
   taskAssignedMessageSchema,
+  artifactCreatedMessageSchema,
+  artifactAvailableMessageSchema,
+  dependencyDeclaredMessageSchema,
+  dependencyAvailableMessageSchema,
 ]);

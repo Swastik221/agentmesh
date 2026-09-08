@@ -37,6 +37,14 @@ import {
   workspacePresenceChangedMessageSchema,
   taskAssignedPayloadSchema,
   taskAssignedMessageSchema,
+  artifactCreatedPayloadSchema,
+  artifactCreatedMessageSchema,
+  artifactAvailablePayloadSchema,
+  artifactAvailableMessageSchema,
+  dependencyDeclaredPayloadSchema,
+  dependencyDeclaredMessageSchema,
+  dependencyAvailablePayloadSchema,
+  dependencyAvailableMessageSchema,
   agentMeshMessageSchema,
 } from './schemas.js';
 import { PROTOCOL_VERSION, ParticipantType, MessageKind } from './constants.js';
@@ -61,6 +69,10 @@ export type PongPayload = z.infer<typeof pongPayloadSchema>;
 export type WorkspaceSnapshotPayload = z.infer<typeof workspaceSnapshotPayloadSchema>;
 export type WorkspacePresenceChangedPayload = z.infer<typeof workspacePresenceChangedPayloadSchema>;
 export type TaskAssignedPayload = z.infer<typeof taskAssignedPayloadSchema>;
+export type ArtifactCreatedPayload = z.infer<typeof artifactCreatedPayloadSchema>;
+export type ArtifactAvailablePayload = z.infer<typeof artifactAvailablePayloadSchema>;
+export type DependencyDeclaredPayload = z.infer<typeof dependencyDeclaredPayloadSchema>;
+export type DependencyAvailablePayload = z.infer<typeof dependencyAvailablePayloadSchema>;
 
 export type AgentHandshakeMessage = z.infer<typeof agentHandshakeMessageSchema>;
 export type AgentHandshakeAcceptedMessage = z.infer<typeof agentHandshakeAcceptedMessageSchema>;
@@ -80,6 +92,10 @@ export type PongMessage = z.infer<typeof pongMessageSchema>;
 export type WorkspaceSnapshotMessage = z.infer<typeof workspaceSnapshotMessageSchema>;
 export type WorkspacePresenceChangedMessage = z.infer<typeof workspacePresenceChangedMessageSchema>;
 export type TaskAssignedMessage = z.infer<typeof taskAssignedMessageSchema>;
+export type ArtifactCreatedMessage = z.infer<typeof artifactCreatedMessageSchema>;
+export type ArtifactAvailableMessage = z.infer<typeof artifactAvailableMessageSchema>;
+export type DependencyDeclaredMessage = z.infer<typeof dependencyDeclaredMessageSchema>;
+export type DependencyAvailableMessage = z.infer<typeof dependencyAvailableMessageSchema>;
 
 export type AgentMeshMessage = z.infer<typeof agentMeshMessageSchema>;
 

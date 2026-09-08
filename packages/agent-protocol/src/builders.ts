@@ -19,6 +19,10 @@ import {
   WorkspaceSnapshotMessage,
   WorkspacePresenceChangedMessage,
   TaskAssignedMessage,
+  ArtifactCreatedMessage,
+  ArtifactAvailableMessage,
+  DependencyDeclaredMessage,
+  DependencyAvailableMessage,
   AgentHandshakePayload,
   AgentHandshakeAcceptedPayload,
   AgentHandshakeRejectedPayload,
@@ -35,6 +39,10 @@ import {
   WorkspaceSnapshotPayload,
   WorkspacePresenceChangedPayload,
   TaskAssignedPayload,
+  ArtifactCreatedPayload,
+  ArtifactAvailablePayload,
+  DependencyDeclaredPayload,
+  DependencyAvailablePayload,
 } from './types.js';
 
 export interface BaseBuilderOptions {
@@ -308,6 +316,75 @@ export function createTaskAssignedMessage(
       MessageKind.EVENT,
     ),
     type: AgentMeshMessageType.TASK_ASSIGNED,
+    payload,
+  };
+}
+
+export function createArtifactCreatedMessage(
+  options: BaseBuilderOptions,
+  payload: ArtifactCreatedPayload,
+): ArtifactCreatedMessage {
+  return {
+    ...buildEnvelope(
+      {
+        ...options,
+        taskId: options.taskId || payload.taskId,
+        executionId: options.executionId || payload.executionId,
+      },
+      MessageKind.EVENT,
+    ),
+    type: AgentMeshMessageType.ARTIFACT_CREATED,
+    payload,
+  };
+}
+
+export function createArtifactAvailableMessage(
+  options: BaseBuilderOptions,
+  payload: ArtifactAvailablePayload,
+): ArtifactAvailableMessage {
+  return {
+    ...buildEnvelope(
+      {
+        ...options,
+        taskId: options.taskId || payload.taskId,
+      },
+      MessageKind.EVENT,
+    ),
+    type: AgentMeshMessageType.ARTIFACT_AVAILABLE,
+    payload,
+  };
+}
+
+export function createDependencyDeclaredMessage(
+  options: BaseBuilderOptions,
+  payload: DependencyDeclaredPayload,
+): DependencyDeclaredMessage {
+  return {
+    ...buildEnvelope(
+      {
+        ...options,
+        taskId: options.taskId || payload.taskId,
+      },
+      MessageKind.EVENT,
+    ),
+    type: AgentMeshMessageType.DEPENDENCY_DECLARED,
+    payload,
+  };
+}
+
+export function createDependencyAvailableMessage(
+  options: BaseBuilderOptions,
+  payload: DependencyAvailablePayload,
+): DependencyAvailableMessage {
+  return {
+    ...buildEnvelope(
+      {
+        ...options,
+        taskId: options.taskId || payload.taskId,
+      },
+      MessageKind.EVENT,
+    ),
+    type: AgentMeshMessageType.DEPENDENCY_AVAILABLE,
     payload,
   };
 }

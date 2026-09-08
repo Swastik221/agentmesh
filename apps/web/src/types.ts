@@ -58,3 +58,18 @@ export interface TaskBoardNodeFields extends Record<string, unknown> {
 export type AgentFlowNode = Node<AgentNodeFields, 'agent'>;
 export type TaskBoardFlowNode = Node<TaskBoardNodeFields, 'taskBoard'>;
 export type WorkspaceNode = AgentFlowNode | TaskBoardFlowNode;
+
+export interface ArtifactSummary {
+  id: string;
+  name: string;
+  type: string;
+  version: number;
+}
+
+export interface TaskDependencySummary {
+  id: string;
+  dependencyType: string;
+  available: boolean;
+  dependsOnTaskId?: string;
+  artifactId?: string;
+}

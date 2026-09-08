@@ -79,7 +79,9 @@ export const assignResponsibilitySchema = z.object({
 });
 
 export const createDependencySchema = z.object({
-  dependsOnTaskId: z.string().min(1, 'dependsOnTaskId is required'),
+  dependencyType: z.string().optional(),
+  dependsOnTaskId: z.string().min(1).optional(),
+  artifactId: z.string().min(1).optional(),
 });
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;

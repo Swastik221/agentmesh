@@ -401,6 +401,68 @@ export class AgentMeshWebSocketServer {
       return;
     }
 
+    // Handle inbound artifact.created from connected BYOA agent
+    if (message.type === AgentMeshMessageType.ARTIFACT_CREATED) {
+      if (!metadata.authenticated || !metadata.agentId) {
+        this.sendError(metadata.socket, 'UNAUTHORIZED', 'Agent must be authenticated to publish artifacts');
+        return;
+      }
+
+      try {
+        const payload = (message as { payload: Record<string, unknown> }).payload;
+        const taskId = payload.taskId as string;
+        const type = payload.type as string;
+        const name = payload.name as string;
+        const artifactPayload = payload.payload;
+        const executionId = payload.executionId as string | undefined;
+
+        const agent = await prisma.agent.findUnique({
+          where: { id: metadata.agentId },
+        });
+
+        if (!agent) {
+          this.sendError(metadata.socket, 'AGENT_NOT_FOUND', 'Agent not found');
+          return;
+        }
+
+        const { artifactService } = await import('../services/artifact.service.js');
+        const artifact = await artifactService.createArtifact(
+          metadata.projectId,
+          taskId,
+          agent.ownerId,
+          {
+            type,
+            name,
+            payload: artifactPayload,
+            executionId,
+            agentId: metadata.agentId,
+          },
+        );
+
+        this.sendJson(metadata.socket, {
+          type: AgentMeshMessageType.ARTIFACT_CREATED,
+          payload: {
+            artifactId: artifact.id,
+            projectId: metadata.projectId,
+            taskId: artifact.taskId,
+            executionId: artifact.executionId || undefined,
+            agentId: artifact.agentId,
+            type: artifact.type,
+            name: artifact.name,
+            version: artifact.version,
+          },
+        } as unknown as WebSocketMessage);
+      } catch (err: unknown) {
+        const error = err as Error;
+        this.sendError(
+          metadata.socket,
+          'ARTIFACT_CREATION_FAILED',
+          error?.message || 'Failed to create artifact',
+        );
+      }
+      return;
+    }
+
     // Handle connector task messages
     if (
       message.type === AgentMeshMessageType.TASK_ACCEPTED ||
