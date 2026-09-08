@@ -213,6 +213,9 @@ export class HandshakeService {
       });
     }
 
+    const { connectorService } = await import('../connector/connector.service.js');
+    void connectorService.onAgentConnected(agent.id, connection.projectId).catch(() => {});
+
     const acceptedMessage = createAgentMeshMessage({
       type: AgentMeshMessageType.AGENT_HANDSHAKE_ACCEPTED,
       projectId: connection.projectId,

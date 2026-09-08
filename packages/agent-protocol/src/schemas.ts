@@ -38,13 +38,16 @@ export const agentMessagePayloadSchema = z.object({
 
 export const taskStatusPayloadSchema = z.object({
   taskId: z.string().trim().min(1, 'Task ID is required'),
+  executionId: z.string().trim().optional(),
   status: z.enum(['TODO', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED', 'FAILED', 'CANCELLED'], {
     errorMap: () => ({ message: 'Status must be a valid task status' }),
   }),
+  message: z.string().trim().optional(),
 });
 
 export const taskRequestPayloadSchema = z.object({
   taskId: z.string().trim().min(1, 'Task ID is required'),
+  executionId: z.string().trim().optional(),
   title: z.string().trim().min(1, 'Task title cannot be empty'),
   description: z.string().trim().min(1, 'Task description cannot be empty'),
   requiredCapabilities: z
@@ -56,26 +59,31 @@ export const taskRequestPayloadSchema = z.object({
 
 export const taskAcceptedPayloadSchema = z.object({
   taskId: z.string().trim().min(1, 'Task ID is required'),
+  executionId: z.string().trim().optional(),
 });
 
 export const taskRejectedPayloadSchema = z.object({
   taskId: z.string().trim().min(1, 'Task ID is required'),
+  executionId: z.string().trim().optional(),
   reason: z.string().trim().min(1, 'Rejection reason cannot be empty'),
 });
 
 export const taskProgressPayloadSchema = z.object({
   taskId: z.string().trim().min(1, 'Task ID is required'),
+  executionId: z.string().trim().optional(),
   progress: z.number().min(0, 'Progress must be at least 0').max(100, 'Progress cannot exceed 100'),
   message: z.string().trim().optional(),
 });
 
 export const taskCompletedPayloadSchema = z.object({
   taskId: z.string().trim().min(1, 'Task ID is required'),
+  executionId: z.string().trim().optional(),
   result: z.unknown().optional(),
 });
 
 export const taskFailedPayloadSchema = z.object({
   taskId: z.string().trim().min(1, 'Task ID is required'),
+  executionId: z.string().trim().optional(),
   error: z.string().trim().min(1, 'Error message cannot be empty'),
   retryable: z.boolean().optional(),
 });

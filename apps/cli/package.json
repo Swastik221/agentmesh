@@ -1,0 +1,29 @@
+{
+  "name": "@agentmesh/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.js",
+  "bin": {
+    "agentmesh": "./bin/agentmesh.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@agentmesh/agent-protocol": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@agentmesh/config": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.14",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.5"
+  }
+}

@@ -249,7 +249,29 @@ export class ExecutionService {
         console.error(`Failed to resolve workspace context for execution ${executionId}:`, ctxErr);
       }
 
-      // 3. Invoke Executor
+      // 3. Check if BYOA agent is connected via WebSocket connector
+      try {
+        const taskObj = await prisma.task.findUnique({
+          where: { id: execution.taskId },
+          select: { projectId: true },
+        });
+        if (taskObj) {
+          const { connectorService } = await import('../connector/connector.service.js');
+          const dispatched = await connectorService.dispatchTaskToAgent(
+            taskObj.projectId,
+            execution.taskId,
+            execution.id,
+            execution.agentId,
+          );
+          if (dispatched) {
+            return;
+          }
+        }
+      } catch (connErr) {
+        console.error(`Failed to dispatch execution ${executionId} via connector:`, connErr);
+      }
+
+      // 4. Invoke Executor
       const result = await this.executor.execute({
         executionId: execution.id,
         taskId: execution.taskId,
@@ -443,6 +465,19 @@ export class ExecutionService {
 
     // Sync agent status
     await this.syncAgentStatus(execution.agentId);
+
+    // Notify connected BYOA agent if active
+    try {
+      const { connectorService } = await import('../connector/connector.service.js');
+      await connectorService.notifyTaskCancelled(
+        projectId,
+        taskId,
+        executionId,
+        execution.agentId,
+      );
+    } catch {
+      // Ignore connector notification failures
+    }
 
     return updated;
   }

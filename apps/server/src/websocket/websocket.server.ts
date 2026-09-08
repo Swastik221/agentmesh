@@ -23,6 +23,17 @@ function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7).trim();
   }
+  if (req.url) {
+    try {
+      const parsedUrl = new URL(req.url, 'http://localhost');
+      const token = parsedUrl.searchParams.get('token');
+      if (token && token.trim() !== '') {
+        return token.trim();
+      }
+    } catch {
+      // Ignore URL parse errors on invalid URLs
+    }
+  }
   return undefined;
 }
 
@@ -153,6 +164,23 @@ export class AgentMeshWebSocketServer {
     // Handle agent.message
     if (message.type === AgentMeshMessageType.AGENT_MESSAGE) {
       const result = await messagingService.processAgentMessage(metadata, parsed);
+      if (!result.success && result.error) {
+        this.sendJson(metadata.socket, result.error as unknown as WebSocketMessage);
+      }
+      return;
+    }
+
+    // Handle connector task messages
+    if (
+      message.type === AgentMeshMessageType.TASK_ACCEPTED ||
+      message.type === AgentMeshMessageType.TASK_COMPLETED ||
+      message.type === AgentMeshMessageType.TASK_FAILED ||
+      message.type === AgentMeshMessageType.TASK_REJECTED ||
+      message.type === AgentMeshMessageType.TASK_PROGRESS ||
+      message.type === AgentMeshMessageType.TASK_STATUS
+    ) {
+      const { connectorService } = await import('../connector/connector.service.js');
+      const result = await connectorService.processConnectorTaskMessage(metadata, parsed);
       if (!result.success && result.error) {
         this.sendJson(metadata.socket, result.error as unknown as WebSocketMessage);
       }
