@@ -90,10 +90,15 @@ const seedNodes: ProductNode[] = [
 const edgeBase = {
   type: 'smoothstep' as const,
   animated: true,
-  markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: '#648b83' },
-  style: { stroke: '#648b83', strokeWidth: 1.6 },
-  labelStyle: { fill: '#344b47', fontSize: 10 },
-  labelBgStyle: { fill: '#fbfdf7', stroke: '#b7c9bd' },
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    width: 14,
+    height: 14,
+    color: 'var(--am-teal)',
+  },
+  style: { stroke: 'var(--am-teal)', strokeWidth: 1.6 },
+  labelStyle: { fill: 'var(--am-text-primary)', fontSize: 10 },
+  labelBgStyle: { fill: 'var(--am-surface)', stroke: 'var(--am-border-light)' },
   labelBgPadding: [5, 4] as [number, number],
 };
 const initialEdges: Edge[] = [
@@ -103,6 +108,13 @@ const initialEdges: Edge[] = [
     source: 'coordinator',
     target: 'tasks',
     label: 'TASK_PROPOSAL',
+    style: { stroke: 'var(--am-cyan)', strokeWidth: 1.6 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 14,
+      height: 14,
+      color: 'var(--am-cyan)',
+    },
   },
   { ...edgeBase, id: 'tasks-orion', source: 'tasks', target: 'orion', label: 'preference: AM-114' },
   { ...edgeBase, id: 'tasks-vega', source: 'tasks', target: 'vega', label: 'preference: AM-115' },
@@ -112,6 +124,13 @@ const initialEdges: Edge[] = [
     source: 'vega',
     target: 'artifact',
     label: 'schema published',
+    style: { stroke: 'var(--am-cyan)', strokeWidth: 1.6 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 14,
+      height: 14,
+      color: 'var(--am-cyan)',
+    },
   },
   {
     ...edgeBase,
@@ -126,7 +145,13 @@ const initialEdges: Edge[] = [
     source: 'vega',
     target: 'approval',
     label: 'deploy requested',
-    style: { stroke: '#f0b458', strokeWidth: 1.4 },
+    style: { stroke: 'var(--am-amber)', strokeWidth: 1.4 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 14,
+      height: 14,
+      color: 'var(--am-amber)',
+    },
   },
 ];
 const timestamp = () => new Date().toLocaleTimeString([], { hour12: false });
@@ -426,12 +451,12 @@ function Canvas() {
           return {
             ...edge,
             label: `deploy ${workspace.approval.status}`,
-            style: { stroke: approved ? '#42d69a' : '#f06a61', strokeWidth: 1.6 },
+            style: { stroke: approved ? 'var(--am-green)' : 'var(--am-red)', strokeWidth: 1.6 },
             markerEnd: {
               type: MarkerType.ArrowClosed,
               width: 14,
               height: 14,
-              color: approved ? '#42d69a' : '#f06a61',
+              color: approved ? 'var(--am-green)' : 'var(--am-red)',
             },
           };
         }
@@ -527,20 +552,24 @@ function Canvas() {
           fitView
           fitViewOptions={{ padding: 0.08, maxZoom: 0.82 }}
         >
-          <Background color="#9bae9e" gap={28} size={1} />
+          <Background color="#cad7d1" gap={28} size={1} />
           <Controls showInteractive={false} position="bottom-right" />
           <MiniMap
             className="product-minimap"
             nodeColor={(node) =>
               node.id === 'orion'
-                ? '#a78bfa'
+                ? 'var(--am-purple-soft)'
                 : node.id === 'vega'
-                  ? '#42d69a'
+                  ? 'var(--am-teal-soft)'
                   : node.id === 'approval'
-                    ? '#f0b458'
-                    : '#69c8d6'
+                    ? 'var(--am-amber-soft)'
+                    : node.id === 'artifact'
+                      ? 'var(--am-purple-soft)'
+                      : node.id === 'coordinator'
+                        ? 'var(--am-cyan-soft)'
+                        : 'var(--am-surface-muted)'
             }
-            maskColor="rgb(238 246 230 / 72%)"
+            maskColor="rgb(242 246 243 / 72%)"
             pannable
             zoomable
             position="bottom-right"

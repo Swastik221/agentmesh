@@ -118,13 +118,22 @@ export const initialNodes: WorkspaceNode[] = [
 export const edgeDefaults = {
   type: 'smoothstep' as const,
   animated: true,
-  markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#22d3ee' },
-  style: { stroke: '#22d3ee', strokeWidth: 1.5 },
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    width: 16,
+    height: 16,
+    color: 'var(--am-cyan)',
+  },
+  style: { stroke: 'var(--am-cyan)', strokeWidth: 1.5 },
   labelShowBg: true,
   labelBgPadding: [6, 4] as [number, number],
   labelBgBorderRadius: 3,
-  labelStyle: { fill: '#8b98ad', fontFamily: 'var(--am-font-mono)', fontSize: 10 },
-  labelBgStyle: { fill: '#0d1117', stroke: '#232c40' },
+  labelStyle: {
+    fill: 'var(--am-text-muted)',
+    fontFamily: 'var(--am-font-mono)',
+    fontSize: 10,
+  },
+  labelBgStyle: { fill: 'var(--am-ink-900)', stroke: 'var(--am-border-dark)' },
 };
 
 export const initialEdges: Edge[] = [

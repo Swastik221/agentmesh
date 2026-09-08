@@ -2,37 +2,37 @@
    share one light workspace palette without changing the React Flow model. */
 .app-shell,
 .product-workspace {
-  --canvas-ink: #18221f;
-  --canvas-muted: #65736d;
-  --canvas-line: #c5d2c8;
-  --canvas-line-strong: #9db0a2;
-  --canvas-paper: #f8faef;
-  --canvas-cream: #f4f2e7;
-  --canvas-lime: #cbf47a;
-  --canvas-lime-soft: #e6f9bd;
-  --canvas-mint: #3ddc97;
-  --canvas-violet: #9d7cf4;
-  --canvas-violet-soft: #eee9fb;
-  --canvas-cyan: #4c8790;
-  --canvas-amber: #efb052;
-  --canvas-shadow: 0 18px 48px rgb(48 73 57 / 12%);
+  --canvas-ink: var(--am-text-primary);
+  --canvas-muted: var(--am-text-secondary);
+  --canvas-line: var(--am-border-light);
+  --canvas-line-strong: #9eafa7;
+  --canvas-paper: var(--am-surface);
+  --canvas-cream: var(--am-surface-muted);
+  --canvas-lime: var(--am-green-soft);
+  --canvas-lime-soft: var(--am-green-soft);
+  --canvas-mint: var(--am-green);
+  --canvas-violet: var(--am-purple);
+  --canvas-violet-soft: var(--am-purple-soft);
+  --canvas-cyan: var(--am-cyan);
+  --canvas-amber: var(--am-amber);
+  --canvas-shadow: none;
 }
 
 body .app-shell {
   grid-template-rows: 64px minmax(0, 1fr) 30px;
-  background: #eaf4dc;
+  background: var(--am-canvas);
 }
 
 body .app-shell .app-header {
   color: var(--canvas-ink);
-  background: rgb(250 252 245 / 88%);
+  background: var(--am-surface);
   border-color: var(--canvas-line);
-  box-shadow: 0 8px 30px rgb(53 78 61 / 6%);
-  backdrop-filter: blur(20px) saturate(125%);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 body .app-shell .app-header__mark {
-  color: #567568;
+  color: var(--am-cyan);
 }
 
 body .app-shell .app-header__name,
@@ -51,23 +51,23 @@ body .app-shell .app-header__actions {
 }
 
 body .app-shell .app-header__actions button {
-  color: #53625c;
-  background: rgb(255 255 255 / 66%);
-  border-color: #b8c7bc;
-  box-shadow: 0 4px 12px rgb(55 79 63 / 5%);
+  color: var(--am-text-secondary);
+  background: var(--am-surface);
+  border-color: var(--am-border-light);
+  box-shadow: none;
 }
 
 body .app-shell .app-header__actions button:hover,
 body .app-shell .app-header__actions button:focus-visible {
   color: var(--canvas-ink);
-  background: var(--canvas-lime-soft);
-  border-color: #8da765;
+  background: var(--am-surface-muted);
+  border-color: var(--am-cyan);
 }
 
 body .app-shell .app-header__actions button:nth-child(3) {
-  color: #26311e;
-  background: var(--canvas-lime);
-  border-color: #93b950;
+  color: var(--am-text-primary);
+  background: var(--am-green-soft);
+  border-color: var(--am-green);
 }
 
 body .app-shell .app-body {
@@ -75,31 +75,31 @@ body .app-shell .app-body {
 }
 
 body .app-shell .app-sidebar {
-  background: rgb(247 250 239 / 90%);
+  background: var(--am-surface);
   border-color: var(--canvas-line);
-  box-shadow: 12px 0 34px rgb(61 84 67 / 5%);
-  backdrop-filter: blur(18px);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 body .app-shell .app-nav {
-  color: #61706a;
+  color: var(--am-text-secondary);
 }
 
 body .app-shell .app-nav:hover:not(:disabled) {
   color: var(--canvas-ink);
-  background: rgb(230 249 189 / 48%);
+  background: var(--am-surface-muted);
 }
 
 body .app-shell .app-nav--active,
 body .app-shell .app-nav--active:hover:not(:disabled) {
   color: var(--canvas-ink);
-  background: linear-gradient(90deg, #d7f69b, #e8f9c7);
-  border-left-color: #759548;
+  background: var(--am-cyan-soft);
+  border-left-color: var(--am-cyan);
 }
 
 body .app-shell .app-main {
   overflow: hidden;
-  background: #edf5e4;
+  background: var(--am-canvas);
 }
 
 body .app-shell .overview {
@@ -120,8 +120,8 @@ body .app-shell .overview__canvas-frame {
 }
 
 body .app-shell .app-status {
-  color: #596860;
-  background: rgb(250 252 245 / 94%);
+  color: var(--am-text-secondary);
+  background: var(--am-surface);
   border-color: var(--canvas-line);
 }
 
@@ -133,7 +133,7 @@ body .app-shell .app-status {
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
   overflow: hidden;
-  background: #edf5e4;
+  background: var(--am-canvas);
   transition:
     grid-template-columns 240ms cubic-bezier(0.22, 1, 0.36, 1),
     grid-template-rows 240ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -158,16 +158,12 @@ body .app-shell .app-status {
   min-width: 0;
   min-height: 0;
   border-color: var(--canvas-line);
-  background:
-    radial-gradient(circle at 18% 25%, rgb(203 244 122 / 30%), transparent 29%),
-    radial-gradient(circle at 86% 72%, rgb(61 220 151 / 12%), transparent 32%),
-    radial-gradient(circle at 58% 42%, rgb(157 124 244 / 7%), transparent 28%),
-    linear-gradient(135deg, #fbfcf5 0%, #f1f7e7 52%, #e8f3dd 100%);
+  background: var(--am-canvas);
 }
 
 .product-canvas::before {
   opacity: 0.22;
-  background-image: radial-gradient(rgb(79 105 88 / 38%) 0.7px, transparent 0.7px);
+  background-image: radial-gradient(rgb(202 215 209 / 55%) 0.7px, transparent 0.7px);
   background-size: 28px 28px;
   mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
 }
@@ -187,15 +183,15 @@ body .app-shell .app-status {
   align-items: center;
   min-height: 42px;
   padding: 7px 8px 7px 12px;
-  border: 1px solid rgb(181 198 185 / 68%);
+  border: 1px solid var(--am-border-light);
   border-radius: 12px;
-  background: rgb(251 253 247 / 72%);
-  box-shadow: 0 9px 28px rgb(55 80 61 / 7%);
-  backdrop-filter: blur(17px) saturate(125%);
+  background: var(--am-surface);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .canvas-context > div:first-child span {
-  color: #75837d;
+  color: var(--am-text-secondary);
 }
 
 .canvas-context > div:first-child b {
@@ -216,7 +212,7 @@ body .app-shell .app-status {
   align-items: center;
   gap: 6px;
   margin-right: 3px;
-  color: #62716a;
+  color: var(--am-text-secondary);
   font: 9px var(--am-font-mono);
 }
 
@@ -225,7 +221,7 @@ body .app-shell .app-status {
   height: 7px;
   border-radius: 50%;
   background: var(--canvas-mint);
-  box-shadow: 0 0 0 4px rgb(61 220 151 / 12%);
+  box-shadow: none;
 }
 
 .canvas-legend {
@@ -242,7 +238,7 @@ body .app-shell .app-status {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #687870 !important;
+  color: var(--am-text-secondary) !important;
   font: 7px var(--am-font-mono) !important;
   letter-spacing: 0.05em !important;
 }
@@ -271,12 +267,12 @@ body .app-shell .app-status {
   align-items: center;
   gap: 6px;
   padding: 0 10px;
-  border: 1px solid #b9c8bd;
+  border: 1px solid var(--am-border-light);
   border-radius: 999px;
-  color: #45564f;
-  background: rgb(255 255 255 / 76%);
-  box-shadow: 0 3px 10px rgb(56 78 63 / 5%);
-  backdrop-filter: blur(12px);
+  color: var(--am-text-secondary);
+  background: var(--am-surface);
+  box-shadow: none;
+  backdrop-filter: none;
   font: 10px var(--am-font-sans);
   cursor: pointer;
   transition:
@@ -289,9 +285,9 @@ body .app-shell .app-status {
 .canvas-context__tools button:hover,
 .canvas-context__tools button:focus-visible,
 .canvas-context__tools button[aria-pressed='true'] {
-  color: #27321f;
-  background: var(--canvas-lime-soft);
-  border-color: #91aa69;
+  color: var(--am-text-primary);
+  background: var(--am-cyan-soft);
+  border-color: var(--am-cyan);
   transform: translateY(-1px);
 }
 
@@ -299,8 +295,8 @@ body .app-shell .app-status {
   min-width: 18px;
   padding: 2px 5px;
   border-radius: 999px;
-  color: #31523d;
-  background: var(--canvas-lime);
+  color: var(--am-text-primary);
+  background: var(--am-green-soft);
   font: 8px var(--am-font-mono);
 }
 
@@ -315,12 +311,10 @@ body .app-shell .app-status {
 .react-flow__node.canvas-owner-purple.selected .product-node,
 .react-flow__node.canvas-owner-green.selected .product-node {
   color: var(--canvas-ink);
-  background: rgb(255 255 255 / 80%);
-  border-color: rgb(142 163 148 / 72%);
-  box-shadow:
-    var(--canvas-shadow),
-    inset 0 1px rgb(255 255 255 / 75%);
-  backdrop-filter: blur(18px) saturate(120%);
+  background: var(--am-surface);
+  border-color: var(--am-border-light);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .react-flow__node {
@@ -328,32 +322,50 @@ body .app-shell .app-status {
 }
 
 .react-flow__node:hover {
-  filter: drop-shadow(0 10px 20px rgb(56 80 62 / 12%));
+  filter: none;
 }
 
 .react-flow__node.selected .product-node,
 .react-flow__node.canvas-owner-purple.selected .product-node,
 .react-flow__node.canvas-owner-green.selected .product-node {
-  box-shadow:
-    0 0 0 3px rgb(203 244 122 / 76%),
-    0 20px 52px rgb(48 73 57 / 17%);
+  box-shadow: 0 0 0 2px var(--am-cyan);
+}
+
+.react-flow__node.canvas-owner-purple.selected .product-node {
+  box-shadow: 0 0 0 2px var(--am-purple);
+}
+
+.react-flow__node.canvas-owner-green.selected .product-node {
+  box-shadow: 0 0 0 2px var(--am-teal);
+}
+
+.canvas-owner-purple .product-agent::before {
+  background: var(--am-purple);
+}
+
+.canvas-owner-green .product-agent::before {
+  background: var(--am-teal);
+}
+
+.product-presence--green {
+  --presence-color: var(--am-teal);
 }
 
 .canvas-owner-purple .product-agent {
-  background: linear-gradient(145deg, rgb(253 252 255 / 91%), rgb(238 233 251 / 88%));
-  border-color: rgb(157 124 244 / 78%);
+  background: var(--am-purple-soft);
+  border-color: var(--am-purple);
 }
 
 .canvas-owner-green .product-agent {
-  background: linear-gradient(145deg, rgb(252 255 252 / 91%), rgb(226 250 235 / 88%));
-  border-color: rgb(61 190 132 / 72%);
+  background: var(--am-teal-soft);
+  border-color: var(--am-teal);
 }
 
 .product-agent header,
 .product-node header,
 .product-terminal,
 .product-taskboard li {
-  border-color: rgb(159 178 164 / 38%);
+  border-color: var(--am-border-light);
 }
 
 .product-agent header > span:last-child,
@@ -369,114 +381,158 @@ body .app-shell .app-status {
 }
 
 .product-terminal {
-  background: rgb(240 245 235 / 66%);
+  background: var(--am-surface-muted);
 }
 
 .product-capabilities span {
-  color: #53635c;
-  background: rgb(255 255 255 / 64%);
-  border-color: #c2d0c5;
+  color: var(--am-text-secondary);
+  background: var(--am-surface);
+  border-color: var(--am-border-light);
 }
 
 .product-state--connected {
-  color: #187a50 !important;
+  color: var(--am-green) !important;
 }
 
 .product-state--flow {
-  color: #426a62 !important;
+  color: var(--am-cyan) !important;
+}
+
+.product-coordinator .product-state--flow {
+  color: var(--am-green) !important;
+}
+
+.task-state {
+  color: var(--am-text-secondary);
+  border-color: var(--am-border-light);
+}
+
+.task-state--claimed {
+  color: var(--am-green);
+  border-color: var(--am-green);
+  background: var(--am-green-soft);
+}
+
+.task-state--auto-assigned {
+  color: var(--am-amber);
+  border-color: var(--am-amber);
+  background: var(--am-amber-soft);
 }
 
 .product-coordinator {
-  color: #26311e;
-  background: linear-gradient(145deg, #dafa9c, #c7f074);
-  border-color: #8eae4e;
+  color: var(--am-text-primary);
+  background: var(--am-surface);
+  border-color: var(--am-cyan);
 }
 
 .product-coordinator > div,
 .product-coordinator header strong {
-  color: #26311e;
+  color: var(--am-text-primary);
 }
 
 .product-coordinator > p,
 .product-coordinator header > span:last-child {
-  color: #536442;
+  color: var(--am-text-secondary);
 }
 
 .product-taskboard {
-  background: rgb(255 255 253 / 89%);
+  background: var(--am-surface);
 }
 
 .product-taskboard li:hover {
-  background: rgb(203 244 122 / 22%);
+  background: var(--am-surface-muted);
 }
 
 .product-artifact {
-  background: linear-gradient(145deg, rgb(251 249 255 / 91%), rgb(230 224 245 / 91%));
-  border-color: #ab9bc8;
+  background: var(--am-purple-soft);
+  border-color: var(--am-purple);
+}
+
+.product-artifact dd {
+  color: var(--am-purple);
 }
 
 .product-approval {
-  background: linear-gradient(145deg, rgb(255 250 237 / 94%), rgb(255 229 182 / 90%));
-  border-color: #d4a65b;
+  background: var(--am-amber-soft);
+  border-color: var(--am-amber);
+}
+
+.product-approval__risk,
+.product-approval .reject,
+.product-approval--rejected .product-approval__decision {
+  color: var(--am-red);
+}
+
+.product-approval .reject {
+  border-color: var(--am-red);
+}
+
+.product-approval .approve,
+.product-approval__decision {
+  color: var(--am-green);
+}
+
+.product-approval .approve {
+  border-color: var(--am-green);
 }
 
 .product-handle.react-flow__handle,
 .product-agent .product-handle.react-flow__handle {
-  background: #fbfdf7;
-  border-color: #54756a;
-  box-shadow: 0 0 0 2px rgb(255 255 255 / 68%);
+  background: var(--am-surface);
+  border-color: var(--am-cyan);
+  box-shadow: none;
 }
 
 .product-presence span {
-  box-shadow: 0 6px 16px rgb(46 68 53 / 14%);
+  box-shadow: none;
 }
 
 .product-canvas .react-flow__edge-path {
-  filter: drop-shadow(0 1px 2px rgb(42 75 66 / 12%));
+  filter: none;
 }
 
 .product-canvas .react-flow__edge-textbg {
-  fill: rgb(251 253 247 / 94%);
-  stroke: #b7c9bd;
+  fill: var(--am-surface);
+  stroke: var(--am-border-light);
 }
 
 .product-canvas .react-flow__edge-text {
-  fill: #344b47;
+  fill: var(--am-text-primary);
 }
 
 .product-canvas .react-flow__controls {
   right: 14px;
   bottom: 14px;
   overflow: hidden;
-  border: 1px solid #b9c8bd;
+  border: 1px solid var(--am-border-light);
   border-radius: 11px;
-  background: rgb(255 255 255 / 78%);
-  box-shadow: 0 10px 28px rgb(49 72 56 / 11%);
-  backdrop-filter: blur(14px);
+  background: var(--am-surface);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .product-canvas .react-flow__controls-button {
-  color: #4e625a;
-  fill: #4e625a;
+  color: var(--am-text-secondary);
+  fill: var(--am-text-secondary);
   background: transparent;
-  border-color: #c8d4ca;
+  border-color: var(--am-border-light);
 }
 
 .product-canvas .react-flow__controls-button:hover {
-  color: #27321f;
-  fill: #27321f;
-  background: var(--canvas-lime-soft);
+  color: var(--am-text-primary);
+  fill: var(--am-text-primary);
+  background: var(--am-cyan-soft);
 }
 
 .product-minimap {
   right: 58px !important;
   bottom: 14px !important;
   overflow: hidden;
-  border: 1px solid #b9c8bd;
+  border: 1px solid var(--am-border-light);
   border-radius: 11px;
-  background: rgb(248 251 242 / 86%) !important;
-  box-shadow: 0 10px 28px rgb(49 72 56 / 10%);
-  backdrop-filter: blur(14px);
+  background: var(--am-surface-muted) !important;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .canvas-command-dock {
@@ -484,37 +540,37 @@ body .app-shell .app-status {
   left: 14px;
   width: auto;
   min-width: 0;
-  color: #495a53;
-  background: rgb(252 253 248 / 82%);
-  border-color: #b9c8bd;
-  box-shadow: 0 10px 28px rgb(49 72 56 / 10%);
+  color: var(--am-text-secondary);
+  background: var(--am-surface);
+  border-color: var(--am-border-light);
+  box-shadow: none;
   transform: none;
-  backdrop-filter: blur(15px) saturate(120%);
+  backdrop-filter: none;
 }
 
 .canvas-command-dock__status {
-  color: #52635b;
+  color: var(--am-text-secondary);
 }
 
 .canvas-command-dock__status svg {
-  color: #6f9341;
+  color: var(--am-green);
 }
 
 .canvas-command-dock button {
-  color: #405149;
-  background: rgb(255 255 255 / 72%);
-  border-color: #bac9be;
+  color: var(--am-text-primary);
+  background: var(--am-surface);
+  border-color: var(--am-border-light);
 }
 
 .canvas-command-dock button:hover,
 .canvas-command-dock button:focus-visible {
-  color: #27321f;
-  background: var(--canvas-lime-soft);
-  border-color: #91aa69;
+  color: var(--am-text-primary);
+  background: var(--am-cyan-soft);
+  border-color: var(--am-cyan);
 }
 
 .canvas-navigation-hint {
-  color: #718079;
+  color: var(--am-text-secondary);
 }
 
 .workspace-inspector-panel {
@@ -523,12 +579,10 @@ body .app-shell .app-status {
   min-width: 0;
   overflow: auto;
   color: var(--canvas-ink);
-  background:
-    radial-gradient(circle at 92% 6%, rgb(203 244 122 / 26%), transparent 24%),
-    rgb(249 252 244 / 88%);
+  background: var(--am-surface);
   border-left: 1px solid var(--canvas-line);
-  box-shadow: -16px 0 40px rgb(55 78 61 / 7%);
-  backdrop-filter: blur(20px) saturate(125%);
+  box-shadow: none;
+  backdrop-filter: none;
   animation: workspace-panel-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -552,12 +606,12 @@ body .app-shell .app-status {
 .workspace-inspector-panel section > small,
 .workspace-inspector-panel dt,
 .workspace-inspector-panel > footer {
-  color: #718078;
+  color: var(--am-text-secondary);
 }
 
 .workspace-inspector-panel > header b,
 .workspace-inspector-panel dd {
-  color: #45564f;
+  color: var(--am-text-primary);
 }
 
 .workspace-inspector-panel h2 {
@@ -565,7 +619,7 @@ body .app-shell .app-status {
 }
 
 .workspace-inspector-panel .identity-value {
-  color: #7459b6;
+  color: var(--am-purple);
 }
 
 .workspace-panel__close {
@@ -575,10 +629,10 @@ body .app-shell .app-status {
   place-items: center;
   flex: 0 0 auto;
   padding: 0;
-  border: 1px solid #bdcbc0;
+  border: 1px solid var(--am-border-light);
   border-radius: 9px;
-  color: #596a62;
-  background: rgb(255 255 255 / 66%);
+  color: var(--am-text-secondary);
+  background: var(--am-surface);
   cursor: pointer;
   transition:
     background 160ms ease,
@@ -589,20 +643,20 @@ body .app-shell .app-status {
 .workspace-panel__close:hover,
 .workspace-panel__close:focus-visible {
   color: var(--canvas-ink);
-  background: var(--canvas-lime-soft);
+  background: var(--am-cyan-soft);
   transform: translateY(-1px);
 }
 
 .permission-list {
-  color: #5e6e66;
+  color: var(--am-text-secondary);
 }
 
 .permission-list .yes {
-  color: #168456;
+  color: var(--am-green);
 }
 
 .permission-list .no {
-  color: #c85a52;
+  color: var(--am-red);
 }
 
 .inspector-events li {
@@ -610,11 +664,11 @@ body .app-shell .app-status {
 }
 
 .inspector-events strong {
-  color: #3f747b;
+  color: var(--am-cyan);
 }
 
 .inspector-events span {
-  color: #65736d;
+  color: var(--am-text-secondary);
 }
 
 .protocol-rail {
@@ -622,11 +676,10 @@ body .app-shell .app-status {
   grid-row: 2;
   min-width: 0;
   color: var(--canvas-ink);
-  background:
-    linear-gradient(90deg, rgb(238 233 251 / 46%), transparent 25%), rgb(249 252 244 / 92%);
+  background: var(--am-surface);
   border-top: 1px solid var(--canvas-line);
-  box-shadow: 0 -14px 38px rgb(55 78 61 / 6%);
-  backdrop-filter: blur(20px) saturate(120%);
+  box-shadow: none;
+  backdrop-filter: none;
   animation: workspace-panel-up 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -637,7 +690,7 @@ body .app-shell .app-status {
 
 .protocol-rail > header,
 .protocol-rail > header div {
-  color: #5d6d65;
+  color: var(--am-text-secondary);
 }
 
 .protocol-rail__actions {
@@ -647,20 +700,20 @@ body .app-shell .app-status {
 }
 
 .protocol-events article:hover {
-  background: rgb(203 244 122 / 18%);
+  background: var(--am-surface-muted);
 }
 
 .protocol-events time,
 .protocol-events p {
-  color: #6b7a73;
+  color: var(--am-text-secondary);
 }
 
 .protocol-events strong {
-  color: #3e7780;
+  color: var(--am-cyan);
 }
 
 .protocol-events span {
-  color: #765db2;
+  color: var(--am-purple);
 }
 
 .sr-only {
@@ -734,7 +787,7 @@ body .app-shell .app-status {
     min-height: 360px;
     border-top: 1px solid var(--canvas-line);
     border-left: 0;
-    box-shadow: 0 -14px 36px rgb(55 78 61 / 6%);
+    box-shadow: none;
   }
 
   .product-workspace.is-inspector-open.is-activity-open .protocol-rail {
