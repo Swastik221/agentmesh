@@ -26,6 +26,7 @@ export const navItems: NavItem[] = [
 
 /** Placeholder project. There is no project switching yet. */
 export const currentProject = {
+  id: 'checkout-protocol',
   name: 'Checkout protocol workspace',
   slug: 'checkout-protocol',
 } as const;
