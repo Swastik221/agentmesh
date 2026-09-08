@@ -11,6 +11,7 @@ describe('Prisma Core Models Integration Tests', () => {
     // Clean up any test artifacts before running tests
     const existingUser = await prisma.user.findUnique({ where: { walletAddress: testWallet } });
     if (existingUser) {
+      await prisma.project.deleteMany({ where: { ownerId: existingUser.id } });
       await prisma.user.delete({ where: { id: existingUser.id } });
     }
   });

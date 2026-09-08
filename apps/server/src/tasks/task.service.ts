@@ -16,6 +16,7 @@ import { validateFilePaths } from '../workspace/file-path.validator.js';
 import { assertNoFileConflicts } from '../workspace/conflict-detector.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
+import { deltaSequencerService } from '../services/delta-sequencer.service.js';
 
 const creatorSelect = {
   id: true,
@@ -57,6 +58,17 @@ export class TaskService {
         status,
       },
     });
+
+    deltaSequencerService
+      .recordAndBroadcastDelta(projectId, [
+        {
+          entity: 'task',
+          entityId: taskId,
+          operation: 'updated',
+          fields: { status },
+        },
+      ])
+      .catch(() => {});
   }
 
   async createTask(projectId: string, userId: string, data: CreateTaskInput) {
@@ -88,7 +100,28 @@ export class TaskService {
       },
     });
 
-    this.broadcastTaskStatusEvent(projectId, createdTask.id, createdTask.status);
+    connectionManager.broadcastToProject(projectId, {
+      type: AgentMeshMessageType.TASK_STATUS,
+      payload: {
+        taskId: createdTask.id,
+        status: createdTask.status,
+      },
+    });
+
+    deltaSequencerService
+      .recordAndBroadcastDelta(projectId, [
+        {
+          entity: 'task',
+          entityId: createdTask.id,
+          operation: 'created',
+          fields: {
+            title: createdTask.title,
+            status: createdTask.status,
+            priority: createdTask.priority,
+          },
+        },
+      ])
+      .catch(() => {});
 
     return createdTask;
   }

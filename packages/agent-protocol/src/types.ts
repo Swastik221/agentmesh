@@ -45,6 +45,13 @@ import {
   dependencyDeclaredMessageSchema,
   dependencyAvailablePayloadSchema,
   dependencyAvailableMessageSchema,
+  workspaceDeltaChangeSchema,
+  workspaceDeltaPayloadSchema,
+  workspaceDeltaMessageSchema,
+  workspaceResyncRequestPayloadSchema,
+  workspaceResyncRequestMessageSchema,
+  workspaceResyncRequiredPayloadSchema,
+  workspaceResyncRequiredMessageSchema,
   agentMeshMessageSchema,
 } from './schemas.js';
 import { PROTOCOL_VERSION, ParticipantType, MessageKind } from './constants.js';
@@ -74,6 +81,11 @@ export type ArtifactAvailablePayload = z.infer<typeof artifactAvailablePayloadSc
 export type DependencyDeclaredPayload = z.infer<typeof dependencyDeclaredPayloadSchema>;
 export type DependencyAvailablePayload = z.infer<typeof dependencyAvailablePayloadSchema>;
 
+export type WorkspaceDeltaChange = z.infer<typeof workspaceDeltaChangeSchema>;
+export type WorkspaceDeltaPayload = z.infer<typeof workspaceDeltaPayloadSchema>;
+export type WorkspaceResyncRequestPayload = z.infer<typeof workspaceResyncRequestPayloadSchema>;
+export type WorkspaceResyncRequiredPayload = z.infer<typeof workspaceResyncRequiredPayloadSchema>;
+
 export type AgentHandshakeMessage = z.infer<typeof agentHandshakeMessageSchema>;
 export type AgentHandshakeAcceptedMessage = z.infer<typeof agentHandshakeAcceptedMessageSchema>;
 export type AgentHandshakeRejectedMessage = z.infer<typeof agentHandshakeRejectedMessageSchema>;
@@ -96,6 +108,9 @@ export type ArtifactCreatedMessage = z.infer<typeof artifactCreatedMessageSchema
 export type ArtifactAvailableMessage = z.infer<typeof artifactAvailableMessageSchema>;
 export type DependencyDeclaredMessage = z.infer<typeof dependencyDeclaredMessageSchema>;
 export type DependencyAvailableMessage = z.infer<typeof dependencyAvailableMessageSchema>;
+export type WorkspaceDeltaMessage = z.infer<typeof workspaceDeltaMessageSchema>;
+export type WorkspaceResyncRequestMessage = z.infer<typeof workspaceResyncRequestMessageSchema>;
+export type WorkspaceResyncRequiredMessage = z.infer<typeof workspaceResyncRequiredMessageSchema>;
 
 export type AgentMeshMessage = z.infer<typeof agentMeshMessageSchema>;
 

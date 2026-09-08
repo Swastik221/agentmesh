@@ -9,6 +9,7 @@ import {
 } from '../errors/app-error.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
+import { deltaSequencerService } from './delta-sequencer.service.js';
 
 export interface CreateDependencyInput {
   dependencyType?: string;
@@ -234,6 +235,19 @@ export class DependencyService {
           artifactId: dependency.artifactId || undefined,
         },
       });
+
+      await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+        {
+          entity: 'dependency',
+          entityId: dependency.id,
+          operation: 'created',
+          fields: {
+            taskId,
+            dependsOnTaskId: dependency.dependsOnTaskId || undefined,
+            artifactId: dependency.artifactId || undefined,
+          },
+        },
+      ]);
 
       // Determine initial availability
       let isAvailable = false;
