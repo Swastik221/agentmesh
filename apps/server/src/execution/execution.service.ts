@@ -233,7 +233,11 @@ export class ExecutionService {
         });
         if (taskObj) {
           const { workspaceService } = await import('../workspace/workspace.service.js');
-          context = await workspaceService.getExecutionContext(taskObj.projectId, execution.taskId);
+          context = await workspaceService.getExecutionContext(
+            taskObj.projectId,
+            execution.taskId,
+            execution.id,
+          );
         }
       } catch (ctxErr) {
         console.error(`Failed to resolve workspace context for execution ${executionId}:`, ctxErr);

@@ -86,6 +86,7 @@ model Agent {
   capabilities         AgentCapability[]
   taskResponsibilities TaskResponsibility[]
   executions           TaskExecution[]
+  worktrees            GitWorktree[]
 
   @@index([projectId])
   @@index([ownerId])
@@ -191,6 +192,7 @@ model Task {
   dependencies     TaskDependency[]     @relation("TaskDependencies")
   dependents       TaskDependency[]     @relation("TaskDependents")
   executions       TaskExecution[]
+  worktrees        GitWorktree[]
 
   @@index([projectId])
   @@index([projectId, status])
@@ -251,8 +253,9 @@ model TaskExecution {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  task     Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agent    Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  worktree GitWorktree?
 
   @@index([taskId])
   @@index([agentId])
@@ -261,18 +264,44 @@ model TaskExecution {
 }
 
 model ProjectWorkspace {
-  id        String   @id @default(cuid())
-  projectId String   @unique
-  rootPath  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  projectId   String   @unique
+  rootPath    String
+  gitRepoPath String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  worktrees GitWorktree[]
 
   @@map("project_workspaces")
 }
 
+enum GitWorktreeStatus {
+  ACTIVE
+  REMOVED
+}
 
+model GitWorktree {
+  id          String            @id @default(cuid())
+  workspaceId String
+  executionId String            @unique
+  agentId     String
+  taskId      String
+  path        String
+  branchName  String
+  status      GitWorktreeStatus @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
+  workspace ProjectWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  execution TaskExecution    @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  agent     Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  task      Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-
+  @@index([workspaceId])
+  @@index([agentId])
+  @@index([taskId])
+  @@index([status])
+  @@map("git_worktrees")
+}

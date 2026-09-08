@@ -194,9 +194,46 @@ export interface ProjectWorkspaceDTO {
   id: string;
   projectId: string;
   rootPath: string;
+  gitRepoPath: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+export interface UpdateProjectWorkspaceGitRepoInput {
+  gitRepoPath: string | null;
+}
+
+export type GitWorktreeStatus = 'ACTIVE' | 'REMOVED';
+
+export interface GitWorktreeDTO {
+  id: string;
+  workspaceId: string;
+  executionId: string;
+  agentId: string;
+  taskId: string;
+  path: string;
+  branchName: string;
+  status: GitWorktreeStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GitWorktreeListResponseDTO {
+  items: GitWorktreeDTO[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface ListWorktreesQueryDTO {
+  agentId?: string;
+  taskId?: string;
+  executionId?: string;
+  status?: GitWorktreeStatus;
+  page?: number;
+  limit?: number;
+}
+
 
 export interface WorkspaceTaskStateDTO {
   id: string;
