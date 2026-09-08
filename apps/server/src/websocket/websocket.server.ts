@@ -13,6 +13,7 @@ import { ConnectionMetadata, WebSocketMessage, WSMessageType } from './websocket
 import { handshakeService, HandshakeErrorCode } from '../handshake/index.js';
 import { messagingService } from '../messaging/index.js';
 import { sessionService } from '../auth/session.service.js';
+import { deltaSequencerService } from '../services/delta-sequencer.service.js';
 
 function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
   const cookieHeader = req.headers.cookie;
@@ -117,10 +118,15 @@ export class AgentMeshWebSocketServer {
     });
 
     ws.on('message', (data: RawData) => {
-      this.handleIncomingMessage(metadata, data);
+      // Fire-and-forget async boundary: never allow message handling to leak an
+      // unhandled rejection (e.g. delta recording racing workspace teardown).
+      this.handleIncomingMessage(metadata, data).catch((err: unknown) => {
+        logger.error(`[WebSocket] Error handling message on ${metadata.connectionId}:`, err);
+      });
     });
 
     ws.on('close', async () => {
+      try {
       logger.info(
         `[WebSocket] Connection ${metadata.connectionId} closed for project ${projectId}`,
       );
@@ -148,6 +154,14 @@ export class AgentMeshWebSocketServer {
             projectId,
             presenceMsg as unknown as WebSocketMessage,
           );
+          await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+            {
+              entity: 'presence',
+              entityId: agentId,
+              operation: 'updated',
+              fields: { entityType: 'agent', status: 'OFFLINE' },
+            },
+          ]);
         }
       } else {
         connectionManager.removeConnection(metadata.connectionId);
@@ -170,7 +184,24 @@ export class AgentMeshWebSocketServer {
             projectId,
             presenceMsg as unknown as WebSocketMessage,
           );
+          // Best-effort presence delta during close cleanup: the workspace may
+          // already be torn down (e.g. test teardown), so a failure here must not
+          // become an unhandled rejection that fails unrelated work.
+          await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+            {
+              entity: 'presence',
+              entityId: userId,
+              operation: 'updated',
+              fields: { entityType: 'user', status: 'OFFLINE' },
+            },
+          ]);
         }
+      }
+      } catch (err) {
+        logger.error(
+          `[WebSocket] Error during close cleanup for connection ${metadata.connectionId}:`,
+          err,
+        );
       }
     });
 
@@ -242,6 +273,14 @@ export class AgentMeshWebSocketServer {
               presenceMsg as unknown as WebSocketMessage,
               metadata.connectionId,
             );
+            await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+              {
+                entity: 'presence',
+                entityId: session.userId,
+                operation: 'updated',
+                fields: { entityType: 'user', status: 'ONLINE' },
+              },
+            ]);
           }
         }
       } catch (err) {
@@ -321,6 +360,8 @@ export class AgentMeshWebSocketServer {
       priority: t.priority,
     }));
 
+    const currentSeq = await deltaSequencerService.getCurrentSequence(metadata.projectId);
+
     const snapshotMsg = createWorkspaceSnapshotMessage(
       {
         projectId: metadata.projectId,
@@ -332,6 +373,7 @@ export class AgentMeshWebSocketServer {
           id: project.id,
           name: project.name,
         },
+        sequence: currentSeq,
         members: memberList,
         agents: agentList,
         tasks: taskList,
@@ -388,6 +430,14 @@ export class AgentMeshWebSocketServer {
           metadata.projectId,
           presenceMsg as unknown as WebSocketMessage,
         );
+        await deltaSequencerService.recordAndBroadcastDelta(metadata.projectId, [
+          {
+            entity: 'presence',
+            entityId: metadata.agentId,
+            operation: 'updated',
+            fields: { entityType: 'agent', status: 'ONLINE' },
+          },
+        ]);
       }
       return;
     }
@@ -397,6 +447,35 @@ export class AgentMeshWebSocketServer {
       const result = await messagingService.processAgentMessage(metadata, parsed);
       if (!result.success && result.error) {
         this.sendJson(metadata.socket, result.error as unknown as WebSocketMessage);
+      }
+      return;
+    }
+
+    // Handle workspace.resync.request
+    if (message.type === AgentMeshMessageType.WORKSPACE_RESYNC_REQUEST) {
+      try {
+        const payload = (message as { payload: { lastKnownSequence: number; reason: string } }).payload;
+        await deltaSequencerService.processResyncRequest(
+          metadata,
+          payload.lastKnownSequence ?? 0,
+          payload.reason || 'CLIENT_REQUEST',
+          async (meta) => {
+            const project = await prisma.project.findUnique({
+              where: { id: meta.projectId },
+              select: { id: true, name: true, ownerId: true },
+            });
+            if (project) {
+              await this.sendWorkspaceSnapshot(meta, project);
+            }
+          },
+        );
+      } catch (err: unknown) {
+        const error = err as Error;
+        this.sendError(
+          metadata.socket,
+          'RESYNC_FAILED',
+          error?.message || 'Failed to process workspace resync',
+        );
       }
       return;
     }

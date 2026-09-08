@@ -13,4 +13,5 @@ export const config = {
   maxArtifactPayloadBytes: parseInt(process.env.MAX_ARTIFACT_PAYLOAD_BYTES || '524288', 10), // 512KB
   maxArtifactsPerPage: parseInt(process.env.MAX_ARTIFACTS_PER_PAGE || '50', 10),
   maxDependencyTraversalDepth: parseInt(process.env.MAX_DEPENDENCY_TRAVERSAL_DEPTH || '10', 10),
+  maxWorkspaceDeltaBytes: parseInt(process.env.MAX_WORKSPACE_DELTA_BYTES || '65536', 10), // 64KB
 };

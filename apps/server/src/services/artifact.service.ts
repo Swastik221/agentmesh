@@ -8,6 +8,7 @@ import {
 } from '../errors/app-error.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
+import { deltaSequencerService } from './delta-sequencer.service.js';
 
 import crypto from 'node:crypto';
 
@@ -237,6 +238,21 @@ export class ArtifactService {
         version: artifact.version,
       },
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'artifact',
+        entityId: artifact.id,
+        operation: 'created',
+        fields: {
+          name: artifact.name,
+          type: artifact.type,
+          version: artifact.version,
+          taskId: artifact.taskId,
+          agentId: artifact.agentId,
+        },
+      },
+    ]);
 
     // Notify dependent tasks waiting on artifact
     const dependentDeps = await prisma.taskDependency.findMany({

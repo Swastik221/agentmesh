@@ -131,9 +131,41 @@ export const workspaceSnapshotPayloadSchema = z.object({
     id: z.string().trim().min(1),
     name: z.string().trim().min(1),
   }),
+  sequence: z.number().int().min(0).optional(),
   members: z.array(workspaceMemberSchema),
   agents: z.array(workspaceAgentSchema),
   tasks: z.array(workspaceTaskSummarySchema),
+});
+
+export const workspaceDeltaChangeSchema = z.object({
+  entity: z.enum([
+    'member',
+    'agent',
+    'presence',
+    'task',
+    'taskResponsibility',
+    'execution',
+    'artifact',
+    'dependency',
+  ]),
+  entityId: z.string().trim().min(1),
+  operation: z.enum(['created', 'updated', 'removed']),
+  fields: z.record(z.unknown()).optional(),
+});
+
+export const workspaceDeltaPayloadSchema = z.object({
+  sequence: z.number().int().positive('Delta sequence must be a positive integer'),
+  changes: z.array(workspaceDeltaChangeSchema).min(1, 'Delta must contain at least one change'),
+});
+
+export const workspaceResyncRequestPayloadSchema = z.object({
+  lastKnownSequence: z.number().int().min(0),
+  reason: z.enum(['SEQUENCE_GAP', 'INVALID_DELTA', 'RECONNECT', 'CLIENT_STATE_RESET']),
+});
+
+export const workspaceResyncRequiredPayloadSchema = z.object({
+  sequence: z.number().int().min(0),
+  reason: z.string().trim().min(1),
 });
 
 export const workspacePresenceChangedPayloadSchema = z.object({
@@ -315,6 +347,21 @@ export const dependencyAvailableMessageSchema = baseEnvelopeSchema.extend({
   payload: dependencyAvailablePayloadSchema,
 });
 
+export const workspaceDeltaMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.WORKSPACE_DELTA),
+  payload: workspaceDeltaPayloadSchema,
+});
+
+export const workspaceResyncRequestMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.WORKSPACE_RESYNC_REQUEST),
+  payload: workspaceResyncRequestPayloadSchema,
+});
+
+export const workspaceResyncRequiredMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.WORKSPACE_RESYNC_REQUIRED),
+  payload: workspaceResyncRequiredPayloadSchema,
+});
+
 export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   agentHandshakeMessageSchema,
   agentHandshakeAcceptedMessageSchema,
@@ -338,4 +385,7 @@ export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   artifactAvailableMessageSchema,
   dependencyDeclaredMessageSchema,
   dependencyAvailableMessageSchema,
+  workspaceDeltaMessageSchema,
+  workspaceResyncRequestMessageSchema,
+  workspaceResyncRequiredMessageSchema,
 ]);

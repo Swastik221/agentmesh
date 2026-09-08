@@ -9,6 +9,7 @@ import {
 } from '../errors/app-error.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
+import { deltaSequencerService } from './delta-sequencer.service.js';
 
 export interface CreateDependencyInput {
   dependencyType?: string;
@@ -235,6 +236,19 @@ export class DependencyService {
         },
       });
 
+      await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+        {
+          entity: 'dependency',
+          entityId: dependency.id,
+          operation: 'created',
+          fields: {
+            taskId,
+            dependsOnTaskId: dependency.dependsOnTaskId || undefined,
+            artifactId: dependency.artifactId || undefined,
+          },
+        },
+      ]);
+
       // Determine initial availability
       let isAvailable = false;
       if (dependency.dependsOnTask) {
@@ -373,6 +387,17 @@ export class DependencyService {
     await prisma.taskDependency.delete({
       where: { id: dependencyId },
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'dependency',
+        entityId: dependencyId,
+        operation: 'removed',
+        fields: {
+          taskId,
+        },
+      },
+    ]);
   }
 }
 
