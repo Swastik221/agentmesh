@@ -87,6 +87,7 @@ model Agent {
   taskResponsibilities TaskResponsibility[]
   executions           TaskExecution[]
   worktrees            GitWorktree[]
+  preferredTasks       Task[]               @relation("PreferredAgentTasks")
 
   @@index([projectId])
   @@index([ownerId])
@@ -175,19 +176,22 @@ enum TaskPriority {
 }
 
 model Task {
-  id          String       @id @default(cuid())
-  projectId   String
-  creatorId   String
-  title       String
-  description String
-  status      TaskStatus   @default(TODO)
-  priority    TaskPriority @default(MEDIUM)
-  filePaths   String[]     @default([])
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                   String       @id @default(cuid())
+  projectId            String
+  creatorId            String
+  preferredAgentId     String?
+  title                String
+  description          String
+  status               TaskStatus   @default(TODO)
+  priority             TaskPriority @default(MEDIUM)
+  filePaths            String[]     @default([])
+  requiredCapabilities String[]     @default([])
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
   project          Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creator          User                 @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  preferredAgent   Agent?               @relation("PreferredAgentTasks", fields: [preferredAgentId], references: [id], onDelete: SetNull)
   responsibilities TaskResponsibility[]
   dependencies     TaskDependency[]     @relation("TaskDependencies")
   dependents       TaskDependency[]     @relation("TaskDependents")
@@ -198,15 +202,18 @@ model Task {
   @@index([projectId, status])
   @@index([projectId, priority])
   @@index([creatorId])
+  @@index([preferredAgentId])
   @@map("tasks")
 }
 
 model TaskResponsibility {
-  id        String   @id @default(cuid())
-  taskId    String
-  agentId   String
-  role      String?
-  createdAt DateTime @default(now())
+  id                    String   @id @default(cuid())
+  taskId                String
+  agentId               String
+  role                  String?
+  assignmentSource      String?
+  assignmentExplanation Json?
+  createdAt             DateTime @default(now())
 
   task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
   agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)

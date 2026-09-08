@@ -19,6 +19,8 @@ export const createTaskSchema = z.object({
     }),
   priority: taskPriorityEnum.optional().default(TaskPriority.MEDIUM),
   filePaths: z.array(z.string()).optional(),
+  preferredAgentId: z.string().optional(),
+  requiredCapabilities: z.array(z.string()).optional(),
 });
 
 export const updateTaskSchema = z
@@ -40,6 +42,8 @@ export const updateTaskSchema = z
     status: taskStatusEnum.optional(),
     priority: taskPriorityEnum.optional(),
     filePaths: z.array(z.string()).optional(),
+    preferredAgentId: z.string().optional(),
+    requiredCapabilities: z.array(z.string()).optional(),
   })
   .refine(
     (data) =>
@@ -47,11 +51,17 @@ export const updateTaskSchema = z
       data.description !== undefined ||
       data.status !== undefined ||
       data.priority !== undefined ||
-      data.filePaths !== undefined,
+      data.filePaths !== undefined ||
+      data.preferredAgentId !== undefined ||
+      data.requiredCapabilities !== undefined,
     {
       message: 'At least one field must be provided for update',
     },
   );
+
+export const coordinatorAssignSchema = z.object({
+  preferredAgentId: z.string().optional(),
+});
 
 export const listTasksQuerySchema = z.object({
   status: taskStatusEnum.optional(),

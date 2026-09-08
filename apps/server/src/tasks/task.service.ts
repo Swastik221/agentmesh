@@ -73,6 +73,8 @@ export class TaskService {
         description: data.description,
         priority: data.priority,
         filePaths: validatedFilePaths,
+        ...(data.preferredAgentId && { preferredAgentId: data.preferredAgentId }),
+        ...(data.requiredCapabilities && { requiredCapabilities: data.requiredCapabilities }),
       },
       include: {
         creator: {
@@ -185,6 +187,12 @@ export class TaskService {
     if (data.status !== undefined) updateData.status = data.status;
     if (data.priority !== undefined) updateData.priority = data.priority;
     if (validatedFilePaths !== undefined) updateData.filePaths = validatedFilePaths;
+    if (data.preferredAgentId !== undefined) {
+      updateData.preferredAgent = data.preferredAgentId
+        ? { connect: { id: data.preferredAgentId } }
+        : { disconnect: true };
+    }
+    if (data.requiredCapabilities !== undefined) updateData.requiredCapabilities = data.requiredCapabilities;
 
     const updatedTask = await prisma.$transaction(async (tx) => {
       // Execute PostgreSQL row lock on project tasks to guarantee concurrency safety

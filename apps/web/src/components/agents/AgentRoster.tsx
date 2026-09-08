@@ -13,6 +13,7 @@ export function AgentRoster() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 className="section-heading">Agents</h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <Pill tone="neutral">Task Coordinator: Active</Pill>
           <Pill tone={presence.connected ? 'success' : 'neutral'} dot>
             {presence.connected ? 'Multiplayer Live' : presence.isReconnecting ? 'Reconnecting...' : 'Offline'}
           </Pill>
