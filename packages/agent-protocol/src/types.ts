@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  participantSchema,
   agentHandshakePayloadSchema,
   agentHandshakeAcceptedPayloadSchema,
   agentHandshakeRejectedPayloadSchema,
@@ -13,6 +14,8 @@ import {
   taskCompletedPayloadSchema,
   taskFailedPayloadSchema,
   errorPayloadSchema,
+  pingPayloadSchema,
+  pongPayloadSchema,
   agentHandshakeMessageSchema,
   agentHandshakeAcceptedMessageSchema,
   agentHandshakeRejectedMessageSchema,
@@ -26,9 +29,13 @@ import {
   taskCompletedMessageSchema,
   taskFailedMessageSchema,
   errorMessageSchema,
+  pingMessageSchema,
+  pongMessageSchema,
   agentMeshMessageSchema,
 } from './schemas.js';
-import { AGENTMESH_PROTOCOL_VERSION } from './constants.js';
+import { PROTOCOL_VERSION, ParticipantType, MessageKind } from './constants.js';
+
+export type MessageParticipant = z.infer<typeof participantSchema>;
 
 export type AgentHandshakePayload = z.infer<typeof agentHandshakePayloadSchema>;
 export type AgentHandshakeAcceptedPayload = z.infer<typeof agentHandshakeAcceptedPayloadSchema>;
@@ -43,6 +50,8 @@ export type TaskProgressPayload = z.infer<typeof taskProgressPayloadSchema>;
 export type TaskCompletedPayload = z.infer<typeof taskCompletedPayloadSchema>;
 export type TaskFailedPayload = z.infer<typeof taskFailedPayloadSchema>;
 export type ErrorPayload = z.infer<typeof errorPayloadSchema>;
+export type PingPayload = z.infer<typeof pingPayloadSchema>;
+export type PongPayload = z.infer<typeof pongPayloadSchema>;
 
 export type AgentHandshakeMessage = z.infer<typeof agentHandshakeMessageSchema>;
 export type AgentHandshakeAcceptedMessage = z.infer<typeof agentHandshakeAcceptedMessageSchema>;
@@ -57,7 +66,10 @@ export type TaskProgressMessage = z.infer<typeof taskProgressMessageSchema>;
 export type TaskCompletedMessage = z.infer<typeof taskCompletedMessageSchema>;
 export type TaskFailedMessage = z.infer<typeof taskFailedMessageSchema>;
 export type ErrorMessage = z.infer<typeof errorMessageSchema>;
+export type PingMessage = z.infer<typeof pingMessageSchema>;
+export type PongMessage = z.infer<typeof pongMessageSchema>;
 
 export type AgentMeshMessage = z.infer<typeof agentMeshMessageSchema>;
 
-export type ProtocolVersion = typeof AGENTMESH_PROTOCOL_VERSION;
+export type ProtocolVersion = typeof PROTOCOL_VERSION;
+export { ParticipantType, MessageKind };

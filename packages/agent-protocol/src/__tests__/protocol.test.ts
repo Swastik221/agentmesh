@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  PROTOCOL_VERSION,
   AGENTMESH_PROTOCOL_VERSION,
   AgentMeshMessageType,
   AgentMeshProtocolError,
@@ -318,7 +319,7 @@ describe('AgentMesh Protocol v0.1 Tests', () => {
 
       expect(msg.id).toBeDefined();
       expect(typeof msg.id).toBe('string');
-      expect(msg.protocolVersion).toBe('0.1');
+      expect(msg.protocolVersion).toBe(PROTOCOL_VERSION);
       expect(msg.timestamp).toBeDefined();
       expect(new Date(msg.timestamp).toString()).not.toBe('Invalid Date');
       expect(msg.type).toBe('task.request');
