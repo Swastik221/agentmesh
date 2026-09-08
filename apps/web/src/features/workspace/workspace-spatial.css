@@ -1,0 +1,134 @@
+/* Loaded after the legacy workspace theme so the main canvas can become an
+   immersive spatial surface while the shell, sidebar and drawers stay light. */
+.product-canvas {
+  border-color: rgb(113 158 170 / 42%);
+  background:
+    radial-gradient(circle at 50% 30%, rgb(53 126 157 / 34%), transparent 34%),
+    radial-gradient(circle at 12% 84%, rgb(86 133 104 / 35%), transparent 31%),
+    radial-gradient(circle at 91% 10%, rgb(98 123 76 / 30%), transparent 28%),
+    linear-gradient(145deg, #123f5b 0%, #0a304a 48%, #071f34 100%);
+}
+.product-canvas .react-flow {
+  background-color: transparent;
+  background-image:
+    linear-gradient(rgb(167 217 226 / 4%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(167 217 226 / 4%) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+.canvas-context {
+  align-items: flex-start;
+  background: rgb(7 22 34 / 62%);
+}
+.canvas-context div span,
+.canvas-sync {
+  color: #a8c1c8;
+}
+.canvas-context b {
+  color: #f5f2e9;
+}
+.canvas-context__tools button {
+  color: #dce9e7;
+  background: rgb(10 35 49 / 78%);
+  border-color: rgb(146 190 193 / 38%);
+}
+.canvas-context__tools button:hover,
+.canvas-context__tools button[aria-pressed='true'] {
+  color: #101b20;
+  background: #cbf47a;
+  border-color: #cbf47a;
+}
+
+.product-node,
+.product-coordinator,
+.product-taskboard,
+.product-artifact,
+.product-approval,
+.canvas-owner-purple .product-agent,
+.canvas-owner-green .product-agent,
+.react-flow__node.selected .product-node,
+.react-flow__node.canvas-owner-purple.selected .product-node,
+.react-flow__node.canvas-owner-green.selected .product-node {
+  color: #f5f2e9;
+  background: rgb(7 17 28 / 88%);
+  border-color: rgb(118 166 178 / 52%);
+  box-shadow:
+    0 24px 60px rgb(0 10 24 / 34%),
+    inset 0 1px rgb(255 255 255 / 4%);
+  backdrop-filter: blur(20px) saturate(130%);
+}
+.canvas-owner-purple .product-agent {
+  border-color: rgb(167 139 250 / 72%);
+}
+.canvas-owner-green .product-agent {
+  border-color: rgb(66 214 154 / 68%);
+}
+.product-agent header,
+.product-node header,
+.product-terminal,
+.product-taskboard li {
+  border-color: rgb(123 166 180 / 23%);
+}
+.product-agent header > span:last-child,
+.product-node header > span:last-child,
+.product-agent__identity b,
+.product-terminal p,
+.product-terminal p i {
+  color: #91aab3;
+}
+.product-agent__identity span {
+  color: #f5f2e9;
+}
+.product-terminal {
+  background: rgb(3 12 21 / 54%);
+}
+.product-capabilities span {
+  color: #b9cbd0;
+  background: rgb(105 200 214 / 8%);
+  border-color: rgb(105 200 214 / 24%);
+}
+.product-coordinator {
+  color: #16221d;
+  background: rgb(203 244 122 / 90%);
+  border-color: #cbf47a;
+}
+.product-coordinator > div,
+.product-coordinator header strong {
+  color: #16221d;
+}
+.product-coordinator > p,
+.product-coordinator header > span:last-child {
+  color: #42533f;
+}
+.product-taskboard {
+  background: rgb(10 25 37 / 91%);
+}
+.product-taskboard li:hover {
+  background: rgb(203 244 122 / 8%);
+}
+.product-artifact {
+  background: rgb(40 31 61 / 88%);
+  border-color: rgb(167 139 250 / 70%);
+}
+.product-approval {
+  background: rgb(54 39 24 / 90%);
+  border-color: rgb(240 180 88 / 72%);
+}
+.product-handle.react-flow__handle,
+.product-agent .product-handle.react-flow__handle {
+  background: #092033;
+  border-color: #69c8d6;
+}
+.product-canvas .react-flow__controls {
+  background: rgb(5 18 29 / 78%);
+}
+.product-canvas .react-flow__controls-button {
+  color: #dce9e7;
+  fill: #dce9e7;
+  background: transparent;
+  border-color: rgb(146 190 193 / 22%);
+}
+.product-canvas .react-flow__controls-button:hover {
+  color: #101b20;
+  fill: #101b20;
+  background: #cbf47a;
+}
