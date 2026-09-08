@@ -445,4 +445,259 @@ describe('PRD #11 BYOA Real Agent Connector Integration Tests', () => {
 
     ws.close();
   });
+
+  it('rejects unknown connector message types', async () => {
+    const ws = createClientSocket(projectA.id, sessionA.id);
+    await new Promise((res) => ws.on('open', res));
+
+    await performHandshake(ws, projectA.id, agentA1.id);
+
+    const unknownMsg = {
+      id: 'msg-unknown-1',
+      protocolVersion: AGENTMESH_PROTOCOL_VERSION,
+      type: 'unknown.type',
+      projectId: projectA.id,
+      senderId: agentA1.id,
+      recipientId: 'server',
+      timestamp: new Date().toISOString(),
+      payload: {},
+    } as unknown as AgentMeshMessage;
+
+    const result = await connectorService.processConnectorTaskMessage(
+      {
+        connectionId: 'conn-unknown',
+        socket: ws as unknown as import('ws').WebSocket,
+        projectId: projectA.id,
+        connectedAt: new Date(),
+        isAlive: true,
+        lastHeartbeat: Date.now(),
+        authenticated: true,
+        userId: userA.id,
+        agentId: agentA1.id,
+      },
+      unknownMsg,
+    );
+
+    expect(result.success).toBe(false);
+    expect((result.error?.payload as { code: string }).code).toBe('INVALID_MESSAGE');
+
+    ws.close();
+  });
+
+  it('handles TASK_FAILED message and updates execution state to FAILED', async () => {
+    const ws = createClientSocket(projectA.id, sessionA.id);
+    await new Promise((res) => ws.on('open', res));
+
+    await performHandshake(ws, projectA.id, agentA1.id);
+
+    const task = await prisma.task.create({
+      data: {
+        title: 'Task Failed Test',
+        description: 'Test failure reporting',
+        status: 'TODO',
+        priority: 'MEDIUM',
+        projectId: projectA.id,
+        creatorId: userA.id,
+      },
+    });
+
+    const execution = await prisma.taskExecution.create({
+      data: {
+        taskId: task.id,
+        agentId: agentA1.id,
+        status: ExecutionStatus.RUNNING,
+      },
+    });
+
+    const failedMsg = createAgentMeshMessage({
+      type: AgentMeshMessageType.TASK_FAILED,
+      projectId: projectA.id,
+      senderId: agentA1.id,
+      recipientId: 'server',
+      payload: {
+        taskId: task.id,
+        executionId: execution.id,
+        error: 'Execution failed due to syntax error',
+      },
+    });
+
+    const result = await connectorService.processConnectorTaskMessage(
+      {
+        connectionId: 'conn-fail-1',
+        socket: ws as unknown as import('ws').WebSocket,
+        projectId: projectA.id,
+        connectedAt: new Date(),
+        isAlive: true,
+        lastHeartbeat: Date.now(),
+        authenticated: true,
+        userId: userA.id,
+        agentId: agentA1.id,
+      },
+      failedMsg,
+    );
+
+    expect(result.success).toBe(true);
+
+    const finalExec = await prisma.taskExecution.findUnique({
+      where: { id: execution.id },
+    });
+    expect(finalExec?.status).toBe(ExecutionStatus.FAILED);
+    expect(finalExec?.error).toBe('Execution failed due to syntax error');
+
+    ws.close();
+  });
+
+  it('prevents stale completion message from overwriting cancelled execution', async () => {
+    const ws = createClientSocket(projectA.id, sessionA.id);
+    await new Promise((res) => ws.on('open', res));
+
+    await performHandshake(ws, projectA.id, agentA1.id);
+
+    const task = await prisma.task.create({
+      data: {
+        title: 'Stale Completion Test',
+        description: 'Test stale completion after cancellation',
+        status: 'TODO',
+        priority: 'HIGH',
+        projectId: projectA.id,
+        creatorId: userA.id,
+      },
+    });
+
+    const execution = await prisma.taskExecution.create({
+      data: {
+        taskId: task.id,
+        agentId: agentA1.id,
+        status: ExecutionStatus.CANCELLED,
+        completedAt: new Date(),
+      },
+    });
+
+    const staleCompletedMsg = createAgentMeshMessage({
+      type: AgentMeshMessageType.TASK_COMPLETED,
+      projectId: projectA.id,
+      senderId: agentA1.id,
+      recipientId: 'server',
+      payload: {
+        taskId: task.id,
+        executionId: execution.id,
+        result: { summary: 'Stale completion' },
+      },
+    });
+
+    const result = await connectorService.processConnectorTaskMessage(
+      {
+        connectionId: 'conn-stale-1',
+        socket: ws as unknown as import('ws').WebSocket,
+        projectId: projectA.id,
+        connectedAt: new Date(),
+        isAlive: true,
+        lastHeartbeat: Date.now(),
+        authenticated: true,
+        userId: userA.id,
+        agentId: agentA1.id,
+      },
+      staleCompletedMsg,
+    );
+
+    expect(result.success).toBe(true);
+
+    const finalExec = await prisma.taskExecution.findUnique({
+      where: { id: execution.id },
+    });
+    expect(finalExec?.status).toBe(ExecutionStatus.CANCELLED);
+
+    ws.close();
+  });
+
+  it('rejects connector message with mismatched projectId', async () => {
+    const ws = createClientSocket(projectA.id, sessionA.id);
+    await new Promise((res) => ws.on('open', res));
+
+    await performHandshake(ws, projectA.id, agentA1.id);
+
+    const mismatchedMsg = createAgentMeshMessage({
+      type: AgentMeshMessageType.TASK_ACCEPTED,
+      projectId: projectB.id,
+      senderId: agentA1.id,
+      recipientId: 'server',
+      payload: {
+        taskId: 'task-123',
+      },
+    });
+
+    const result = await connectorService.processConnectorTaskMessage(
+      {
+        connectionId: 'conn-cross-1',
+        socket: ws as unknown as import('ws').WebSocket,
+        projectId: projectA.id,
+        connectedAt: new Date(),
+        isAlive: true,
+        lastHeartbeat: Date.now(),
+        authenticated: true,
+        userId: userA.id,
+        agentId: agentA1.id,
+      },
+      mismatchedMsg,
+    );
+
+    expect(result.success).toBe(false);
+    expect((result.error?.payload as { code: string }).code).toBe('AUTHORIZATION_FAILED');
+
+    ws.close();
+  });
+
+  it('returns false when trying to dispatch unassigned or non-existent task', async () => {
+    const ws = createClientSocket(projectA.id, sessionA.id);
+    await new Promise((res) => ws.on('open', res));
+
+    await performHandshake(ws, projectA.id, agentA1.id);
+
+    const dispatched = await connectorService.dispatchTaskToAgent(
+      projectA.id,
+      'non-existent-task-id',
+      'non-existent-execution-id',
+      agentA1.id,
+    );
+
+    expect(dispatched).toBe(false);
+
+    ws.close();
+  });
+
+  it('handles disconnect during active execution leaving state recoverable', async () => {
+    const ws = createClientSocket(projectA.id, sessionA.id);
+    await new Promise((res) => ws.on('open', res));
+
+    await performHandshake(ws, projectA.id, agentA1.id);
+
+    const task = await prisma.task.create({
+      data: {
+        title: 'Disconnect Execution Test',
+        description: 'Test socket drop during active execution',
+        status: 'TODO',
+        priority: 'MEDIUM',
+        projectId: projectA.id,
+        creatorId: userA.id,
+      },
+    });
+
+    const execution = await prisma.taskExecution.create({
+      data: {
+        taskId: task.id,
+        agentId: agentA1.id,
+        status: ExecutionStatus.RUNNING,
+      },
+    });
+
+    ws.close();
+
+    await new Promise((res) => setTimeout(res, 100));
+
+    const currentExec = await prisma.taskExecution.findUnique({
+      where: { id: execution.id },
+    });
+
+    expect(currentExec?.status).toBe(ExecutionStatus.RUNNING);
+  });
 });
