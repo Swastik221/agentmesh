@@ -228,6 +228,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@agentmesh/agent-protocol':
+        specifier: workspace:*
+        version: link:../../packages/agent-protocol
       '@agentmesh/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -253,6 +256,9 @@ importers:
       '@agentmesh/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@types/node':
+        specifier: ^22.13.4
+        version: 22.20.1
       '@types/react':
         specifier: ^19.0.8
         version: 19.2.18
