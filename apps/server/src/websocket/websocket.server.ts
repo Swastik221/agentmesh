@@ -89,6 +89,44 @@ export class AgentMeshWebSocketServer {
         return;
       }
 
+      // Pre-Upgrade Session Authentication & Project Authorization (PRD-37 FIX 1)
+      const httpSessionId = extractSessionIdFromReq(req);
+      if (!httpSessionId) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
+      let session;
+      try {
+        session = await sessionService.validateSession(httpSessionId);
+      } catch {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
+      // Check project authorization (owner or member) based strictly on authenticated session user id
+      const isOwner = project.ownerId === session.user.id;
+      let isMember = isOwner;
+      if (!isMember) {
+        const membership = await prisma.projectMember.findUnique({
+          where: {
+            projectId_userId: {
+              projectId,
+              userId: session.user.id,
+            },
+          },
+        });
+        isMember = Boolean(membership);
+      }
+
+      if (!isMember) {
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
       this.wss.handleUpgrade(req, socket, head, (ws) => {
         this.wss.emit('connection', ws, req, projectId);
       });

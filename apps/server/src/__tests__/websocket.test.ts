@@ -168,24 +168,33 @@ describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
   });
 
   describe('WebSocket Session Authentication & Project Authorization Enforcement', () => {
-    it('should reject connection with 4001 status when session token is invalid or expired', async () => {
-      let closeEvent: { code: number; reason: string } | null = null;
+    it('1. should reject unauthenticated upgrade (no session token) before HTTP 101 with 401 response', async () => {
+      let responseCode: number | null = null;
       await new Promise<void>((resolve) => {
-        const client = new WebSocket(`ws://localhost:${serverPort}/ws?projectId=${project1Id}&token=invalid-session-token`);
-        client.on('close', (code, reason) => {
-          closeEvent = { code, reason: reason.toString() };
+        const client = new WebSocket(`ws://localhost:${serverPort}/ws?projectId=${project1Id}`);
+        client.on('unexpected-response', (_req, res) => {
+          responseCode = res.statusCode ?? null;
           resolve();
         });
-        client.on('error', () => {});
+        client.on('error', () => resolve());
       });
-
-      const event1 = closeEvent as { code: number; reason: string } | null;
-      expect(event1).not.toBeNull();
-      expect(event1?.code).toBe(4001);
+      expect(responseCode).toBe(401);
     });
 
-    it('should reject connection with 4003 status when user is not a member of the project', async () => {
-      // Create User B and Session B (not a member of Project 1)
+    it('2. should reject upgrade with invalid/expired session token before HTTP 101 with 401 response', async () => {
+      let responseCode: number | null = null;
+      await new Promise<void>((resolve) => {
+        const client = new WebSocket(`ws://localhost:${serverPort}/ws?projectId=${project1Id}&token=invalid-session-token`);
+        client.on('unexpected-response', (_req, res) => {
+          responseCode = res.statusCode ?? null;
+          resolve();
+        });
+        client.on('error', () => resolve());
+      });
+      expect(responseCode).toBe(401);
+    });
+
+    it('3. should reject upgrade with 403 response when user is not a member of the project', async () => {
       const userB = await prisma.user.create({
         data: {
           walletAddress: '0xwsunauthorizeduser11111111111111111111',
@@ -194,21 +203,37 @@ describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
       });
       const sessionB = await sessionService.createSession(userB.id);
 
-      let closeEvent: { code: number; reason: string } | null = null;
+      let responseCode: number | null = null;
       await new Promise<void>((resolve) => {
         const client = new WebSocket(`ws://localhost:${serverPort}/ws?projectId=${project1Id}&token=${sessionB.id}`);
-        client.on('close', (code, reason) => {
-          closeEvent = { code, reason: reason.toString() };
+        client.on('unexpected-response', (_req, res) => {
+          responseCode = res.statusCode ?? null;
           resolve();
         });
-        client.on('error', () => {});
+        client.on('error', () => resolve());
       });
 
-      const event2 = closeEvent as { code: number; reason: string } | null;
-      expect(event2).not.toBeNull();
-      expect(event2?.code).toBe(4003);
-
+      expect(responseCode).toBe(403);
       await prisma.user.delete({ where: { id: userB.id } }).catch(() => {});
+    });
+
+    it('4. should allow upgrade for authenticated project member/owner and establish WS connection', async () => {
+      const ws = await connectWs(`/ws?projectId=${project1Id}`);
+      expect(ws.readyState).toBe(WebSocket.OPEN);
+      ws.close();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    it('5. should ignore query parameter userId and maintain session identity authoritatively', async () => {
+      const ws = await connectWs(`/ws?projectId=${project1Id}&userId=fake-user-id`);
+      expect(ws.readyState).toBe(WebSocket.OPEN);
+      const activeConns = connectionManager.getProjectConnections(project1Id);
+      const conn = activeConns.find((c) => c.httpSessionId === sessionId);
+      expect(conn).toBeDefined();
+      expect(conn?.httpSessionId).toBe(sessionId);
+      expect(conn?.userId).not.toBe('fake-user-id');
+      ws.close();
+      await new Promise((r) => setTimeout(r, 50));
     });
   });
 
@@ -216,7 +241,7 @@ describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
     it('should register connection and remove it upon socket close', async () => {
       const ws = await connectWs(`/ws?projectId=${project1Id}`);
       const projectConnsBefore = connectionManager.getProjectConnections(project1Id);
-      const connId = projectConnsBefore[0].connectionId;
+      const connId = projectConnsBefore[projectConnsBefore.length - 1].connectionId;
 
       expect(connectionManager.getConnection(connId)).toBeDefined();
 

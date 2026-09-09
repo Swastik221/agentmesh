@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import supertest from 'supertest';
 import { createApp } from '../app.js';
 import { prisma } from '../lib/prisma.js';
 import { PAYMENT_CONFIG } from '../payments/payment.config.js';
+import { x402Service } from '../payments/x402.service.js';
 import { PolicyDecision, PaymentStatus } from '@prisma/client';
 
 const app = createApp();
@@ -412,6 +413,74 @@ describe('PRD-36-C1 — Hedera x402 Agent Payment Corrective Tests', () => {
       expect(listRes.body.success).toBe(true);
       expect(Array.isArray(listRes.body.data)).toBe(true);
       expect(listRes.body.data.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('6. High-Concurrency Payment Settlement & Execution Idempotency Regression Tests', () => {
+    it('should process 25 concurrent settlement requests for identical payment reference without duplicate records or double execution', async () => {
+      // 1. Trigger HTTP 402 requirement
+      const reqRes = await request
+        .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
+        .set('Cookie', [`agentmesh_session=${user1Token}`])
+        .send({});
+
+      expect(reqRes.status).toBe(402);
+      const requirement = reqRes.body.paymentRequirement;
+      expect(requirement).toBeDefined();
+      expect(requirement.paymentReference).toBeDefined();
+
+      const verifySpy = vi.spyOn(x402Service, 'verifyAndSettle').mockResolvedValue({
+        valid: true,
+        transactionReference: '0.0.9185802@1700000000.000000000',
+        amount: '1000',
+        asset: '0.0.429274',
+        network: 'hedera:testnet',
+        payerAddress: '0.0.12345',
+        receiverAddress: PAYMENT_CONFIG.RECEIVER_ADDRESS,
+      });
+
+      const mockPayload = {
+        scheme: 'exact',
+        network: 'hedera:testnet',
+        asset: '0.0.429274',
+        amount: '1000',
+        receiverAddress: PAYMENT_CONFIG.RECEIVER_ADDRESS,
+        paymentReference: requirement.paymentReference,
+        signedTransaction: 'signed_tx_bytes',
+      };
+
+      // 2. Dispatch 25 simultaneous concurrent settlement requests
+      const CONCURRENCY = 25;
+      const promises = Array.from({ length: CONCURRENCY }).map(() =>
+        request
+          .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
+          .set('Cookie', [`agentmesh_session=${user1Token}`])
+          .set('X-Payment', JSON.stringify(mockPayload))
+          .set('X-Payment-Reference', requirement.paymentReference)
+          .send({ action: 'capability.execute' }),
+      );
+
+      const responses = await Promise.all(promises);
+
+      // 3. Verify all callers receive 200 OK and consistent settled status
+      for (const res of responses) {
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.payment).toBeDefined();
+        expect(res.body.payment.status).toBe('SETTLED');
+        expect(res.body.payment.transactionReference).toBe('0.0.9185802@1700000000.000000000');
+      }
+
+      // 4. Verify DB idempotency: EXACTLY 1 payment record created with status SETTLED
+      const dbRecords = await prisma.payment.findMany({
+        where: { x402PaymentReference: requirement.paymentReference },
+      });
+
+      expect(dbRecords.length).toBe(1);
+      expect(dbRecords[0].status).toBe('SETTLED');
+      expect(dbRecords[0].settledAt).not.toBeNull();
+
+      verifySpy.mockRestore();
     });
   });
 });
