@@ -1,7 +1,7 @@
 import { Project, ProjectRole } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { CreateProjectInput, UpdateProjectInput } from '../schemas/project.schema.js';
-import { NotFoundError } from '../errors/app-error.js';
+import { NotFoundError, ForbiddenError } from '../errors/app-error.js';
 
 export class ProjectService {
   async createProject(data: CreateProjectInput): Promise<Project> {
@@ -33,7 +33,34 @@ export class ProjectService {
     });
   }
 
-  async getProjectById(id: string) {
+  async verifyProjectMembership(projectId: string, userId: string): Promise<void> {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundError(`Project with ID '${projectId}' not found`);
+    }
+
+    const membership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId,
+        },
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenError('User is not a member of this project');
+    }
+  }
+
+  async getProjectById(id: string, actorUserId?: string) {
+    if (actorUserId) {
+      await this.verifyProjectMembership(id, actorUserId);
+    }
+
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
@@ -80,8 +107,8 @@ export class ProjectService {
     }));
   }
 
-  async updateProject(id: string, data: UpdateProjectInput): Promise<Project> {
-    await this.getProjectById(id);
+  async updateProject(id: string, actorUserId: string, data: UpdateProjectInput): Promise<Project> {
+    await this.verifyProjectMembership(id, actorUserId);
 
     return await prisma.project.update({
       where: { id },
@@ -92,8 +119,15 @@ export class ProjectService {
     });
   }
 
-  async deleteProject(id: string): Promise<{ message: string }> {
-    await this.getProjectById(id);
+  async deleteProject(id: string, actorUserId: string): Promise<{ message: string }> {
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) {
+      throw new NotFoundError(`Project with ID '${id}' not found`);
+    }
+
+    if (project.ownerId !== actorUserId) {
+      throw new ForbiddenError('Only the project owner can delete this project');
+    }
 
     await prisma.project.delete({
       where: { id },
