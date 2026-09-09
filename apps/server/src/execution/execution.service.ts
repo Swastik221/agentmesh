@@ -1,5 +1,9 @@
 import { Prisma, ExecutionStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
+import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
+import { connectionManager } from '../websocket/connection.manager.js';
+import { deltaSequencerService } from '../services/delta-sequencer.service.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '../errors/app-error.js';
 import { CreateTaskExecutionInput, ListExecutionsQuery } from './execution.schemas.js';
 import { mockAgentExecutor } from './executors/mock-agent-executor.js';
@@ -10,6 +14,64 @@ export class ExecutionService {
 
   public setExecutor(executor: AgentExecutor): void {
     this.executor = executor;
+  }
+
+  /**
+   * Broadcasts a task status change (TASK_STATUS frame + delta) and records a
+   * matching activity event. Best-effort: a failed broadcast/activity write for
+   * a status transition that already committed to the DB must never fail the
+   * execution flow or leak an unhandled rejection.
+   */
+  private async broadcastTaskChange(
+    projectId: string,
+    taskId: string,
+    status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED',
+    activity: {
+      type: string;
+      actorType: 'human' | 'agent' | 'system' | 'coordinator';
+      actorId: string;
+      actorName?: string;
+      message: string;
+    },
+  ): Promise<void> {
+    try {
+      connectionManager.broadcastToProject(projectId, {
+        type: AgentMeshMessageType.TASK_STATUS,
+        payload: { taskId, status },
+      });
+      await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+        {
+          entity: 'task',
+          entityId: taskId,
+          operation: 'updated',
+          fields: { status },
+        },
+      ]);
+      const { activityService } = await import('../services/activity.service.js');
+      await activityService.recordActivity(projectId, { ...activity, taskId });
+    } catch (err) {
+      logger.warn(`[Execution] Failed to broadcast task status for ${taskId}:`, err);
+    }
+  }
+
+  private async resolveAgentName(agentId: string): Promise<string | undefined> {
+    try {
+      const agent = await prisma.agent.findUnique({
+        where: { id: agentId },
+        select: { name: true },
+      });
+      return agent?.name ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async taskProjectId(taskId: string): Promise<string | null> {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { projectId: true },
+    });
+    return task?.projectId ?? null;
   }
 
   private async verifyProjectMembership(projectId: string, userId: string): Promise<void> {
@@ -184,6 +246,7 @@ export class ExecutionService {
 
       // 1. Atomic/conditional transition QUEUED -> RUNNING (and Task -> IN_PROGRESS if latest)
       let queuedToRunningCount = 0;
+      let taskMarkedInProgress = false;
       await prisma.$transaction(async (tx) => {
         const updateResult = await tx.taskExecution.updateMany({
           where: {
@@ -208,6 +271,7 @@ export class ExecutionService {
               where: { id: execution.taskId },
               data: { status: 'IN_PROGRESS' },
             });
+            taskMarkedInProgress = true;
           }
         }
       });
@@ -222,6 +286,27 @@ export class ExecutionService {
           await this.syncAgentStatus(execution.agentId);
         }
         return;
+      }
+
+      // Live status: the task entered IN_PROGRESS; notify web clients immediately
+      // (a connected BYOA agent may claim TASK_REQUEST moments later).
+      if (taskMarkedInProgress) {
+        const projectId = await this.taskProjectId(execution.taskId);
+        if (projectId) {
+          const agentName = await this.resolveAgentName(execution.agentId);
+          await this.broadcastTaskChange(
+            projectId,
+            execution.taskId,
+            'IN_PROGRESS',
+            {
+              type: 'task.started',
+              actorType: 'agent',
+              actorId: execution.agentId,
+              ...(agentName && { actorName: agentName }),
+              message: 'Agent started executing the task',
+            },
+          );
+        }
       }
 
       // Update Agent status -> BUSY
@@ -295,6 +380,7 @@ export class ExecutionService {
         result.status === 'COMPLETED' ? ExecutionStatus.COMPLETED : ExecutionStatus.FAILED;
 
       let finishCount = 0;
+      let taskStatusChanged: 'COMPLETED' | 'FAILED' | null = null;
       await prisma.$transaction(async (tx) => {
         const finishUpdateResult = await tx.taskExecution.updateMany({
           where: {
@@ -322,12 +408,15 @@ export class ExecutionService {
           });
 
           if (latestExecution && latestExecution.id === executionId) {
+            const nextTaskStatus =
+              targetStatus === ExecutionStatus.COMPLETED ? 'COMPLETED' : 'FAILED';
             await tx.task.update({
               where: { id: execution.taskId },
               data: {
-                status: targetStatus === ExecutionStatus.COMPLETED ? 'COMPLETED' : 'FAILED',
+                status: nextTaskStatus,
               },
             });
+            taskStatusChanged = nextTaskStatus;
           }
         }
       });
@@ -336,6 +425,24 @@ export class ExecutionService {
         // Conditional update affected 0 rows (execution was cancelled concurrently)
         await this.syncAgentStatus(execution.agentId);
         return;
+      }
+
+      // Live status + activity for the terminal task transition.
+      if (taskStatusChanged) {
+        const projectId = await this.taskProjectId(execution.taskId);
+        if (projectId) {
+          const agentName = await this.resolveAgentName(execution.agentId);
+          await this.broadcastTaskChange(projectId, execution.taskId, taskStatusChanged, {
+            type: taskStatusChanged === 'COMPLETED' ? 'task.completed' : 'task.failed',
+            actorType: 'agent',
+            actorId: execution.agentId,
+            ...(agentName && { actorName: agentName }),
+            message:
+              taskStatusChanged === 'COMPLETED'
+                ? 'Agent completed the task'
+                : 'Agent reported the task as failed',
+          });
+        }
       }
 
       // Agent Status Integration: check if agent has remaining active executions
@@ -418,6 +525,7 @@ export class ExecutionService {
 
     this.validateStateTransition(execution.status, ExecutionStatus.CANCELLED);
 
+    let taskMarkedCancelled = false;
     await prisma.$transaction(async (tx) => {
       const cancelUpdateResult = await tx.taskExecution.updateMany({
         where: {
@@ -452,8 +560,20 @@ export class ExecutionService {
           where: { id: taskId },
           data: { status: 'CANCELLED' },
         });
+        taskMarkedCancelled = true;
       }
     });
+
+    if (taskMarkedCancelled) {
+      const agentName = await this.resolveAgentName(execution.agentId);
+      await this.broadcastTaskChange(projectId, taskId, 'CANCELLED', {
+        type: 'task.cancelled',
+        actorType: 'system',
+        actorId: userId,
+        ...(agentName && { actorName: agentName }),
+        message: 'Task execution cancelled',
+      });
+    }
 
     const updated = await prisma.taskExecution.findUniqueOrThrow({
       where: { id: executionId },
@@ -546,6 +666,38 @@ export class ExecutionService {
       }
 
       return updatedExec;
+    });
+
+    // Live status + activity: web clients must see IN_PROGRESS / COMPLETED /
+    // FAILED as soon as a connected agent claims or finishes an execution.
+    const taskStatusAfter =
+      targetStatus === ExecutionStatus.RUNNING
+        ? 'IN_PROGRESS'
+        : targetStatus === ExecutionStatus.COMPLETED
+          ? 'COMPLETED'
+          : targetStatus === ExecutionStatus.FAILED
+            ? 'FAILED'
+            : 'CANCELLED';
+    await this.broadcastTaskChange(projectId, taskId, taskStatusAfter, {
+      type:
+        taskStatusAfter === 'IN_PROGRESS'
+          ? 'task.started'
+          : taskStatusAfter === 'COMPLETED'
+            ? 'task.completed'
+            : taskStatusAfter === 'FAILED'
+              ? 'task.failed'
+              : 'task.cancelled',
+      actorType: 'agent',
+      actorId: execution.agentId,
+      ...(updated.agent?.name && { actorName: updated.agent.name }),
+      message:
+        taskStatusAfter === 'IN_PROGRESS'
+          ? 'Agent claimed and started the task'
+          : taskStatusAfter === 'COMPLETED'
+            ? 'Agent completed the task'
+            : taskStatusAfter === 'FAILED'
+              ? 'Agent reported the task as failed'
+              : 'Task execution cancelled',
     });
 
     // Apply Agent status sync

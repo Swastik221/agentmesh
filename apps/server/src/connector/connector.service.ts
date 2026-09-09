@@ -291,6 +291,62 @@ export class ConnectorService {
         return { success: true };
       }
 
+      case AgentMeshMessageType.TASK_PROGRESS: {
+        // Agents stream progress while working. Progress is live-only (not
+        // persisted as a column); web clients use it to render the working
+        // state without polling. Task state itself remains server-owned.
+        const { taskId, executionId, progress, message: progressMessage } =
+          message.payload as {
+            taskId?: string;
+            executionId?: string;
+            progress?: number;
+            message?: string;
+          };
+        if (!taskId) {
+          return {
+            success: false,
+            error: createAgentMeshMessage({
+              type: AgentMeshMessageType.ERROR,
+              projectId: metadata.projectId,
+              senderId: 'server',
+              payload: {
+                code: 'INVALID_MESSAGE',
+                message: "task.progress requires 'taskId'",
+              },
+            }),
+          };
+        }
+        let currentStatus: string = 'IN_PROGRESS';
+        try {
+          const currentTask = await prisma.task.findUnique({
+            where: { id: taskId },
+            select: { status: true },
+          });
+          currentStatus = currentTask?.status ?? 'IN_PROGRESS';
+        } catch {
+          // Best-effort status lookup; fall back to IN_PROGRESS.
+        }
+        connectionManager.broadcastToProject(metadata.projectId, {
+          type: AgentMeshMessageType.TASK_STATUS,
+          payload: {
+            taskId,
+            ...(executionId && { executionId }),
+            status: currentStatus,
+            ...(typeof progress === 'number' && { progress }),
+            ...(progressMessage !== undefined &&
+              progressMessage.trim() !== '' && { message: progressMessage.trim() }),
+          },
+        });
+        return { success: true };
+      }
+
+      case AgentMeshMessageType.TASK_STATUS: {
+        // Agents may report status updates; the server is the authority on
+        // task state, so this is acknowledged and ignored (prevents an
+        // UNKNOWN_MESSAGE_TYPE error round-trip on the agent socket).
+        return { success: true };
+      }
+
       default:
         return {
           success: false,

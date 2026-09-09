@@ -3,20 +3,26 @@ import { Header } from './components/layout/Header';
 import { Sidebar } from './components/navigation/Sidebar';
 import { StatusBar } from './components/status/StatusBar';
 import { OverviewPage } from './pages/Overview/OverviewPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
+import { AuthGate } from './pages/AuthGate';
+import { ProjectsPage } from './pages/ProjectsPage';
+import { AgentsPage } from './pages/AgentsPage';
+import { TasksPage } from './pages/TasksPage';
+import { ActivityPage } from './pages/ActivityPage';
 import { useBackendHealth } from './hooks/useBackendHealth';
+import { useWorkspace, WorkspaceProvider } from './state/WorkspaceContext';
+import { useWorkspaceSocket } from './hooks/useWorkspaceSocket';
 import { navItems } from './data/workspace';
 import type { SectionId } from './types';
 
 /**
- * Workspace shell: header, left rail, section content, status bar.
- *
- * Backend health is polled once here and passed down, so the header and the
- * status bar always agree and only one poll is in flight.
+ * Product shell driven by the real backend:
+ *   workspace context (auth + projects) -> live socket state -> section pages.
  */
-export function App() {
+function Shell() {
   const [activeSection, setActiveSection] = useState<SectionId>('overview');
   const health = useBackendHealth();
+  const { activeProjectId, activeProject } = useWorkspace();
+  const { live, refresh } = useWorkspaceSocket(activeProjectId);
   const activeLabel = navItems.find((item) => item.id === activeSection)?.label ?? 'Overview';
 
   return (
@@ -28,16 +34,46 @@ export function App() {
 
         <main className="app-main">
           {activeSection === 'overview' ? (
-            <OverviewPage />
+            <OverviewPage name={activeProject?.name ?? 'Workspace'} />
+          ) : activeSection === 'agents' ? (
+            <AgentsPage live={live} refresh={refresh} />
+          ) : activeSection === 'tasks' ? (
+            <TasksPage live={live} refresh={refresh} />
+          ) : activeSection === 'activity' ? (
+            <ActivityPage activity={live.activity} connected={live.connected} />
           ) : (
             <PlaceholderPage title={activeLabel} />
           )}
         </main>
       </div>
 
-      <StatusBar health={health} />
+      <StatusBar health={health} connected={live.connected} />
     </div>
   );
 }
 
-export default App;
+function PlaceholderPage({ title }: { title: string }) {
+  return (
+    <div className="app-placeholder">
+      <span className="app-placeholder__title">{title}</span>
+      <span className="app-placeholder__note">Section reserved.</span>
+    </div>
+  );
+}
+
+/**
+ * Root: authentication gate -> project selection -> workspace shell.
+ */
+export function App() {
+  const { activeProjectId } = useWorkspace();
+
+  return <AuthGate>{activeProjectId ? <Shell /> : <ProjectsPage />}</AuthGate>;
+}
+
+export default function Root() {
+  return (
+    <WorkspaceProvider>
+      <App />
+    </WorkspaceProvider>
+  );
+}
