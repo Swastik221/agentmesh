@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
-import { AppError } from '../errors/app-error.js';
+import { AppError, ApprovalRequiredError } from '../errors/app-error.js';
 
 export const errorHandler = (
   err: Error,
@@ -19,13 +19,12 @@ export const errorHandler = (
       return;
     }
 
-    if ('approvalRequestId' in err) {
-      const appReqErr = err as unknown as { approvalRequestId: string; approvalRequest: unknown };
+    if (err instanceof ApprovalRequiredError) {
       res.status(err.statusCode).json({
         error: err.code,
         message: err.message,
-        approvalRequestId: appReqErr.approvalRequestId,
-        approvalRequest: appReqErr.approvalRequest,
+        approvalRequestId: err.approvalRequestId,
+        approvalRequest: err.approvalRequest,
       });
       return;
     }

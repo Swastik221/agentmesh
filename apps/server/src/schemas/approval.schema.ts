@@ -7,6 +7,7 @@ export const createApprovalRequestSchema = z
     action: z.string().trim().min(1, 'Action is required'),
     policyId: z.string().trim().optional().nullable(),
     agentId: z.string().trim().optional().nullable(),
+    idempotencyKey: z.string().trim().optional().nullable(),
     reason: z.string().trim().max(500, 'Reason is too long').optional().nullable(),
     metadata: z.record(z.unknown()).optional().nullable(),
   })

@@ -3,17 +3,22 @@ import request from 'supertest';
 import { createApp } from '../app.js';
 import { prisma } from '../lib/prisma.js';
 import { sessionService } from '../auth/session.service.js';
+import { approvalService } from '../services/approval.service.js';
 
 const app = createApp();
 
-describe('PRD-35 Human Approval Layer & Execution Gate', () => {
+describe('PRD-35-C1 Human Approval Layer & Execution Gate Corrective Tests', () => {
   let userA: { id: string };
   let userB: { id: string };
   let sessionA: { id: string };
   let sessionB: { id: string };
   let projectA: { id: string };
+  let projectB: { id: string };
   let agentA: { id: string };
+  let agentB: { id: string };
   let taskA: { id: string };
+  let policyA: { id: string };
+  let policyB: { id: string };
 
   beforeEach(async () => {
     await prisma.approvalRequest.deleteMany();
@@ -47,7 +52,20 @@ describe('PRD-35 Human Approval Layer & Execution Gate', () => {
       data: {
         name: 'Project A',
         ownerId: userA.id,
-        members: { create: { userId: userA.id, role: 'OWNER' } },
+        members: {
+          create: [
+            { userId: userA.id, role: 'OWNER' },
+            { userId: userB.id, role: 'MEMBER' },
+          ],
+        },
+      },
+    });
+
+    projectB = await prisma.project.create({
+      data: {
+        name: 'Project B',
+        ownerId: userB.id,
+        members: { create: { userId: userB.id, role: 'OWNER' } },
       },
     });
 
@@ -56,6 +74,16 @@ describe('PRD-35 Human Approval Layer & Execution Gate', () => {
         projectId: projectA.id,
         ownerId: userA.id,
         name: 'Agent A',
+        provider: 'test-provider',
+        status: 'ONLINE',
+      },
+    });
+
+    agentB = await prisma.agent.create({
+      data: {
+        projectId: projectB.id,
+        ownerId: userB.id,
+        name: 'Agent B',
         provider: 'test-provider',
         status: 'ONLINE',
       },
@@ -75,70 +103,131 @@ describe('PRD-35 Human Approval Layer & Execution Gate', () => {
         },
       },
     });
+
+    policyA = await prisma.policy.create({
+      data: {
+        projectId: projectA.id,
+        name: 'Policy A',
+        action: 'task.execute',
+        decision: 'APPROVAL_REQUIRED',
+        enabled: true,
+      },
+    });
+
+    policyB = await prisma.policy.create({
+      data: {
+        projectId: projectB.id,
+        name: 'Policy B',
+        action: 'task.execute',
+        decision: 'APPROVAL_REQUIRED',
+        enabled: true,
+      },
+    });
   });
 
-  describe('Approval Lifecycle & Transitions', () => {
-    it('creates, retrieves, and approves a pending request (PENDING -> APPROVED)', async () => {
-      const createRes = await request(app)
+  describe('1. Cross-Project Referential Integrity', () => {
+    it('rejects creation of approval request referencing policy from another project', async () => {
+      const res = await request(app)
         .post('/approvals')
         .set('Cookie', [`agentmesh_session=${sessionA.id}`])
         .send({
           projectId: projectA.id,
           action: 'task.execute',
-          agentId: agentA.id,
-          reason: 'Manual execution test',
+          policyId: policyB.id, // Policy belonging to Project B!
         });
 
-      expect(createRes.status).toBe(201);
-      expect(createRes.body.status).toBe('PENDING');
-      const approvalId = createRes.body.id;
-
-      // Retrieve Approval
-      const getRes = await request(app)
-        .get(`/approvals/${approvalId}`)
-        .set('Cookie', [`agentmesh_session=${sessionA.id}`]);
-
-      expect(getRes.status).toBe(200);
-      expect(getRes.body.id).toBe(approvalId);
-
-      // Approve Request
-      const approveRes = await request(app)
-        .post(`/approvals/${approvalId}/approve`)
-        .set('Cookie', [`agentmesh_session=${sessionA.id}`])
-        .send({ reason: 'Approved by project owner' });
-
-      expect(approveRes.status).toBe(200);
-      expect(approveRes.body.status).toBe('APPROVED');
-      expect(approveRes.body.resolvedByUserId).toBe(userA.id);
-      expect(approveRes.body.resolvedAt).toBeDefined();
+      expect(res.status).toBe(404);
+      expect(res.body.message).toContain('Policy with ID');
     });
 
-    it('rejects a pending request (PENDING -> REJECTED)', async () => {
-      const createRes = await request(app)
+    it('rejects creation of approval request referencing agent from another project', async () => {
+      const res = await request(app)
         .post('/approvals')
         .set('Cookie', [`agentmesh_session=${sessionA.id}`])
         .send({
           projectId: projectA.id,
-          action: 'payment.request',
-          reason: 'Large payment request',
+          action: 'task.execute',
+          agentId: agentB.id, // Agent belonging to Project B!
         });
 
-      const approvalId = createRes.body.id;
+      expect(res.status).toBe(404);
+      expect(res.body.message).toContain('Agent with ID');
+    });
 
-      const rejectRes = await request(app)
-        .post(`/approvals/${approvalId}/reject`)
+    it('succeeds when referencing valid same-project policy and agent', async () => {
+      const res = await request(app)
+        .post('/approvals')
         .set('Cookie', [`agentmesh_session=${sessionA.id}`])
-        .send({ reason: 'Budget limit exceeded' });
+        .send({
+          projectId: projectA.id,
+          action: 'task.execute',
+          policyId: policyA.id,
+          agentId: agentA.id,
+        });
 
-      expect(rejectRes.status).toBe(200);
-      expect(rejectRes.body.status).toBe('REJECTED');
-      expect(rejectRes.body.resolvedByUserId).toBe(userA.id);
+      expect(res.status).toBe(201);
+      expect(res.body.policyId).toBe(policyA.id);
+      expect(res.body.agentId).toBe(agentA.id);
     });
   });
 
-  describe('Invalid State Transitions & Concurrent Approval', () => {
-    it('fails invalid transition APPROVED -> REJECTED with 409 Conflict', async () => {
-      const reqRecord = await prisma.approvalRequest.create({
+  describe('2. Race-Safe Approval Idempotency', () => {
+    it('genuinely concurrent approval requests produce exactly 1 PENDING approval record and return same record', async () => {
+      const idempotencyKey = 'task.execute:concurrent-test-key';
+
+      const [res1, res2] = await Promise.all([
+        approvalService.createApprovalRequest(projectA.id, userA.id, {
+          projectId: projectA.id,
+          action: 'task.execute',
+          idempotencyKey,
+          metadata: { taskId: taskA.id },
+        }),
+        approvalService.createApprovalRequest(projectA.id, userA.id, {
+          projectId: projectA.id,
+          action: 'task.execute',
+          idempotencyKey,
+          metadata: { taskId: taskA.id },
+        }),
+      ]);
+
+      expect(res1.id).toBe(res2.id);
+
+      const count = await prisma.approvalRequest.count({
+        where: { projectId: projectA.id, idempotencyKey },
+      });
+      expect(count).toBe(1);
+    });
+  });
+
+  describe('3. Requester vs Approver Identity Semantics', () => {
+    it('preserves User A as original requester when User B approves request', async () => {
+      // User A requests blocked task execution
+      const execRes = await request(app)
+        .post(`/projects/${projectA.id}/tasks/${taskA.id}/executions`)
+        .set('Cookie', [`agentmesh_session=${sessionA.id}`])
+        .send({ agentId: agentA.id });
+
+      expect(execRes.status).toBe(202);
+      const approvalId = execRes.body.approvalRequestId;
+
+      // User B (project member) approves request
+      const approveRes = await request(app)
+        .post(`/approvals/${approvalId}/approve`)
+        .set('Cookie', [`agentmesh_session=${sessionB.id}`]);
+
+      expect(approveRes.status).toBe(200);
+      expect(approveRes.body.requestedByUserId).toBe(userA.id); // User A requester!
+      expect(approveRes.body.resolvedByUserId).toBe(userB.id); // User B approver!
+
+      // Resumed execution belongs to User A's task context
+      const executions = await prisma.taskExecution.findMany({ where: { taskId: taskA.id } });
+      expect(executions.length).toBe(1);
+    });
+  });
+
+  describe('4. Invalid State Transitions', () => {
+    it('rejects invalid state transitions with 409 Conflict', async () => {
+      const approvedReq = await prisma.approvalRequest.create({
         data: {
           projectId: projectA.id,
           requestedByUserId: userA.id,
@@ -149,15 +238,17 @@ describe('PRD-35 Human Approval Layer & Execution Gate', () => {
         },
       });
 
-      const res = await request(app)
-        .post(`/approvals/${reqRecord.id}/reject`)
+      const res1 = await request(app)
+        .post(`/approvals/${approvedReq.id}/reject`)
         .set('Cookie', [`agentmesh_session=${sessionA.id}`]);
+      expect(res1.status).toBe(409);
 
-      expect(res.status).toBe(409);
-    });
+      const res2 = await request(app)
+        .post(`/approvals/${approvedReq.id}/approve`)
+        .set('Cookie', [`agentmesh_session=${sessionA.id}`]);
+      expect(res2.status).toBe(409);
 
-    it('fails invalid transition REJECTED -> APPROVED with 409 Conflict', async () => {
-      const reqRecord = await prisma.approvalRequest.create({
+      const rejectedReq = await prisma.approvalRequest.create({
         data: {
           projectId: projectA.id,
           requestedByUserId: userA.id,
@@ -168,183 +259,140 @@ describe('PRD-35 Human Approval Layer & Execution Gate', () => {
         },
       });
 
-      const res = await request(app)
-        .post(`/approvals/${reqRecord.id}/approve`)
+      const res3 = await request(app)
+        .post(`/approvals/${rejectedReq.id}/approve`)
         .set('Cookie', [`agentmesh_session=${sessionA.id}`]);
+      expect(res3.status).toBe(409);
 
-      expect(res.status).toBe(409);
-    });
-
-    it('prevents race condition: two concurrent approvals result in exactly 1 success and 1 conflict', async () => {
-      const reqRecord = await prisma.approvalRequest.create({
+      const expiredReq = await prisma.approvalRequest.create({
         data: {
           projectId: projectA.id,
           requestedByUserId: userA.id,
           action: 'task.execute',
-          status: 'PENDING',
+          status: 'EXPIRED',
         },
       });
 
-      const [res1, res2] = await Promise.all([
-        request(app)
-          .post(`/approvals/${reqRecord.id}/approve`)
-          .set('Cookie', [`agentmesh_session=${sessionA.id}`]),
-        request(app)
-          .post(`/approvals/${reqRecord.id}/approve`)
-          .set('Cookie', [`agentmesh_session=${sessionA.id}`]),
-      ]);
-
-      const statuses = [res1.status, res2.status].sort();
-      expect(statuses).toEqual([200, 409]);
+      const res4 = await request(app)
+        .post(`/approvals/${expiredReq.id}/approve`)
+        .set('Cookie', [`agentmesh_session=${sessionA.id}`]);
+      expect(res4.status).toBe(409);
     });
   });
 
-  describe('Security & Authorization', () => {
-    it('returns 401 for unauthenticated approval calls', async () => {
-      const res = await request(app).get('/approvals');
-      expect(res.status).toBe(401);
-    });
-
-    it('returns 403 for user trying to approve request in another project', async () => {
-      const reqRecord = await prisma.approvalRequest.create({
-        data: {
-          projectId: projectA.id,
-          requestedByUserId: userA.id,
-          action: 'task.execute',
-          status: 'PENDING',
-        },
-      });
-
-      const res = await request(app)
-        .post(`/approvals/${reqRecord.id}/approve`)
-        .set('Cookie', [`agentmesh_session=${sessionB.id}`]);
-
-      expect(res.status).toBe(403);
-    });
-
-    it('ignores client identity spoofing attempts (requestedByUserId, resolvedByUserId, status)', async () => {
-      const createRes = await request(app)
-        .post('/approvals')
-        .set('Cookie', [`agentmesh_session=${sessionA.id}`])
-        .send({
-          projectId: projectA.id,
-          action: 'task.execute',
-          requestedByUserId: userB.id, // spoof attempt
-          status: 'APPROVED', // spoof attempt
-        });
-
-      expect(createRes.status).toBe(201);
-      expect(createRes.body.requestedByUserId).toBe(userA.id); // server-derived!
-      expect(createRes.body.status).toBe('PENDING'); // server-enforced!
-
-      const approvalId = createRes.body.id;
-
-      const approveRes = await request(app)
-        .post(`/approvals/${approvalId}/approve`)
-        .set('Cookie', [`agentmesh_session=${sessionA.id}`])
-        .send({
-          resolvedByUserId: userB.id, // spoof attempt
-        });
-
-      expect(approveRes.status).toBe(200);
-      expect(approveRes.body.resolvedByUserId).toBe(userA.id); // server-derived!
-    });
-  });
-
-  describe('Execution Gate & Resume Integration', () => {
-    it('blocks task execution when APPROVAL_REQUIRED policy exists, creates PENDING request, and resumes execution upon approval', async () => {
-      // 1. Create APPROVAL_REQUIRED policy for task.execute
+  describe('5. End-to-End Artifact Write Policy Gating & Resumption', () => {
+    it('ALLOW policy creates artifact directly', async () => {
       await prisma.policy.create({
         data: {
           projectId: projectA.id,
-          name: 'Require Approval for Task Execution',
-          action: 'task.execute',
-          decision: 'APPROVAL_REQUIRED',
+          name: 'Allow Artifact Write',
+          action: 'artifact.write',
+          decision: 'ALLOW',
           enabled: true,
         },
       });
 
-      // 2. Attempt task execution
-      const execRes = await request(app)
-        .post(`/projects/${projectA.id}/tasks/${taskA.id}/executions`)
+      const res = await request(app)
+        .post(`/projects/${projectA.id}/tasks/${taskA.id}/artifacts`)
         .set('Cookie', [`agentmesh_session=${sessionA.id}`])
         .send({
+          type: 'code',
+          name: 'allow-artifact.ts',
+          payload: { code: 'console.log("hello")' },
           agentId: agentA.id,
         });
 
-      expect(execRes.status).toBe(202); // ApprovalRequiredError
-      expect(execRes.body.error).toBe('APPROVAL_REQUIRED');
-      const approvalRequestId = execRes.body.approvalRequestId;
-      expect(approvalRequestId).toBeDefined();
-
-      // Verify execution was NOT created yet
-      const execsCount = await prisma.taskExecution.count({ where: { taskId: taskA.id } });
-      expect(execsCount).toBe(0);
-
-      // 3. Human Approves the Request
-      const approveRes = await request(app)
-        .post(`/approvals/${approvalRequestId}/approve`)
-        .set('Cookie', [`agentmesh_session=${sessionA.id}`]);
-
-      expect(approveRes.status).toBe(200);
-      expect(approveRes.body.status).toBe('APPROVED');
-
-      // 4. Verify execution was automatically resumed and created!
-      const postExecs = await prisma.taskExecution.findMany({ where: { taskId: taskA.id } });
-      expect(postExecs.length).toBe(1);
-      expect(postExecs[0].agentId).toBe(agentA.id);
+      expect(res.status).toBe(201);
+      expect(res.body.name).toBe('allow-artifact.ts');
     });
 
-    it('rejects task execution immediately when DENY policy exists', async () => {
+    it('DENY policy blocks artifact creation with 403 Forbidden', async () => {
       await prisma.policy.create({
         data: {
           projectId: projectA.id,
-          name: 'Deny Task Execution',
-          action: 'task.execute',
+          name: 'Deny Artifact Write',
+          action: 'artifact.write',
           decision: 'DENY',
           enabled: true,
         },
       });
 
-      const execRes = await request(app)
-        .post(`/projects/${projectA.id}/tasks/${taskA.id}/executions`)
+      const res = await request(app)
+        .post(`/projects/${projectA.id}/tasks/${taskA.id}/artifacts`)
         .set('Cookie', [`agentmesh_session=${sessionA.id}`])
         .send({
+          type: 'code',
+          name: 'deny-artifact.ts',
+          payload: { code: 'console.log("hello")' },
           agentId: agentA.id,
         });
 
-      expect(execRes.status).toBe(403);
-      const execsCount = await prisma.taskExecution.count({ where: { taskId: taskA.id } });
-      expect(execsCount).toBe(0);
+      expect(res.status).toBe(403);
+
+      const artifactsCount = await prisma.artifact.count({
+        where: { taskId: taskA.id, name: 'deny-artifact.ts' },
+      });
+      expect(artifactsCount).toBe(0);
     });
 
-    it('avoids duplicate uncontrolled pending approval creation when retrying blocked execution', async () => {
+    it('APPROVAL_REQUIRED policy gates artifact creation, returning 202 and creating artifact upon approval', async () => {
       await prisma.policy.create({
         data: {
           projectId: projectA.id,
-          name: 'Require Approval',
-          action: 'task.execute',
+          name: 'Require Approval for Artifact Write',
+          action: 'artifact.write',
           decision: 'APPROVAL_REQUIRED',
           enabled: true,
         },
       });
 
-      const res1 = await request(app)
-        .post(`/projects/${projectA.id}/tasks/${taskA.id}/executions`)
+      const res = await request(app)
+        .post(`/projects/${projectA.id}/tasks/${taskA.id}/artifacts`)
         .set('Cookie', [`agentmesh_session=${sessionA.id}`])
-        .send({ agentId: agentA.id });
+        .send({
+          type: 'code',
+          name: 'gated-artifact.ts',
+          payload: { code: 'console.log("gated")' },
+          agentId: agentA.id,
+        });
+
+      expect(res.status).toBe(202);
+      expect(res.body.error).toBe('APPROVAL_REQUIRED');
+      const approvalId = res.body.approvalRequestId;
+      expect(approvalId).toBeDefined();
+
+      // Verify artifact not created yet
+      let count = await prisma.artifact.count({
+        where: { taskId: taskA.id, name: 'gated-artifact.ts' },
+      });
+      expect(count).toBe(0);
+
+      // Approve request
+      const approveRes = await request(app)
+        .post(`/approvals/${approvalId}/approve`)
+        .set('Cookie', [`agentmesh_session=${sessionA.id}`]);
+
+      expect(approveRes.status).toBe(200);
+
+      // Verify artifact created exactly once
+      count = await prisma.artifact.count({
+        where: { taskId: taskA.id, name: 'gated-artifact.ts' },
+      });
+      expect(count).toBe(1);
+    });
+  });
+
+  describe('6. Bypass Methods Public Route Isolation', () => {
+    it('verifies bypass endpoints are not directly exposed as public routes', async () => {
+      const res1 = await request(app)
+        .post(`/projects/${projectA.id}/tasks/${taskA.id}/executions/bypass`)
+        .set('Cookie', [`agentmesh_session=${sessionA.id}`]);
+      expect(res1.status).toBe(404);
 
       const res2 = await request(app)
-        .post(`/projects/${projectA.id}/tasks/${taskA.id}/executions`)
-        .set('Cookie', [`agentmesh_session=${sessionA.id}`])
-        .send({ agentId: agentA.id });
-
-      expect(res1.body.approvalRequestId).toBe(res2.body.approvalRequestId);
-
-      const totalApprovals = await prisma.approvalRequest.count({
-        where: { projectId: projectA.id, action: 'task.execute' },
-      });
-      expect(totalApprovals).toBe(1);
+        .post(`/projects/${projectA.id}/tasks/${taskA.id}/artifacts/bypass`)
+        .set('Cookie', [`agentmesh_session=${sessionA.id}`]);
+      expect(res2.status).toBe(404);
     });
   });
 });

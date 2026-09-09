@@ -146,10 +146,7 @@ export class ExecutionService {
 
     // Policy Evaluation Gate
     const { policyService } = await import('../services/policy.service.js');
-    const evaluation = await policyService.evaluateAction(projectId, 'task.execute', {
-      userId,
-      agentId: data.agentId,
-    });
+    const evaluation = await policyService.evaluateAction(projectId, 'task.execute');
 
     if (evaluation.decision === 'DENY') {
       throw new ForbiddenError('Action rejected by project policy');
@@ -163,6 +160,7 @@ export class ExecutionService {
         action: 'task.execute',
         policyId: matchedPolicy?.id || null,
         agentId: data.agentId,
+        idempotencyKey: `task.execute:${taskId}`,
         reason: `Action task.execute requires human approval per policy '${matchedPolicy?.name || 'default'}'`,
         metadata: {
           taskId,

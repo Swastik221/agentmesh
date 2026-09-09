@@ -167,10 +167,7 @@ export class ArtifactService {
 
     // Policy Evaluation Gate
     const { policyService } = await import('./policy.service.js');
-    const evaluation = await policyService.evaluateAction(projectId, 'artifact.write', {
-      userId,
-      agentId: producerAgentId,
-    });
+    const evaluation = await policyService.evaluateAction(projectId, 'artifact.write');
 
     if (evaluation.decision === 'DENY') {
       throw new ForbiddenError('Action rejected by project policy');
@@ -184,6 +181,7 @@ export class ArtifactService {
         action: 'artifact.write',
         policyId: matchedPolicy?.id || null,
         agentId: producerAgentId,
+        idempotencyKey: `artifact.write:${taskId}:${data.name.trim()}`,
         reason: `Action artifact.write requires human approval per policy '${matchedPolicy?.name || 'default'}'`,
         metadata: {
           taskId,

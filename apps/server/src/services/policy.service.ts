@@ -35,7 +35,6 @@ export class PolicyService {
   async evaluateAction(
     projectId: string,
     action: string,
-    _context?: { agentId?: string; userId?: string },
   ): Promise<{ decision: PolicyDecision; matchedPolicies: Policy[] }> {
     const policies = await prisma.policy.findMany({
       where: {

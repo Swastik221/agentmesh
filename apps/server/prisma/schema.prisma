@@ -443,6 +443,7 @@ model ApprovalRequest {
   requestedByUserId String
   agentId           String?
   action            String
+  idempotencyKey    String?
   status            ApprovalStatus @default(PENDING)
   reason            String?
   metadata          Json?
@@ -457,6 +458,7 @@ model ApprovalRequest {
   resolvedByUser  User?   @relation("ApprovalResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
   agent           Agent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
 
+  @@unique([projectId, idempotencyKey])
   @@index([projectId])
   @@index([projectId, status])
   @@index([requestedByUserId])

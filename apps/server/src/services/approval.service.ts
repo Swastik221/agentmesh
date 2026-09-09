@@ -1,6 +1,6 @@
 import { Prisma, ApprovalStatus, ApprovalRequest } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
-import { ConflictError, ForbiddenError, NotFoundError } from '../errors/app-error.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../errors/app-error.js';
 import { CreateApprovalRequestInput, ListApprovalsQuery } from '../schemas/approval.schema.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import type { WebSocketMessage } from '../websocket/websocket.types.js';
@@ -37,49 +37,93 @@ export class ApprovalService {
   ): Promise<ApprovalRequest> {
     await this.verifyProjectMembership(projectId, requestedByUserId);
 
-    // Idempotency check: if metadata contains taskId or operationId, look for existing PENDING request
-    const meta = data.metadata as Record<string, unknown> | null;
-    const taskId = typeof meta?.taskId === 'string' ? meta.taskId : undefined;
-    const operationId = typeof meta?.operationId === 'string' ? meta.operationId : undefined;
-
-    if (taskId || operationId) {
-      const existingPending = await prisma.approvalRequest.findFirst({
-        where: {
-          projectId,
-          action: data.action,
-          status: ApprovalStatus.PENDING,
-        },
-        orderBy: { createdAt: 'desc' },
+    // Cross-Project Referential Integrity Validation
+    if (data.policyId) {
+      const policy = await prisma.policy.findUnique({
+        where: { id: data.policyId },
       });
-
-      if (existingPending) {
-        const existingMeta = existingPending.metadata as Record<string, unknown> | null;
-        if (
-          (taskId && existingMeta?.taskId === taskId) ||
-          (operationId && existingMeta?.operationId === operationId)
-        ) {
-          return existingPending;
-        }
+      if (!policy || policy.projectId !== projectId) {
+        throw new NotFoundError(`Policy with ID '${data.policyId}' not found in project '${projectId}'`);
       }
     }
 
-    const approval = await prisma.approvalRequest.create({
-      data: {
-        projectId,
-        requestedByUserId,
-        action: data.action,
-        policyId: data.policyId || null,
-        agentId: data.agentId || null,
-        reason: data.reason || null,
-        metadata: data.metadata ? (data.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
-        status: ApprovalStatus.PENDING,
-      },
-      include: {
-        policy: true,
-        requestedByUser: true,
-        agent: true,
-      },
-    });
+    if (data.agentId) {
+      const agent = await prisma.agent.findUnique({
+        where: { id: data.agentId },
+      });
+      if (!agent || agent.projectId !== projectId) {
+        throw new NotFoundError(`Agent with ID '${data.agentId}' not found in project '${projectId}'`);
+      }
+    }
+
+    // Race-Safe Idempotency Check & Atomic Creation
+    const idempotencyKey = data.idempotencyKey || null;
+
+    if (idempotencyKey) {
+      const existing = await prisma.approvalRequest.findUnique({
+        where: {
+          projectId_idempotencyKey: {
+            projectId,
+            idempotencyKey,
+          },
+        },
+        include: {
+          policy: true,
+          requestedByUser: true,
+          agent: true,
+        },
+      });
+
+      if (existing && existing.status === ApprovalStatus.PENDING) {
+        return existing;
+      }
+    }
+
+    let approval: ApprovalRequest;
+    try {
+      approval = await prisma.approvalRequest.create({
+        data: {
+          projectId,
+          requestedByUserId,
+          action: data.action,
+          policyId: data.policyId || null,
+          agentId: data.agentId || null,
+          idempotencyKey,
+          reason: data.reason || null,
+          metadata: data.metadata ? (data.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+          status: ApprovalStatus.PENDING,
+        },
+        include: {
+          policy: true,
+          requestedByUser: true,
+          agent: true,
+        },
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        idempotencyKey
+      ) {
+        const existing = await prisma.approvalRequest.findUnique({
+          where: {
+            projectId_idempotencyKey: {
+              projectId,
+              idempotencyKey,
+            },
+          },
+          include: {
+            policy: true,
+            requestedByUser: true,
+            agent: true,
+          },
+        });
+        if (existing) {
+          return existing;
+        }
+      }
+      throw err;
+    }
 
     // Notify WS subscribers & activity log
     try {
@@ -237,6 +281,9 @@ export class ApprovalService {
       return resolved!;
     });
 
+    // Resume original blocked action (propagating failure cleanly if resume fails)
+    await this.resumeBlockedAction(updatedApproval);
+
     // Notify WS subscribers & activity log
     try {
       await activityService.recordActivity(updatedApproval.projectId, {
@@ -256,9 +303,6 @@ export class ApprovalService {
     } catch {
       // Activity/WS log is best-effort
     }
-
-    // Approval Resume: Execute original blocked action if payload is stored in metadata
-    await this.resumeBlockedAction(updatedApproval, userId);
 
     return updatedApproval;
   }
@@ -346,44 +390,55 @@ export class ApprovalService {
     return updatedApproval;
   }
 
-  private async resumeBlockedAction(approval: ApprovalRequest, userId: string): Promise<void> {
+  private async resumeBlockedAction(approval: ApprovalRequest): Promise<void> {
+    if (
+      approval.action !== 'task.execute' &&
+      approval.action !== 'agent.execute' &&
+      approval.action !== 'artifact.write'
+    ) {
+      throw new BadRequestError(`Unsupported action '${approval.action}' for automatic approval resumption`);
+    }
+
     if (!approval.metadata || typeof approval.metadata !== 'object') {
       return;
     }
 
     const meta = approval.metadata as Record<string, unknown>;
 
-    try {
-      if (approval.action === 'task.execute' || approval.action === 'agent.execute') {
-        const taskId = typeof meta.taskId === 'string' ? meta.taskId : undefined;
-        const agentId = typeof meta.agentId === 'string' ? meta.agentId : undefined;
-        const input = (meta.input as Record<string, unknown>) || undefined;
+    // Use requestedByUserId (original requester), NOT the approver's userId!
+    const originalRequesterUserId = approval.requestedByUserId;
 
-        if (taskId && agentId) {
-          const { executionService } = await import('../execution/execution.service.js');
-          await executionService.createExecutionBypassingPolicy(
-            approval.projectId,
-            taskId,
-            userId,
-            { agentId, input },
-          );
-        }
-      } else if (approval.action === 'artifact.write') {
-        const taskId = typeof meta.taskId === 'string' ? meta.taskId : undefined;
-        const artifactData = meta.artifactData as import('./artifact.service.js').CreateArtifactInput | undefined;
+    if (approval.action === 'task.execute' || approval.action === 'agent.execute') {
+      const taskId = typeof meta.taskId === 'string' ? meta.taskId : undefined;
+      const agentId = typeof meta.agentId === 'string' ? meta.agentId : undefined;
+      const input = (meta.input as Record<string, unknown>) || undefined;
 
-        if (taskId && artifactData) {
-          const { artifactService } = await import('./artifact.service.js');
-          await artifactService.createArtifactBypassingPolicy(
-            approval.projectId,
-            taskId,
-            userId,
-            artifactData,
-          );
-        }
+      if (!taskId || !agentId) {
+        throw new BadRequestError('Invalid approval metadata for task execution resumption');
       }
-    } catch (err) {
-      console.error(`Failed to resume blocked action for approval ${approval.id}:`, err);
+
+      const { executionService } = await import('../execution/execution.service.js');
+      await executionService.createExecutionBypassingPolicy(
+        approval.projectId,
+        taskId,
+        originalRequesterUserId,
+        { agentId, input },
+      );
+    } else if (approval.action === 'artifact.write') {
+      const taskId = typeof meta.taskId === 'string' ? meta.taskId : undefined;
+      const artifactData = meta.artifactData as import('./artifact.service.js').CreateArtifactInput | undefined;
+
+      if (!taskId || !artifactData) {
+        throw new BadRequestError('Invalid approval metadata for artifact creation resumption');
+      }
+
+      const { artifactService } = await import('./artifact.service.js');
+      await artifactService.createArtifactBypassingPolicy(
+        approval.projectId,
+        taskId,
+        originalRequesterUserId,
+        artifactData,
+      );
     }
   }
 }
