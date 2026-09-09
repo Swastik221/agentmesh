@@ -9,6 +9,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "demo:e2e": "vitest run src/__tests__/e2e-killer-demo.test.ts",
+    "demo:e2e:live": "tsx src/demo/run-live-demo.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "db:generate": "prisma generate",
