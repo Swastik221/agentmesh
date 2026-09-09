@@ -108,7 +108,7 @@ export class ArtifactService {
       },
     });
 
-    if (!membership) {
+    if (!membership && project.ownerId !== userId) {
       throw new ForbiddenError('User is not a member of this project');
     }
   }
@@ -256,6 +256,20 @@ export class ArtifactService {
         },
       },
     ]);
+
+    // Link any task dependencies waiting for an artifact from this producer task
+    await prisma.taskDependency
+      .updateMany({
+        where: {
+          dependsOnTaskId: artifact.taskId,
+          dependencyType: 'ARTIFACT_REQUIRED',
+          artifactId: null,
+        },
+        data: {
+          artifactId: artifact.id,
+        },
+      })
+      .catch(() => {});
 
     // Notify dependent tasks waiting on artifact
     const dependentDeps = await prisma.taskDependency.findMany({

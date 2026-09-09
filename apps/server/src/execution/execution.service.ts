@@ -133,6 +133,17 @@ export class ExecutionService {
       throw new ForbiddenError('Agent is not assigned responsibility for this task');
     }
 
+    const { dependencyService } = await import('../services/dependency.service.js');
+    const depResolution = await dependencyService.resolveTaskDependencies(
+      projectId,
+      taskId,
+      userId,
+    );
+    if (!depResolution.ready) {
+      const { BadRequestError } = await import('../errors/app-error.js');
+      throw new BadRequestError('Task dependencies are not satisfied');
+    }
+
     const execution = await prisma.taskExecution.create({
       data: {
         taskId,

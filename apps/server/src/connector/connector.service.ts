@@ -70,6 +70,26 @@ export class ConnectorService {
       .getExecutionContext(projectId, taskId, executionId)
       .catch(() => null);
 
+    const taskDeps = await prisma.taskDependency.findMany({
+      where: { taskId },
+      include: {
+        artifact: true,
+      },
+    });
+
+    const dependencyArtifacts = taskDeps
+      .filter((dep) => dep.artifact !== null)
+      .map((dep) => ({
+        dependencyId: dep.id,
+        artifactId: dep.artifact!.id,
+        type: dep.artifact!.type,
+        name: dep.artifact!.name,
+        version: dep.artifact!.version,
+        payload: dep.artifact!.payload,
+        producerAgentId: dep.artifact!.agentId,
+        producerTaskId: dep.artifact!.taskId,
+      }));
+
     const taskRequestMsg = createAgentMeshMessage({
       type: AgentMeshMessageType.TASK_REQUEST,
       projectId,
@@ -86,6 +106,7 @@ export class ConnectorService {
           filePaths: task.filePaths || [],
           worktreePath: execContext?.workingDirectory,
           rootPath: execContext?.rootPath,
+          dependencies: dependencyArtifacts,
         },
       },
     });

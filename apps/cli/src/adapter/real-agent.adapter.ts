@@ -75,13 +75,45 @@ export class RealAgentAdapter implements AgentAdapter {
       await context.onProgress(35, 'Implementing code change');
     }
 
+    // Inspect dependency artifacts provided in metadata
+    const dependencies = (context.metadata?.dependencies as Array<{
+      dependencyId: string;
+      artifactId: string;
+      type: string;
+      name: string;
+      version: number;
+      payload: Record<string, unknown>;
+      producerAgentId?: string;
+      producerTaskId?: string;
+      contentHash?: string;
+    }>) || [];
+
+    const consumedArtifacts: Array<{ artifactId: string; contentHash?: string; name: string }> = [];
+    let consumedContentSnippet = '';
+
+    if (dependencies.length > 0) {
+      for (const depArt of dependencies) {
+        consumedArtifacts.push({
+          artifactId: depArt.artifactId,
+          contentHash: depArt.contentHash,
+          name: depArt.name,
+        });
+
+        const p = depArt.payload || {};
+        const sourceVal = p.sourceValue || p.summary || p.targetPath || JSON.stringify(p);
+        consumedContentSnippet += `// Consumed Artifact '${depArt.name}' (v${depArt.version}): ${String(sourceVal)}\n`;
+      }
+    }
+
     const modifiedFiles: string[] = [];
     const taskTitleLower = context.title.toLowerCase();
     const taskDescLower = (context.description || '').toLowerCase();
 
     // Determine target file to modify inside isolated worktree
     let targetRelativePath = 'src/health.ts';
-    if (taskTitleLower.includes('health') || taskDescLower.includes('health')) {
+    if (dependencies.length > 0) {
+      targetRelativePath = 'src/consumer.ts';
+    } else if (taskTitleLower.includes('health') || taskDescLower.includes('health')) {
       targetRelativePath = 'src/health.ts';
     } else if (
       context.metadata?.filePaths &&
@@ -103,7 +135,9 @@ export class RealAgentAdapter implements AgentAdapter {
     }
 
     let fileContent = '';
-    if (targetRelativePath.endsWith('.ts') || targetRelativePath.endsWith('.js')) {
+    if (dependencies.length > 0) {
+      fileContent = `// AgentMesh Artifact Consumer Module\n${consumedContentSnippet}export const consumedArtifactCount = ${dependencies.length};\nexport const lastConsumedValue = ${JSON.stringify(dependencies[0]?.payload?.sourceValue || 'consumed-data')};\n`;
+    } else if (targetRelativePath.endsWith('.ts') || targetRelativePath.endsWith('.js')) {
       fileContent = `// AgentMesh Generated Endpoint/Module\nexport function healthCheck() {\n  return { status: "ok", timestamp: new Date().toISOString() };\n}\n`;
     } else {
       fileContent = `# AgentMesh Implementation\nUpdated by ${this.name} for task: ${context.title}\n`;
@@ -143,13 +177,20 @@ export class RealAgentAdapter implements AgentAdapter {
       await context.onProgress(90, 'Preparing execution artifact');
     }
 
-    const artifactPayload = {
+    const artifactPayload: Record<string, unknown> = {
       modifiedFiles,
       targetPath: targetRelativePath,
       verification: verificationStatus,
-      summary: `Modified ${targetRelativePath} inside worktree`,
+      summary: dependencies.length > 0
+        ? `Consumed ${dependencies.length} artifact(s) and modified ${targetRelativePath}`
+        : `Modified ${targetRelativePath} inside worktree`,
+      sourceValue: `producer-output-from-${this.agentId}`,
       timestamp: new Date().toISOString(),
     };
+
+    if (consumedArtifacts.length > 0) {
+      artifactPayload.consumedArtifacts = consumedArtifacts;
+    }
 
     if (context.publishArtifact) {
       await context.publishArtifact({
