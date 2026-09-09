@@ -193,7 +193,9 @@ export const artifactCreatedPayloadSchema = z.object({
   type: z.string().trim().min(1, 'Artifact type is required'),
   name: z.string().trim().min(1, 'Artifact name is required'),
   version: z.number().int().positive('Version must be a positive integer'),
+  payload: z.unknown().optional(),
 });
+
 
 export const artifactAvailablePayloadSchema = z.object({
   artifactId: z.string().trim().min(1, 'Artifact ID is required'),

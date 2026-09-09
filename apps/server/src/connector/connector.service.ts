@@ -45,6 +45,31 @@ export class ConnectorService {
       return false;
     }
 
+    const workspace = await prisma.projectWorkspace.findUnique({
+      where: { projectId },
+    });
+
+    if (workspace?.gitRepoPath && executionId) {
+      const activeWt = await prisma.gitWorktree.findFirst({
+        where: { executionId, status: 'ACTIVE' },
+      });
+      if (!activeWt) {
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { ownerId: true },
+        });
+        if (project?.ownerId) {
+          const { worktreeService } = await import('../git/worktree.service.js');
+          await worktreeService.createWorktree(projectId, executionId, project.ownerId).catch(() => null);
+        }
+      }
+    }
+
+    const { workspaceService } = await import('../workspace/workspace.service.js');
+    const execContext = await workspaceService
+      .getExecutionContext(projectId, taskId, executionId)
+      .catch(() => null);
+
     const taskRequestMsg = createAgentMeshMessage({
       type: AgentMeshMessageType.TASK_REQUEST,
       projectId,
@@ -59,9 +84,12 @@ export class ConnectorService {
         metadata: {
           priority: task.priority,
           filePaths: task.filePaths || [],
+          worktreePath: execContext?.workingDirectory,
+          rootPath: execContext?.rootPath,
         },
       },
     });
+
 
     const dataString = JSON.stringify(taskRequestMsg);
     let sentCount = 0;
@@ -275,12 +303,8 @@ export class ConnectorService {
             targetExecId,
             metadata.userId,
             ExecutionStatus.FAILED,
+            error,
           );
-
-          await prisma.taskExecution.update({
-            where: { id: targetExecId },
-            data: { error },
-          }).catch(() => {});
         } catch (err: unknown) {
           logger.info(`Connector TASK_FAILED handled idempotently for ${targetExecId}: ${String(err)}`);
         }
@@ -290,6 +314,26 @@ export class ConnectorService {
       case AgentMeshMessageType.TASK_REJECTED: {
         return { success: true };
       }
+
+      case AgentMeshMessageType.TASK_PROGRESS: {
+        const { taskId, executionId, progress, message: progressMsgText } = message.payload;
+        connectionManager.broadcastToProject(metadata.projectId, message);
+
+        const { deltaSequencerService } = await import('../services/delta-sequencer.service.js');
+        await deltaSequencerService
+          .recordAndBroadcastDelta(metadata.projectId, [
+            {
+              entity: 'execution',
+              entityId: executionId || taskId,
+              operation: 'updated',
+              fields: { progress, message: progressMsgText },
+            },
+          ])
+          .catch(() => {});
+
+        return { success: true };
+      }
+
 
       default:
         return {

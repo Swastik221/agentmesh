@@ -32,7 +32,9 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@agentmesh/cli": "workspace:*",
     "@agentmesh/config": "workspace:*",
+
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
