@@ -15,10 +15,12 @@ export const createAgent = async (
       throw new UnauthorizedError('Authentication required');
     }
     const projectId = req.params.projectId as string;
+    // ownerId is ALWAYS derived from the authenticated session.
+    // Spread req.body first so any client-supplied ownerId, ensAddress, or
+    // ensVerifiedAt is silently overwritten by the server-controlled values.
     const input = createAgentSchema.parse({
-      ownerId: actorUserId,
       ...req.body,
-      // ensAddress from client is silently stripped — server derives it from ENS resolution
+      ownerId: actorUserId, // server-derived; must come last to override any client value
     });
     const agent = await agentService.createAgent(
       projectId,

@@ -464,4 +464,78 @@ describe('PRD-34 Agent ENS API Integration Tests', () => {
     // Address comes from the spy mock, not from client
     expect(res.body.ensAddress).toBe('0x1111111111111111111111111111111111111111');
   });
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // PRD-34-C1 Security Regression Tests
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  // Test A — ownerId spoof attempt
+  it('Test A: client-supplied ownerId is ignored; persisted ownerId always equals actorUserId', async () => {
+    const res = await request(app)
+      .post(`/projects/${projectAId}/agents`)
+      .set('Cookie', [cookieA]) // authenticated as User A
+      .send({
+        name: 'spoof-test',
+        provider: 'test',
+        ownerId: userBId, // attacker tries to impersonate User B
+      });
+
+    expect(res.status).toBe(201);
+    // Must be User A's id, NOT User B's
+    expect(res.body.ownerId).toBe(userAId);
+    expect(res.body.ownerId).not.toBe(userBId);
+  });
+
+  // Test B — ENS spoof fields
+  it('Test B: client-supplied ensAddress and ensVerifiedAt are always stripped', async () => {
+    // No ENS name supplied — so ensService.verifyNameOwnership should NOT be called
+    const res = await request(app)
+      .post(`/projects/${projectAId}/agents`)
+      .set('Cookie', [cookieA])
+      .send({
+        name: 'ens-spoof-test',
+        provider: 'test',
+        ensAddress: '0xAttackerAddress000000000000000000000001',
+        ensVerifiedAt: '2020-01-01T00:00:00.000Z',
+      });
+
+    expect(res.status).toBe(201);
+    // Client-supplied ensAddress must NOT appear in the persisted record
+    expect(res.body.ensAddress).toBeNull();
+    expect(res.body.ensVerifiedAt).toBeNull();
+    expect(res.body.ensName).toBeNull();
+  });
+
+  // Test C — cross-project ownership regression (existing behavior preserved)
+  it('Test C: user not in project cannot modify another project\'s agent (403 preserved)', async () => {
+    // Agent in Project A owned by User A (verifies Test A fix also holds here)
+    const createResA = await request(app)
+      .post(`/projects/${projectAId}/agents`)
+      .set('Cookie', [cookieA])
+      .send({ name: 'cross-user-c1-agent', provider: 'test' });
+    expect(createResA.body.ownerId).toBe(userAId);
+
+    // User B is NOT a member of projectA yet in this scenario —
+    // but they WERE added in test 26.10. So use a third project approach:
+    // Create a fresh project owned only by B and verify A cannot touch B's agents.
+    const createBRes = await request(app)
+      .post(`/projects/${projectBId}/agents`)
+      .set('Cookie', [cookieB])
+      .send({ name: 'b-only-agent', provider: 'test' });
+    const bAgentId = createBRes.body.id;
+    expect(createBRes.body.ownerId).toBe(userBId);
+
+    // User A tries to modify User B's agent in Project B — A is not a member of B
+    const res = await request(app)
+      .patch(`/agents/${bAgentId}`)
+      .set('Cookie', [cookieA])
+      .send({ name: 'hacked' });
+
+    expect(res.status).toBe(403);
+
+    // Agent name must remain unchanged
+    const unchanged = await prisma.agent.findUnique({ where: { id: bAgentId } });
+    expect(unchanged?.name).toBe('b-only-agent');
+  });
 });
+
