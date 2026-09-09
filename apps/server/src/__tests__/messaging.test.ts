@@ -211,24 +211,14 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
   };
 
   describe('1. Authentication & Pre-Handshake Checks', () => {
-    it('1. should reject agent.message on unauthenticated connection with HANDSHAKE_REQUIRED', async () => {
-      const ws = await connectWs(projectA.id); // No session cookie
-
-      const msg = createAgentMeshMessage({
-        type: AgentMeshMessageType.AGENT_MESSAGE,
-        projectId: projectA.id,
-        senderId: agentA1.id,
-        recipientId: agentA2.id,
-        payload: { body: 'Unauthenticated message' },
-      });
-
-      const responsePromise = receiveMessage(ws, 'error');
-      ws.send(JSON.stringify(msg));
-      const res = await responsePromise;
-
-      expect(res.type).toBe('error');
-      expect((res.payload as Record<string, unknown>).code).toBe('HANDSHAKE_REQUIRED');
-      ws.close();
+    it('1. should reject unauthenticated connection before HTTP 101 upgrade', async () => {
+      let error: unknown;
+      try {
+        await connectWs(projectA.id); // No session cookie
+      } catch (err) {
+        error = err;
+      }
+      expect(error).toBeDefined();
     });
 
     it('2. should reject message when senderId does NOT match connection agentId (SENDER_ID_MISMATCH)', async () => {

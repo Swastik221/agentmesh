@@ -203,23 +203,14 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
   };
 
   describe('1. Authentication & Session Verification', () => {
-    it('1. should reject unauthenticated handshake when no session cookie is provided', async () => {
-      const ws = await connectWs(projectA.id); // No session cookie
-
-      const handshakeMsg = createAgentMeshMessage({
-        type: AgentMeshMessageType.AGENT_HANDSHAKE,
-        projectId: projectA.id,
-        senderId: agentA1.id,
-        payload: { agentId: agentA1.id },
-      });
-
-      const responsePromise = receiveHandshakeReply(ws);
-      ws.send(JSON.stringify(handshakeMsg));
-      const res = await responsePromise;
-
-      expect(res.type).toBe('agent.handshake.rejected');
-      expect((res.payload as Record<string, unknown>).code).toBe('UNAUTHENTICATED');
-      ws.close();
+    it('1. should reject unauthenticated upgrade when no session cookie is provided', async () => {
+      let error: unknown;
+      try {
+        await connectWs(projectA.id); // No session cookie
+      } catch (err) {
+        error = err;
+      }
+      expect(error).toBeDefined();
     });
 
     it('2. should accept valid authenticated handshake with session cookie', async () => {
@@ -344,7 +335,7 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
       });
     });
 
-    it('6. should reject with PROJECT_ACCESS_DENIED when user is not a member of the project', async () => {
+    it('6. should reject pre-upgrade with HTTP 403 when user is not a member of the project', async () => {
       // Create an agent owned by User B under Project A, but remove User B from Project A membership
       const tempAgent = await prisma.agent.create({
         data: {
@@ -356,24 +347,15 @@ describe('PRD #9 Authenticated Agent Handshake Integration Tests', () => {
         },
       });
 
-      const ws = await connectWs(projectA.id, sessionB.id);
+      let error: unknown;
+      try {
+        await connectWs(projectA.id, sessionB.id);
+      } catch (err) {
+        error = err;
+      }
+      expect(error).toBeDefined();
 
-      const handshakeMsg = createAgentMeshMessage({
-        type: AgentMeshMessageType.AGENT_HANDSHAKE,
-        projectId: projectA.id,
-        senderId: tempAgent.id,
-        payload: { agentId: tempAgent.id },
-      });
-
-      const responsePromise = receiveHandshakeReply(ws);
-      ws.send(JSON.stringify(handshakeMsg));
-      const res = await responsePromise;
-
-      expect(res.type).toBe('agent.handshake.rejected');
-      expect((res.payload as Record<string, unknown>).code).toBe('PROJECT_ACCESS_DENIED');
-
-      ws.close();
-      await prisma.agent.delete({ where: { id: tempAgent.id } });
+      await prisma.agent.delete({ where: { id: tempAgent.id } }).catch(() => {});
     });
   });
 

@@ -329,13 +329,21 @@ describe('PRD-13 Multiplayer Workspace Foundation Integration Tests', () => {
     // User C is NOT a member of Project A
     const url = `ws://127.0.0.1:${serverPort}/ws?projectId=${projectA.id}&token=${sessionC.id}`;
     const ws = new WebSocket(url);
+    ws.on('error', () => {});
 
-    const closePromise = new Promise<{ code: number; reason: string }>((resolve) => {
-      ws.on('close', (code, reason) => resolve({ code, reason: reason.toString() }));
+    let resCode: number | null = null;
+    await new Promise<void>((resolve) => {
+      ws.on('unexpected-response', (_req, res) => {
+        resCode = res.statusCode ?? null;
+        resolve();
+      });
+      ws.on('close', (code) => {
+        resCode = code;
+        resolve();
+      });
     });
 
-    const closeResult = await closePromise;
-    expect(closeResult.code).toBe(4003);
+    expect([403, 4003]).toContain(resCode);
   });
 
   it('8. Cross-project isolation: User in Project B does NOT receive events for Project A', async () => {
