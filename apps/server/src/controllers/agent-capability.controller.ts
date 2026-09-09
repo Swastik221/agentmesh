@@ -113,10 +113,11 @@ export const executePaidCapability = async (
     }
 
     // STEP 7-10: Payment Gate
+    const authHeader = req.headers['authorization'];
     const paymentHeader = (
       req.headers['payment-signature'] ||
       req.headers['x-payment'] ||
-      req.headers['authorization']
+      (authHeader && authHeader.toLowerCase().startsWith('x402 ') ? authHeader : undefined)
     ) as string | undefined;
 
     const reqHeaderPaymentRef = req.headers['x-payment-reference'] as string | undefined;

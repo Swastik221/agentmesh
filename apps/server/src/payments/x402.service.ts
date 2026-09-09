@@ -113,6 +113,12 @@ export class X402Service {
     }
   }
 
+  private getFacilitatorClient(): HTTPFacilitatorClient {
+    return new HTTPFacilitatorClient({
+      url: PAYMENT_CONFIG.FACILITATOR_URL,
+    });
+  }
+
   /**
    * Cryptographically verifies payment payload and settles transaction on Hedera Testnet via x402 facilitator.
    * STRICT GOLDEN RULE: Settles only if network verification/settlement succeeds with a real Hedera transaction reference.
@@ -140,7 +146,7 @@ export class X402Service {
     }
 
     // 3. Receiver Address Validation (Server-controlled receiver protection)
-    const payloadReceiver = accepted.receiverAddress || accepted.payee;
+    const payloadReceiver = accepted.receiverAddress || accepted.payee || accepted.payTo;
     if (payloadReceiver && payloadReceiver !== requirement.receiver) {
       return {
         valid: false,
@@ -158,55 +164,84 @@ export class X402Service {
 
     // 5. Official Facilitator Verification & Settlement
     try {
-      const verifyRes = await this.facilitatorClient.verify(
+      const client = this.getFacilitatorClient();
+
+      const reqForFacilitator = {
+        scheme: requirement.scheme,
+        network: requirement.network,
+        asset: requirement.asset,
+        amount: requirement.amount,
+        payTo: requirement.receiver,
+        payee: requirement.receiver,
+        receiverAddress: requirement.receiver,
+        extra: {
+          feePayer: '0.0.9185802',
+          paymentReference: requirement.paymentReference,
+        },
+      };
+
+      const verifyRes = await client.verify(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         payload as any,
-        {
-          scheme: requirement.scheme,
-          network: requirement.network,
-          asset: requirement.asset,
-          amount: requirement.amount,
-          payee: requirement.receiver,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
+        reqForFacilitator as any,
       );
 
-      if (!verifyRes || (verifyRes as unknown as { valid?: boolean }).valid === false) {
+      const isVerifyValid =
+        Boolean(verifyRes) &&
+        ((verifyRes as unknown as { valid?: boolean }).valid !== false) &&
+        ((verifyRes as unknown as { isValid?: boolean }).isValid !== false);
+
+      if (!isVerifyValid) {
+        const verifyErr =
+          (verifyRes as unknown as { error?: string }).error ||
+          (verifyRes as unknown as { invalidReason?: string }).invalidReason ||
+          'Payment cryptographic verification failed';
         return {
           valid: false,
-          error: (verifyRes as unknown as { error?: string }).error || 'Payment cryptographic verification failed',
+          error: verifyErr,
         };
       }
 
-      const settleRes = await this.facilitatorClient.settle(
+      const settleRes = await client.settle(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         payload as any,
-        {
-          scheme: requirement.scheme,
-          network: requirement.network,
-          asset: requirement.asset,
-          amount: requirement.amount,
-          payee: requirement.receiver,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
+        reqForFacilitator as any,
       );
 
       const txRef =
         (settleRes as unknown as { transactionReference?: string }).transactionReference ||
+        (settleRes as unknown as { transaction?: string }).transaction ||
         (settleRes as unknown as { txId?: string }).txId;
 
-      if (!txRef) {
+      const isSettleSuccess =
+        Boolean(settleRes) &&
+        ((settleRes as unknown as { success?: boolean }).success !== false) &&
+        Boolean(txRef);
+
+      if (!isSettleSuccess || !txRef) {
+        const settleErr =
+          (settleRes as unknown as { error?: string }).error ||
+          (settleRes as unknown as { errorReason?: string }).errorReason ||
+          'Settlement succeeded but network returned no valid transaction reference';
         return {
           valid: false,
-          error: 'Settlement succeeded but network returned no valid transaction reference',
+          error: settleErr,
         };
       }
+
+      const payerAddr =
+        (verifyRes as unknown as { payerAddress?: string }).payerAddress ||
+        (verifyRes as unknown as { payer?: string }).payer ||
+        (settleRes as unknown as { payer?: string }).payer ||
+        undefined;
 
       return {
         valid: true,
         paymentReference: requirement.paymentReference,
         transactionReference: txRef,
-        payerAddress: (verifyRes as unknown as { payerAddress?: string }).payerAddress || undefined,
+        payerAddress: payerAddr,
         receiverAddress: requirement.receiver,
         amount: requirement.amount,
         asset: requirement.asset,
