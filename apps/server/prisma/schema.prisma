@@ -35,6 +35,7 @@ model User {
   artifactsReviewed Artifact[] @relation("ArtifactReviewer")
   approvalRequestsRequested ApprovalRequest[] @relation("ApprovalRequester")
   approvalRequestsResolved  ApprovalRequest[] @relation("ApprovalResolver")
+  payments                  Payment[]         @relation("PaymentRequester")
 
   @@map("users")
 }
@@ -60,6 +61,7 @@ model Project {
   activityEvents   ActivityEvent[]
   policies         Policy[]
   approvalRequests ApprovalRequest[]
+  payments         Payment[]
 
   @@index([ownerId])
   @@map("projects")
@@ -105,6 +107,7 @@ model Agent {
   preferredTasks       Task[]               @relation("PreferredAgentTasks")
   artifacts            Artifact[]
   approvalRequests     ApprovalRequest[]
+  payments             Payment[]
 
   @@index([projectId])
   @@index([ownerId])
@@ -466,3 +469,42 @@ model ApprovalRequest {
   @@index([createdAt])
   @@map("approval_requests")
 }
+
+enum PaymentStatus {
+  REQUIRED
+  SUBMITTED
+  VERIFIED
+  SETTLED
+  FAILED
+}
+
+model Payment {
+  id                   String        @id @default(cuid())
+  projectId            String
+  requesterUserId      String
+  agentId              String?
+  action               String
+  amount               String
+  asset                String
+  network              String
+  payerAddress         String?
+  receiverAddress      String
+  status               PaymentStatus @default(REQUIRED)
+  x402PaymentReference String?       @unique
+  transactionReference String?
+  metadata             Json?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  settledAt            DateTime?
+
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requesterUser User    @relation("PaymentRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  agent         Agent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([requesterUserId])
+  @@index([agentId])
+  @@index([status])
+  @@map("payments")
+}
+
