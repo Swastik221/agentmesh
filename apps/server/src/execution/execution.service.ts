@@ -238,6 +238,24 @@ export class ExecutionService {
           select: { projectId: true },
         });
         if (taskObj) {
+          const workspace = await prisma.projectWorkspace.findUnique({
+            where: { projectId: taskObj.projectId },
+          });
+          if (workspace?.gitRepoPath && execution.id) {
+            const activeWt = await prisma.gitWorktree.findFirst({
+              where: { executionId: execution.id, status: 'ACTIVE' },
+            });
+            if (!activeWt) {
+              const project = await prisma.project.findUnique({
+                where: { id: taskObj.projectId },
+                select: { ownerId: true },
+              });
+              if (project?.ownerId) {
+                const { worktreeService } = await import('../git/worktree.service.js');
+                await worktreeService.createWorktree(taskObj.projectId, execution.id, project.ownerId).catch(() => null);
+              }
+            }
+          }
           const { workspaceService } = await import('../workspace/workspace.service.js');
           context = await workspaceService.getExecutionContext(
             taskObj.projectId,
@@ -488,6 +506,7 @@ export class ExecutionService {
     executionId: string,
     userId: string,
     targetStatus: ExecutionStatus,
+    error?: string,
   ) {
     await this.verifyProjectMembership(projectId, userId);
 
@@ -514,6 +533,7 @@ export class ExecutionService {
         where: { id: executionId },
         data: {
           status: targetStatus,
+          ...(error !== undefined && { error }),
           ...(targetStatus === ExecutionStatus.RUNNING && { startedAt: new Date() }),
           ...((targetStatus === ExecutionStatus.COMPLETED ||
             targetStatus === ExecutionStatus.FAILED ||

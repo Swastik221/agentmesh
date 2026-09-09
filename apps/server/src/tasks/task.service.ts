@@ -237,6 +237,7 @@ export class TaskService {
 
       const freshTask = await tx.task.findUnique({
         where: { id: taskId },
+        include: { responsibilities: true },
       });
 
       if (!freshTask || freshTask.projectId !== projectId) {
@@ -247,7 +248,7 @@ export class TaskService {
       const targetFilePaths =
         validatedFilePaths !== undefined ? validatedFilePaths : freshTask.filePaths;
 
-      if (targetStatus === 'IN_PROGRESS') {
+      if (targetStatus === 'IN_PROGRESS' || freshTask.responsibilities.length > 0) {
         await assertNoFileConflicts(projectId, taskId, targetFilePaths, tx);
       }
 

@@ -204,6 +204,11 @@ export class AgentMeshClient {
     this.sendJson(acceptMsg);
 
     // 2. Execute locally via adapter
+    const worktreePath =
+      (payload.metadata?.worktreePath as string) ||
+      (payload.metadata?.workingDirectory as string) ||
+      undefined;
+
     const context: TaskExecutionContext = {
       taskId: payload.taskId,
       executionId: payload.executionId,
@@ -211,7 +216,45 @@ export class AgentMeshClient {
       description: payload.description,
       requiredCapabilities: payload.requiredCapabilities,
       metadata: payload.metadata,
+      worktreePath,
+      onProgress: (progress: number, message?: string) => {
+        const progressMsg = createAgentMeshMessage({
+          type: AgentMeshMessageType.TASK_PROGRESS,
+          projectId: this.workspaceId,
+          senderId: this.agentId,
+          payload: {
+            taskId: payload.taskId,
+            executionId: payload.executionId,
+            progress,
+            message,
+          },
+        });
+        this.sendJson(progressMsg);
+      },
+      publishArtifact: async (artifact) => {
+        const artifactMsg = createAgentMeshMessage({
+          type: AgentMeshMessageType.ARTIFACT_CREATED,
+          projectId: this.workspaceId,
+          senderId: this.agentId,
+          payload: {
+            artifactId: `art-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            projectId: this.workspaceId,
+            taskId: payload.taskId,
+            executionId: payload.executionId,
+            agentId: this.agentId,
+            type: artifact.type,
+            name: artifact.name,
+            version: 1,
+            payload: artifact.payload,
+          } as unknown as import('@agentmesh/agent-protocol').ArtifactCreatedPayload,
+        });
+
+
+
+        this.sendJson(artifactMsg);
+      },
     };
+
 
     try {
       const result = await this.adapter.executeTask(context);

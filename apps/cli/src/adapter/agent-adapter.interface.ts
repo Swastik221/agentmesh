@@ -15,6 +15,14 @@ export interface TaskExecutionContext {
   description: string;
   requiredCapabilities?: string[];
   metadata?: Record<string, unknown>;
+  worktreePath?: string;
+  onProgress?: (progress: number, message?: string) => Promise<void> | void;
+  publishArtifact?: (artifact: {
+    type: string;
+    name: string;
+    payload: unknown;
+    requiresReview?: boolean;
+  }) => Promise<void> | void;
 }
 
 export interface AgentExecutionResult {
@@ -29,3 +37,4 @@ export interface AgentAdapter {
   executeTask(context: TaskExecutionContext): Promise<AgentExecutionResult>;
   cancelTask?(taskId: string): Promise<void>;
 }
+

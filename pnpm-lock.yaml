@@ -189,6 +189,9 @@ importers:
         specifier: ^3.24.2
         version: 3.25.76
     devDependencies:
+      '@agentmesh/cli':
+        specifier: workspace:*
+        version: link:../cli
       '@agentmesh/config':
         specifier: workspace:*
         version: link:../../packages/config
