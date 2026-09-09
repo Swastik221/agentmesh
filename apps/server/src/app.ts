@@ -16,6 +16,8 @@ import coordinatorRouter from './routes/coordinator.router.js';
 import { artifactRouter } from './routes/artifact.router.js';
 import { dependencyRouter } from './routes/dependency.router.js';
 import activityRouter from './routes/activity.router.js';
+import policyRouter from './routes/policy.router.js';
+import approvalRouter from './routes/approval.router.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { config } from './config/index.js';
 
@@ -46,6 +48,8 @@ export const createApp = (): Express => {
   app.use('/', artifactRouter);
   app.use('/', dependencyRouter);
   app.use('/', activityRouter);
+  app.use('/', policyRouter);
+  app.use('/', approvalRouter);
 
   app.use(errorHandler);
 

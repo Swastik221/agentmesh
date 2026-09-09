@@ -129,6 +129,94 @@ export class ArtifactService {
       throw new BadRequestError('Artifact name is required');
     }
 
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: {
+        responsibilities: true,
+      },
+    });
+
+    if (!task || task.projectId !== projectId) {
+      throw new NotFoundError('Task not found');
+    }
+
+    // Determine producer agent
+    let producerAgentId = data.agentId;
+
+    if (producerAgentId) {
+      const agent = await prisma.agent.findUnique({
+        where: { id: producerAgentId },
+      });
+      if (!agent || agent.projectId !== projectId) {
+        throw new ForbiddenError('Agent does not belong to this project');
+      }
+    } else if (data.executionId) {
+      const execution = await prisma.taskExecution.findUnique({
+        where: { id: data.executionId },
+      });
+      if (execution && execution.taskId === taskId) {
+        producerAgentId = execution.agentId;
+      }
+    } else if (task.responsibilities.length > 0) {
+      producerAgentId = task.responsibilities[0].agentId;
+    }
+
+    if (!producerAgentId) {
+      throw new BadRequestError('Producer agent ID is required for artifact creation');
+    }
+
+    // Policy Evaluation Gate
+    const { policyService } = await import('./policy.service.js');
+    const evaluation = await policyService.evaluateAction(projectId, 'artifact.write');
+
+    if (evaluation.decision === 'DENY') {
+      throw new ForbiddenError('Action rejected by project policy');
+    }
+
+    if (evaluation.decision === 'APPROVAL_REQUIRED') {
+      const { approvalService } = await import('./approval.service.js');
+      const matchedPolicy = evaluation.matchedPolicies[0];
+      const approvalRequest = await approvalService.createApprovalRequest(projectId, userId, {
+        projectId,
+        action: 'artifact.write',
+        policyId: matchedPolicy?.id || null,
+        agentId: producerAgentId,
+        idempotencyKey: `artifact.write:${taskId}:${data.name.trim()}`,
+        reason: `Action artifact.write requires human approval per policy '${matchedPolicy?.name || 'default'}'`,
+        metadata: {
+          taskId,
+          agentId: producerAgentId,
+          artifactData: data,
+        },
+      });
+
+      const { ApprovalRequiredError } = await import('../errors/app-error.js');
+      throw new ApprovalRequiredError(
+        approvalRequest.id,
+        approvalRequest,
+        'Artifact creation blocked pending human approval',
+      );
+    }
+
+    return await this.createArtifactBypassingPolicy(projectId, taskId, userId, data);
+  }
+
+  async createArtifactBypassingPolicy(
+    projectId: string,
+    taskId: string,
+    userId: string,
+    data: CreateArtifactInput,
+  ) {
+    await this.verifyProjectMembership(projectId, userId);
+
+    if (!data.type || !data.type.trim()) {
+      throw new BadRequestError('Artifact type is required');
+    }
+
+    if (!data.name || !data.name.trim()) {
+      throw new BadRequestError('Artifact name is required');
+    }
+
     // Payload validation, UTF-8 size check, SHA-256 contentHash calculation
     const { contentHash, normalizedPayload } = validateAndSerializeJsonPayload(data.payload);
 
