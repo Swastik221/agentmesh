@@ -108,7 +108,7 @@ export class ArtifactService {
       },
     });
 
-    if (!membership && project.ownerId !== userId) {
+    if (!membership) {
       throw new ForbiddenError('User is not a member of this project');
     }
   }
@@ -258,18 +258,50 @@ export class ArtifactService {
     ]);
 
     // Link any task dependencies waiting for an artifact from this producer task
-    await prisma.taskDependency
-      .updateMany({
-        where: {
-          dependsOnTaskId: artifact.taskId,
-          dependencyType: 'ARTIFACT_REQUIRED',
-          artifactId: null,
+    const pendingDeps = await prisma.taskDependency.findMany({
+      where: {
+        dependsOnTaskId: artifact.taskId,
+        dependencyType: {
+          startsWith: 'ARTIFACT_REQUIRED',
         },
-        data: {
-          artifactId: artifact.id,
-        },
-      })
-      .catch(() => {});
+        artifactId: null,
+      },
+    });
+
+    const totalProducerArtifacts = await prisma.artifact.count({
+      where: { taskId: artifact.taskId },
+    });
+
+    for (const dep of pendingDeps) {
+      let isMatch = false;
+
+      if (dep.dependencyType === 'ARTIFACT_REQUIRED') {
+        if (totalProducerArtifacts === 1) {
+          isMatch = true;
+        }
+      } else if (dep.dependencyType.startsWith('ARTIFACT_REQUIRED:')) {
+        const spec = dep.dependencyType.slice('ARTIFACT_REQUIRED:'.length).trim();
+        if (spec.startsWith('name:')) {
+          const targetName = spec.slice('name:'.length).trim();
+          isMatch = artifact.name === targetName;
+        } else if (spec.startsWith('type:')) {
+          const targetType = spec.slice('type:'.length).trim();
+          isMatch = artifact.type === targetType;
+        } else if (spec.includes(':')) {
+          const [targetType, targetName] = spec.split(':').map((s) => s.trim());
+          isMatch = artifact.type === targetType && artifact.name === targetName;
+        } else {
+          isMatch = artifact.name === spec || artifact.type === spec;
+        }
+      }
+
+      if (isMatch) {
+        await prisma.taskDependency.update({
+          where: { id: dep.id },
+          data: { artifactId: artifact.id },
+        });
+      }
+    }
 
     // Notify dependent tasks waiting on artifact
     const dependentDeps = await prisma.taskDependency.findMany({

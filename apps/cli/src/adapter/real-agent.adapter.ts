@@ -184,7 +184,10 @@ export class RealAgentAdapter implements AgentAdapter {
       summary: dependencies.length > 0
         ? `Consumed ${dependencies.length} artifact(s) and modified ${targetRelativePath}`
         : `Modified ${targetRelativePath} inside worktree`,
-      sourceValue: `producer-output-from-${this.agentId}`,
+      sourceValue:
+        (context.metadata?.input as Record<string, unknown> | undefined)?.sourceValue ||
+        (context.metadata?.sourceValue as string | undefined) ||
+        `producer-output-from-${this.agentId}`,
       timestamp: new Date().toISOString(),
     };
 

@@ -36,7 +36,7 @@ export class DependencyService {
       },
     });
 
-    if (!membership && project.ownerId !== userId) {
+    if (!membership) {
       throw new ForbiddenError('User is not a member of this project');
     }
   }
@@ -321,7 +321,10 @@ export class DependencyService {
 
     return dependencies.map((dep) => {
       let available = false;
-      if (dep.dependencyType === 'ARTIFACT_REQUIRED') {
+      if (
+        dep.dependencyType === 'ARTIFACT_REQUIRED' ||
+        dep.dependencyType.startsWith('ARTIFACT_REQUIRED:')
+      ) {
         available = Boolean(dep.artifactId && dep.artifact);
       } else if (dep.dependsOnTaskId && dep.dependsOnTask) {
         available = dep.dependsOnTask.status === 'COMPLETED';

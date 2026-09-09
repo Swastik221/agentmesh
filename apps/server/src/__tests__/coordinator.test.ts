@@ -74,12 +74,24 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
       },
     });
 
-    await prisma.projectMember.create({
-      data: {
-        projectId: projectA.id,
-        userId: userB.id,
-        role: 'MEMBER',
-      },
+    await prisma.projectMember.createMany({
+      data: [
+        {
+          projectId: projectA.id,
+          userId: userA.id,
+          role: 'OWNER',
+        },
+        {
+          projectId: projectA.id,
+          userId: userB.id,
+          role: 'MEMBER',
+        },
+        {
+          projectId: projectB.id,
+          userId: userB.id,
+          role: 'OWNER',
+        },
+      ],
     });
 
     agentA1 = await prisma.agent.create({
@@ -266,6 +278,14 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
       },
     });
 
+    await prisma.projectMember.create({
+      data: {
+        projectId: emptyProject.id,
+        userId: userA.id,
+        role: 'OWNER',
+      },
+    });
+
     const task = await prisma.task.create({
       data: {
         projectId: emptyProject.id,
@@ -283,6 +303,7 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
     }
 
     await prisma.task.delete({ where: { id: task.id } });
+    await prisma.projectMember.deleteMany({ where: { projectId: emptyProject.id } });
     await prisma.project.delete({ where: { id: emptyProject.id } });
   });
 

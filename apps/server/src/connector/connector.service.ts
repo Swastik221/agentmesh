@@ -10,6 +10,7 @@ import { ConnectionMetadata } from '../websocket/websocket.types.js';
 import { executionService } from '../execution/execution.service.js';
 import { ExecutionStatus } from '@prisma/client';
 import { logger } from '../lib/logger.js';
+import { validateAndSerializeJsonPayload } from '../services/artifact.service.js';
 
 export interface ProcessConnectorMessageResult {
   success: boolean;
@@ -79,16 +80,24 @@ export class ConnectorService {
 
     const dependencyArtifacts = taskDeps
       .filter((dep) => dep.artifact !== null)
-      .map((dep) => ({
-        dependencyId: dep.id,
-        artifactId: dep.artifact!.id,
-        type: dep.artifact!.type,
-        name: dep.artifact!.name,
-        version: dep.artifact!.version,
-        payload: dep.artifact!.payload,
-        producerAgentId: dep.artifact!.agentId,
-        producerTaskId: dep.artifact!.taskId,
-      }));
+      .map((dep) => {
+        const { contentHash } = validateAndSerializeJsonPayload(dep.artifact!.payload);
+        return {
+          dependencyId: dep.id,
+          artifactId: dep.artifact!.id,
+          contentHash,
+          type: dep.artifact!.type,
+          name: dep.artifact!.name,
+          version: dep.artifact!.version,
+          payload: dep.artifact!.payload,
+          producerAgentId: dep.artifact!.agentId,
+          producerTaskId: dep.artifact!.taskId,
+        };
+      });
+
+    const execRecord = executionId
+      ? await prisma.taskExecution.findUnique({ where: { id: executionId } })
+      : null;
 
     const taskRequestMsg = createAgentMeshMessage({
       type: AgentMeshMessageType.TASK_REQUEST,
@@ -107,6 +116,7 @@ export class ConnectorService {
           worktreePath: execContext?.workingDirectory,
           rootPath: execContext?.rootPath,
           dependencies: dependencyArtifacts,
+          input: execRecord?.input || undefined,
         },
       },
     });

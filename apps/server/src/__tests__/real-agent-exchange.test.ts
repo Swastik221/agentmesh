@@ -180,6 +180,58 @@ describe('PRD-32 Real Agent-to-Agent Artifact Exchange Integration Tests', () =>
     expect(dep.dependencyType).toBe('ARTIFACT_REQUIRED');
   });
 
+  it('1b. Multi-artifact producer task links consumer dependency deterministically to matching artifact', async () => {
+    const taskA = await prisma.task.create({
+      data: {
+        projectId: testProject.id,
+        creatorId: testUser.id,
+        title: 'Multi-Artifact Producer Task A',
+        description: 'Produces build log and auth spec',
+        status: 'TODO',
+      },
+    });
+
+    const taskB = await prisma.task.create({
+      data: {
+        projectId: testProject.id,
+        creatorId: testUser.id,
+        title: 'Auth Spec Consumer Task B',
+        description: 'Requires auth spec artifact',
+        status: 'TODO',
+      },
+    });
+
+    const dep = await dependencyService.createDependency(testProject.id, taskB.id, testUser.id, {
+      dependsOnTaskId: taskA.id,
+      dependencyType: 'ARTIFACT_REQUIRED:name:auth-spec',
+    });
+
+    // Create first artifact (build-log) for Task A
+    const artifact1 = await artifactService.createArtifact(testProject.id, taskA.id, testUser.id, {
+      type: 'LOG',
+      name: 'build-log',
+      payload: { status: 'build-success' },
+      agentId: testAgentA.id,
+    });
+
+    // Verify dependency is not yet linked to artifact1
+    const depCheck1 = await prisma.taskDependency.findUnique({ where: { id: dep.id } });
+    expect(depCheck1?.artifactId).toBeNull();
+
+    // Create second artifact (auth-spec) for Task A
+    const artifact2 = await artifactService.createArtifact(testProject.id, taskA.id, testUser.id, {
+      type: 'CODE',
+      name: 'auth-spec',
+      payload: { spec: 'v1.0' },
+      agentId: testAgentA.id,
+    });
+
+    // Verify dependency correctly linked to artifact2 (auth-spec) and NOT artifact1 (build-log)
+    const depCheck2 = await prisma.taskDependency.findUnique({ where: { id: dep.id } });
+    expect(depCheck2?.artifactId).toBe(artifact2.id);
+    expect(depCheck2?.artifactId).not.toBe(artifact1.id);
+  });
+
   it('2. Unsatisfied artifact dependency blocks Task B assignment & execution', async () => {
     const taskA = await prisma.task.create({
       data: {
@@ -218,6 +270,18 @@ describe('PRD-32 Real Agent-to-Agent Artifact Exchange Integration Tests', () =>
     if (!assignRes.assigned) {
       expect(assignRes.reason).toBe('DEPENDENCIES_NOT_SATISFIED');
     }
+
+    // Assign responsibility manually to bypass responsibility check and test execution dependency gating
+    await prisma.taskResponsibility.create({
+      data: { taskId: taskB.id, agentId: testAgentB.id },
+    });
+
+    // Attempt execution -> blocked by dependency gating
+    await expect(
+      executionService.createExecution(testProject.id, taskB.id, testUser.id, {
+        agentId: testAgentB.id,
+      }),
+    ).rejects.toThrow('Task dependencies are not satisfied');
   });
 
   it('3-8. Full Genuine Collaboration Loop: Agent A -> Artifact A -> AgentMesh -> Agent B -> Artifact B', async () => {
@@ -285,6 +349,7 @@ describe('PRD-32 Real Agent-to-Agent Artifact Exchange Integration Tests', () =>
     expect(initialRes.ready).toBe(false);
 
     // 3. Assign & execute Task A with Agent A
+    const uniqueProducerValue = 'UNIQUE-PRODUCER-VALUE-12345';
     const assignA = await coordinatorService.assignTask(testProject.id, taskA.id, testUser.id, {
       preferredAgentId: testAgentA.id,
     });
@@ -292,7 +357,7 @@ describe('PRD-32 Real Agent-to-Agent Artifact Exchange Integration Tests', () =>
 
     const execA = await executionService.createExecution(testProject.id, taskA.id, testUser.id, {
       agentId: testAgentA.id,
-      input: { action: 'produce-artifact' },
+      input: { action: 'produce-artifact', sourceValue: uniqueProducerValue },
     });
 
     // Wait for Task A execution to complete & produce Artifact A
@@ -310,6 +375,12 @@ describe('PRD-32 Real Agent-to-Agent Artifact Exchange Integration Tests', () =>
     expect(artifactA).toBeDefined();
     expect(artifactA?.agentId).toBe(testAgentA.id);
     expect(artifactA?.type).toBe('CODE');
+
+    const payloadA = artifactA!.payload as Record<string, unknown>;
+    expect(payloadA.sourceValue).toBe(uniqueProducerValue);
+
+    const { validateAndSerializeJsonPayload } = await import('../services/artifact.service.js');
+    const { contentHash: artifactAHash } = validateAndSerializeJsonPayload(artifactA!.payload);
 
     const worktreeA = await prisma.gitWorktree.findUnique({
       where: { executionId: execA.id },
@@ -367,18 +438,19 @@ describe('PRD-32 Real Agent-to-Agent Artifact Exchange Integration Tests', () =>
     const consumerFilePath = path.join(worktreeB!.path, 'src', 'consumer.ts');
     expect(fs.existsSync(consumerFilePath)).toBe(true);
     const consumerContent = fs.readFileSync(consumerFilePath, 'utf8');
-    expect(consumerContent).toContain('producer-output-from-' + testAgentA.id);
+    expect(consumerContent).toContain(uniqueProducerValue);
 
     // Verify primary repo checkout remains 100% clean and untouched
     const primaryConsumerPath = path.join(primaryRepoPath, 'src', 'consumer.ts');
     expect(fs.existsSync(primaryConsumerPath)).toBe(false);
 
-    // 7. Verify Artifact B payload contains provenance referencing Artifact A
+    // 7. Verify Artifact B payload contains provenance referencing Artifact A and exact contentHash
     const payloadB = artifactB!.payload as Record<string, unknown>;
     expect(payloadB.consumedArtifacts).toBeDefined();
-    const consumedList = payloadB.consumedArtifacts as Array<{ artifactId: string }>;
+    const consumedList = payloadB.consumedArtifacts as Array<{ artifactId: string; contentHash?: string }>;
     expect(consumedList.length).toBeGreaterThan(0);
     expect(consumedList[0].artifactId).toBe(artifactA!.id);
+    expect(consumedList[0].contentHash).toBe(artifactAHash);
 
     clientA.disconnect();
     clientB.disconnect();
