@@ -48,6 +48,8 @@ export const taskStatusPayloadSchema = z.object({
     errorMap: () => ({ message: 'Status must be a valid task status' }),
   }),
   message: z.string().trim().optional(),
+  /** 0-100 progress reported by the executing agent; live-only field. */
+  progress: z.number().min(0, 'Progress must be at least 0').max(100, 'Progress cannot exceed 100').optional(),
 });
 
 export const taskRequestPayloadSchema = z.object({
