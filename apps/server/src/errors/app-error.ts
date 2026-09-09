@@ -53,3 +53,18 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+export class ApprovalRequiredError extends AppError {
+  public readonly approvalRequestId: string;
+  public readonly approvalRequest: unknown;
+
+  constructor(
+    approvalRequestId: string,
+    approvalRequest: unknown,
+    message: string = 'Action requires human approval',
+  ) {
+    super(message, 202, 'APPROVAL_REQUIRED');
+    this.approvalRequestId = approvalRequestId;
+    this.approvalRequest = approvalRequest;
+  }
+}
+

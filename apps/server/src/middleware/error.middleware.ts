@@ -19,6 +19,17 @@ export const errorHandler = (
       return;
     }
 
+    if ('approvalRequestId' in err) {
+      const appReqErr = err as unknown as { approvalRequestId: string; approvalRequest: unknown };
+      res.status(err.statusCode).json({
+        error: err.code,
+        message: err.message,
+        approvalRequestId: appReqErr.approvalRequestId,
+        approvalRequest: appReqErr.approvalRequest,
+      });
+      return;
+    }
+
     res.status(err.statusCode).json({
       error: err.code,
       message: err.message,
