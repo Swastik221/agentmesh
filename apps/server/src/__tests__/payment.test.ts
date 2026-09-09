@@ -3,12 +3,12 @@ import supertest from 'supertest';
 import { createApp } from '../app.js';
 import { prisma } from '../lib/prisma.js';
 import { PAYMENT_CONFIG } from '../payments/payment.config.js';
-import { PolicyDecision } from '@prisma/client';
+import { PolicyDecision, PaymentStatus } from '@prisma/client';
 
 const app = createApp();
 const request = supertest(app);
 
-describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
+describe('PRD-36-C1 — Hedera x402 Agent Payment Corrective Tests', () => {
   let user1Token: string;
   let user1Wallet: string;
 
@@ -120,7 +120,7 @@ describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
   });
 
   describe('1. Payment Requirements Generation (HTTP 402)', () => {
-    it('should return HTTP 402 Payment Required with x402 payment requirements when no payment header is provided', async () => {
+    it('should return HTTP 402 Payment Required with official x402 payment requirement header when no payment header is provided', async () => {
       const res = await request
         .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
         .set('Cookie', [`agentmesh_session=${user1Token}`])
@@ -139,8 +139,19 @@ describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
       expect(req.receiver).toBe(PAYMENT_CONFIG.RECEIVER_ADDRESS);
       expect(req.paymentReference).toMatch(/^x402_/);
 
-      // Verify header X-Payment-Requirement is present
+      // Verify header X-Payment-Requirement is present and encoded
       expect(res.headers['x-payment-requirement']).toBeDefined();
+    });
+
+    it('should enforce server-authoritative price and ignore client-supplied amount', async () => {
+      const res = await request
+        .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
+        .set('Cookie', [`agentmesh_session=${user1Token}`])
+        .send({ amount: '1' }); // Client attempting to pay $0.000001
+
+      expect(res.status).toBe(402);
+      const req = res.body.paymentRequirement;
+      expect(req.amount).toBe('1000'); // Server-authoritative amount 1000
     });
 
     it('should create an initial payment record in DB with status REQUIRED', async () => {
@@ -183,7 +194,6 @@ describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
     });
 
     it('should reject payment with wrong network', async () => {
-      // Get 402 requirement
       const reqRes = await request
         .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
         .set('Cookie', [`agentmesh_session=${user1Token}`])
@@ -193,7 +203,7 @@ describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
 
       const badPayment = {
         scheme: 'exact',
-        network: 'ethereum:mainnet', // Invalid network
+        network: 'ethereum:mainnet',
         asset: '0.0.429274',
         amount: '1000',
         paymentReference: reqData.paymentReference,
@@ -221,7 +231,7 @@ describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
       const badPayment = {
         scheme: 'exact',
         network: 'hedera:testnet',
-        asset: '0.0.999999', // Wrong token
+        asset: '0.0.999999',
         amount: '1000',
         paymentReference: reqData.paymentReference,
       };
@@ -250,7 +260,7 @@ describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
         network: 'hedera:testnet',
         asset: '0.0.429274',
         amount: '1000',
-        receiverAddress: '0.0.999999', // Spoofed receiver
+        receiverAddress: '0.0.999999',
         paymentReference: reqData.paymentReference,
       };
 
@@ -264,11 +274,8 @@ describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
       expect(res.status).toBe(400);
       expect(res.body.message).toContain('Invalid payment receiver');
     });
-  });
 
-  describe('3. Successful Settlement & Capability Execution', () => {
-    it('should verify & settle valid payment and execute capability', async () => {
-      // 1. Trigger 402
+    it('should reject unverified payment payloads without setting SETTLED status', async () => {
       const reqRes = await request
         .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
         .set('Cookie', [`agentmesh_session=${user1Token}`])
@@ -276,96 +283,78 @@ describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
 
       const reqData = reqRes.body.paymentRequirement;
 
-      // 2. Submit valid signed payment payload
-      const validPayment = {
+      const fakeUnverifiedPayment = {
         scheme: 'exact',
         network: 'hedera:testnet',
         asset: '0.0.429274',
         amount: '1000',
         receiverAddress: PAYMENT_CONFIG.RECEIVER_ADDRESS,
-        payerAddress: '0.0.400100',
         paymentReference: reqData.paymentReference,
-        signedTransaction: 'signed_tx_hex_bytes',
+        signedTransaction: 'invalid_signature_payload',
       };
 
       const res = await request
         .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
         .set('Cookie', [`agentmesh_session=${user1Token}`])
-        .set('X-Payment', JSON.stringify(validPayment))
+        .set('X-Payment', JSON.stringify(fakeUnverifiedPayment))
         .set('X-Payment-Reference', reqData.paymentReference)
-        .send({ input: { query: 'Analyze dependency tree' } });
+        .send({});
 
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('Facilitator settlement failed');
 
-      // Verify Capability Result
-      expect(res.body.result).toBeDefined();
-      expect(res.body.result.capability).toBe('artifact-analysis');
-      expect(res.body.result.agentName).toBe('AnalysisAgent');
-      expect(res.body.result.ensName).toBe('research-agent.eth');
-
-      // Verify Payment Object
-      expect(res.body.payment).toBeDefined();
-      expect(res.body.payment.status).toBe('SETTLED');
-      expect(res.body.payment.amount).toBe('1000');
-      expect(res.body.payment.asset).toBe('0.0.429274');
-      expect(res.body.payment.network).toBe('hedera:testnet');
-      expect(res.body.payment.transactionReference).toBeDefined();
+      const dbRecord = await prisma.payment.findUnique({
+        where: { x402PaymentReference: reqData.paymentReference },
+      });
+      expect(dbRecord?.status).not.toBe('SETTLED');
     });
   });
 
-  describe('4. Idempotency & Duplicate Settlement Protection', () => {
-    it('should return existing settled record when same payment reference is re-submitted', async () => {
-      const reqRes = await request
-        .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
-        .set('Cookie', [`agentmesh_session=${user1Token}`])
-        .send({});
+  describe('3. Idempotency & Database Record Persistence', () => {
+    it('should return existing settled payment when same payment reference is re-submitted', async () => {
+      const paymentRef = `x402_idempotency_test_${Date.now()}`;
+      const settled = await prisma.payment.create({
+        data: {
+          projectId: project1Id,
+          requesterUserId: (await prisma.user.findFirstOrThrow()).id,
+          agentId: agent1Id,
+          action: 'capability.execute',
+          amount: '1000',
+          asset: '0.0.429274',
+          network: 'hedera:testnet',
+          receiverAddress: PAYMENT_CONFIG.RECEIVER_ADDRESS,
+          status: PaymentStatus.SETTLED,
+          x402PaymentReference: paymentRef,
+          transactionReference: '0.0.500123@1700000000.000000000',
+          settledAt: new Date(),
+        },
+      });
 
-      const reqData = reqRes.body.paymentRequirement;
-
-      const validPayment = {
+      const validPaymentHeader = {
         scheme: 'exact',
         network: 'hedera:testnet',
         asset: '0.0.429274',
         amount: '1000',
         receiverAddress: PAYMENT_CONFIG.RECEIVER_ADDRESS,
-        paymentReference: reqData.paymentReference,
-        signedTransaction: 'signed_tx_hex_bytes',
+        paymentReference: paymentRef,
       };
 
-      // Execution 1
-      const res1 = await request
+      const res = await request
         .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
         .set('Cookie', [`agentmesh_session=${user1Token}`])
-        .set('X-Payment', JSON.stringify(validPayment))
-        .set('X-Payment-Reference', reqData.paymentReference)
+        .set('X-Payment', JSON.stringify(validPaymentHeader))
+        .set('X-Payment-Reference', paymentRef)
         .send({});
 
-      expect(res1.status).toBe(200);
-      const payment1Id = res1.body.payment.id;
-
-      // Duplicate Execution 2 with identical payment reference
-      const res2 = await request
-        .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
-        .set('Cookie', [`agentmesh_session=${user1Token}`])
-        .set('X-Payment', JSON.stringify(validPayment))
-        .set('X-Payment-Reference', reqData.paymentReference)
-        .send({});
-
-      expect(res2.status).toBe(200);
-      expect(res2.body.payment.id).toBe(payment1Id);
-
-      // Verify DB count remains 1 for this payment reference
-      const count = await prisma.payment.count({
-        where: { x402PaymentReference: reqData.paymentReference },
-      });
-      expect(count).toBe(1);
+      expect(res.status).toBe(200);
+      expect(res.body.payment.id).toBe(settled.id);
+      expect(res.body.payment.status).toBe('SETTLED');
+      expect(res.body.payment.transactionReference).toBe('0.0.500123@1700000000.000000000');
     });
   });
 
-  describe('5. PRD-35 Policy Integration', () => {
+  describe('4. PRD-35 Policy Integration', () => {
     it('should return 403 Forbidden without payment requirement when policy decision is DENY', async () => {
-      // Create DENY policy for capability.execute
       await prisma.policy.create({
         data: {
           projectId: project1Id,
@@ -387,7 +376,6 @@ describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
     });
 
     it('should return 202 APPROVAL_REQUIRED when policy decision is APPROVAL_REQUIRED', async () => {
-      // Create APPROVAL_REQUIRED policy for capability.execute
       await prisma.policy.create({
         data: {
           projectId: project1Id,
@@ -409,9 +397,8 @@ describe('PRD-36 — Hedera x402 Agent Payment Integration Tests', () => {
     });
   });
 
-  describe('6. REST Payment Query Endpoints', () => {
+  describe('5. REST Payment Query Endpoints', () => {
     it('should list project payment records via GET /projects/:projectId/payments', async () => {
-      // Trigger requirement to create payment record
       await request
         .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
         .set('Cookie', [`agentmesh_session=${user1Token}`])

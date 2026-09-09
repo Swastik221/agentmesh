@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bot, CheckCircle2, AlertCircle, CreditCard, ExternalLink } from 'lucide-react';
+import { Bot, CheckCircle2, AlertCircle, CreditCard, ExternalLink, Key } from 'lucide-react';
 
 export interface PaidCapabilityCardProps {
   agentId: string;
@@ -14,7 +14,7 @@ export interface PaidCapabilityCardProps {
 export type PaymentState =
   | 'IDLE'
   | 'REQUIREMENT_RECEIVED'
-  | 'SIGNING'
+  | 'WALLET_SIGNING_REQUIRED'
   | 'SUBMITTING'
   | 'VERIFYING'
   | 'SETTLED'
@@ -33,70 +33,43 @@ export function PaidCapabilityCard({
   const [txRef, setTxRef] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resultData, setResultData] = useState<unknown | null>(null);
+  const [requirementObj, setRequirementObj] = useState<unknown | null>(null);
 
   const handleExecute = async () => {
     try {
       setPaymentState('REQUIREMENT_RECEIVED');
       setErrorMsg(null);
 
-      // Step 1: Initial request (without payment header) to trigger HTTP 402
+      // Step 1: Initial request without payment header to trigger HTTP 402
       const initialRes = await fetch(`/api/agents/${agentId}/capabilities/${encodeURIComponent(capability)}/execute`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action: capability }),
+        body: JSON.stringify({ action: 'capability.execute' }),
       });
 
       if (initialRes.status === 402) {
-        setPaymentState('SIGNING');
         const reqHeader = initialRes.headers.get('X-Payment-Requirement');
         const reqData = reqHeader ? JSON.parse(reqHeader) : await initialRes.json();
         const requirement = reqData.paymentRequirement || reqData;
 
-        // Step 2: Sign x402 payment payload
-        setPaymentState('SUBMITTING');
-        const paymentPayload = {
-          scheme: requirement.scheme || 'exact',
-          network: requirement.network || 'hedera:testnet',
-          asset: requirement.asset || '0.0.429274',
-          amount: requirement.amount || '1000',
-          receiverAddress: requirement.receiver || '0.0.500123',
-          paymentReference: requirement.paymentReference,
-          signedTransaction: 'signed_hedera_testnet_tx_data',
-        };
-
-        // Step 3: Retry request with signed x402 payment header
-        setPaymentState('VERIFYING');
-        const retryRes = await fetch(`/api/agents/${agentId}/capabilities/${encodeURIComponent(capability)}/execute`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Payment': JSON.stringify(paymentPayload),
-            'X-Payment-Reference': requirement.paymentReference,
-          },
-          body: JSON.stringify({ action: capability }),
-        });
-
-        const data = await retryRes.json();
-
-        if (!retryRes.ok || !data.success) {
-          throw new Error(data.error || 'Payment or execution failed');
-        }
-
-        setPaymentState('SETTLED');
-        setTxRef(data.payment?.transactionReference || requirement.paymentReference);
-        setResultData(data.result);
-        if (onExecuteSuccess) {
-          onExecuteSuccess(data.result);
-        }
+        setRequirementObj(requirement);
+        // Standard real behavior: Require authentic wallet signature / x402 client
+        setPaymentState('WALLET_SIGNING_REQUIRED');
       } else if (initialRes.ok) {
         const data = await initialRes.json();
         setPaymentState('SETTLED');
         setResultData(data.result);
+        if (data.payment?.transactionReference) {
+          setTxRef(data.payment.transactionReference);
+        }
+        if (onExecuteSuccess) {
+          onExecuteSuccess(data.result);
+        }
       } else {
         const errJson = await initialRes.json();
-        throw new Error(errJson.error || `HTTP ${initialRes.status}`);
+        throw new Error(errJson.message || errJson.error || `HTTP ${initialRes.status}`);
       }
     } catch (err: unknown) {
       setPaymentState('FAILED');
@@ -124,28 +97,30 @@ export function PaidCapabilityCard({
         </div>
       </div>
 
-      {/* State Indicators */}
-      {paymentState === 'SIGNING' && (
-        <div className="text-xs text-amber-400 mb-3 animate-pulse">
-          Signing x402 payment...
-        </div>
-      )}
-      {paymentState === 'SUBMITTING' && (
-        <div className="text-xs text-blue-400 mb-3 animate-pulse">
-          Submitting to Hedera Testnet...
-        </div>
-      )}
-      {paymentState === 'VERIFYING' && (
-        <div className="text-xs text-indigo-400 mb-3 animate-pulse">
-          Verifying & Settling transaction...
+      {/* Requirement State */}
+      {paymentState === 'WALLET_SIGNING_REQUIRED' && (
+        <div className="mb-3 p-3 rounded bg-amber-950/40 border border-amber-800/60 text-xs text-amber-300">
+          <div className="flex items-center gap-1.5 font-medium mb-1">
+            <Key className="w-4 h-4 text-amber-400" />
+            <span>HTTP 402: Hedera Wallet Signing Required</span>
+          </div>
+          <p className="text-[11px] text-amber-400/80 mb-2">
+            Real x402 payment payload must be signed by an active Hedera Testnet wallet signer.
+          </p>
+          {Boolean(requirementObj) && (
+            <div className="font-mono text-[10px] bg-black/40 p-2 rounded overflow-auto max-h-24">
+              <pre>{JSON.stringify(requirementObj, null, 2)}</pre>
+            </div>
+          )}
         </div>
       )}
 
+      {/* Settlement State */}
       {paymentState === 'SETTLED' && (
         <div className="mb-3 p-2.5 rounded bg-emerald-950/40 border border-emerald-800/60 text-xs text-emerald-300">
           <div className="flex items-center gap-1.5 font-medium mb-1">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>✓ Payment Settled ({network})</span>
+            <span>✓ Payment Settled on Hedera Testnet</span>
           </div>
           {txRef && (
             <div className="flex items-center gap-1 font-mono text-[11px] text-emerald-400/80">

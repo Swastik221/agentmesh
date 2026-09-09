@@ -10,15 +10,28 @@ export interface X402PaymentRequirement {
 }
 
 export interface X402PaymentPayload {
+  x402Version?: number;
+  accepted?: {
+    scheme?: string;
+    network?: string;
+    asset?: string;
+    amount?: string;
+    payee?: string;
+    receiverAddress?: string;
+    [key: string]: unknown;
+  };
+  payload?: {
+    transaction?: string;
+    [key: string]: unknown;
+  };
   scheme?: string;
   network?: string;
   asset?: string;
   amount?: string;
   payerAddress?: string;
   receiverAddress?: string;
+  payee?: string;
   paymentReference?: string;
-  signedTransaction?: string;
-  proof?: string;
   [key: string]: unknown;
 }
 

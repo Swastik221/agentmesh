@@ -113,23 +113,28 @@ export const executePaidCapability = async (
     }
 
     // STEP 7-10: Payment Gate
-    const paymentHeader = (req.headers['x-payment'] || req.headers['authorization']) as string | undefined;
+    const paymentHeader = (
+      req.headers['payment-signature'] ||
+      req.headers['x-payment'] ||
+      req.headers['authorization']
+    ) as string | undefined;
 
     const reqHeaderPaymentRef = req.headers['x-payment-reference'] as string | undefined;
 
     if (!paymentHeader) {
-      // Return HTTP 402 Payment Required with requirement
+      // Server-authoritative pricing (ignores client-provided amount)
       const { requirement, payment } = await paymentService.createPaymentRequirement({
         projectId: agent.projectId,
         requesterUserId: actorUserId,
         agentId,
-        action: `capability.execute:${capability}`,
-        amount: (req.body?.amount as string) || PAYMENT_CONFIG.DEFAULT_ATOMIC_AMOUNT,
+        action: 'capability.execute',
+        amount: PAYMENT_CONFIG.DEFAULT_ATOMIC_AMOUNT,
         asset: PAYMENT_CONFIG.USDC_TOKEN_ID,
         network: PAYMENT_CONFIG.NETWORK,
       });
 
-      res.setHeader('X-Payment-Requirement', JSON.stringify(requirement));
+      const encodedHeader = x402Service.encodeRequirementHeader(requirement);
+      res.setHeader('X-Payment-Requirement', encodedHeader);
       res.status(402).json({
         success: false,
         error: 'Payment Required',
@@ -143,7 +148,7 @@ export const executePaidCapability = async (
     // Process & Settle Payment
     const requirement = x402Service.generateRequirement({
       paymentReference: reqHeaderPaymentRef,
-      amount: (req.body?.amount as string) || PAYMENT_CONFIG.DEFAULT_ATOMIC_AMOUNT,
+      amount: PAYMENT_CONFIG.DEFAULT_ATOMIC_AMOUNT,
       asset: PAYMENT_CONFIG.USDC_TOKEN_ID,
       network: PAYMENT_CONFIG.NETWORK,
       receiver: PAYMENT_CONFIG.RECEIVER_ADDRESS,
