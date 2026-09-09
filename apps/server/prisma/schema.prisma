@@ -84,8 +84,13 @@ model Agent {
   name      String
   provider  String
   status    AgentStatus @default(OFFLINE)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+
+  ensName       String?
+  ensAddress    String?
+  ensVerifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   owner                User                 @relation("UserOwnedAgents", fields: [ownerId], references: [id], onDelete: Restrict)

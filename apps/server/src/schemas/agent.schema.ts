@@ -5,6 +5,14 @@ export const createAgentSchema = z.object({
   ownerId: z.string().trim().min(1, 'Owner ID is required'),
   name: z.string().trim().min(1, 'Name is required').max(100, 'Name is too long'),
   provider: z.string().trim().min(1, 'Provider is required').max(50, 'Provider is too long'),
+  // Optional ENS identity — server independently resolves & verifies; never trusted from client.
+  ensName: z
+    .string()
+    .trim()
+    .min(1, 'ENS name cannot be empty')
+    .max(255, 'ENS name is too long')
+    .optional()
+    .nullable(),
 });
 
 export const updateAgentSchema = z
@@ -21,6 +29,14 @@ export const updateAgentSchema = z
         errorMap: () => ({ message: 'Status must be OFFLINE, ONLINE, or BUSY' }),
       })
       .optional(),
+    // null = explicit removal; string = attach/change; absent = no change
+    ensName: z
+      .string()
+      .trim()
+      .min(1, 'ENS name cannot be empty')
+      .max(255, 'ENS name is too long')
+      .optional()
+      .nullable(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one field must be provided for update',

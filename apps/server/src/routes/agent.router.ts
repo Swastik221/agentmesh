@@ -6,6 +6,7 @@ import {
   getAgent,
   updateAgent,
   deleteAgent,
+  getAgentIdentity,
 } from '../controllers/agent.controller.js';
 
 const router: Router = Router();
@@ -18,5 +19,8 @@ router.get('/projects/:projectId/agents', listProjectAgents);
 router.get('/agents/:agentId', getAgent);
 router.patch('/agents/:agentId', updateAgent);
 router.delete('/agents/:agentId', deleteAgent);
+
+// ENS Identity
+router.get('/agents/:agentId/identity', getAgentIdentity);
 
 export default router;
