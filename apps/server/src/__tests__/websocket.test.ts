@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import http from 'node:http';
 import { WebSocket } from 'ws';
-import request from 'supertest';
 import { createApp } from '../app.js';
 import { prisma } from '../lib/prisma.js';
 import {
@@ -15,6 +14,7 @@ import {
   parseAgentMeshMessage,
   AgentMeshMessageType,
 } from '@agentmesh/agent-protocol';
+import { sessionService } from '../auth/session.service.js';
 
 describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
   const app = createApp();
@@ -22,14 +22,20 @@ describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
   let wsServer: AgentMeshWebSocketServer;
   let serverPort: number;
 
-  const userWallet = '0xWSINFRA1111111111111111111111111111111';
+  const userWallet = '0xwsinfra1111111111111111111111111111111';
   let userId: string;
+  let sessionId: string;
   let project1Id: string;
   let project2Id: string;
 
-  const connectWs = (urlPath: string): Promise<WebSocket> => {
+  const connectWs = (urlPath: string, tokenOverride?: string): Promise<WebSocket> => {
     return new Promise((resolve, reject) => {
-      const client = new WebSocket(`ws://localhost:${serverPort}${urlPath}`);
+      const token = tokenOverride !== undefined ? tokenOverride : sessionId;
+      let fullPath = urlPath;
+      if (token) {
+        fullPath += (urlPath.includes('?') ? '&' : '?') + `token=${token}`;
+      }
+      const client = new WebSocket(`ws://localhost:${serverPort}${fullPath}`);
       client.on('open', () => resolve(client));
       client.on('error', (err) => reject(err));
     });
@@ -63,27 +69,49 @@ describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
     }
 
     // Create User
-    const userRes = await request(app).post('/users').send({
-      walletAddress: userWallet,
-      displayName: 'WebSocket Tester',
+    const user = await prisma.user.create({
+      data: {
+        walletAddress: userWallet,
+        displayName: 'WebSocket Tester',
+      },
     });
-    userId = userRes.body.id;
+    userId = user.id;
+
+    // Create Session
+    const session = await sessionService.createSession(userId);
+    sessionId = session.id;
 
     // Create Project 1
-    const p1Res = await request(app).post('/projects').send({
-      name: 'WS Project 1',
-      description: 'First test project for WS',
-      ownerId: userId,
+    const p1 = await prisma.project.create({
+      data: {
+        name: 'WS Project 1',
+        description: 'First test project for WS',
+        ownerId: userId,
+        members: {
+          create: {
+            userId,
+            role: 'OWNER',
+          },
+        },
+      },
     });
-    project1Id = p1Res.body.id;
+    project1Id = p1.id;
 
     // Create Project 2
-    const p2Res = await request(app).post('/projects').send({
-      name: 'WS Project 2',
-      description: 'Second test project for WS',
-      ownerId: userId,
+    const p2 = await prisma.project.create({
+      data: {
+        name: 'WS Project 2',
+        description: 'Second test project for WS',
+        ownerId: userId,
+        members: {
+          create: {
+            userId,
+            role: 'OWNER',
+          },
+        },
+      },
     });
-    project2Id = p2Res.body.id;
+    project2Id = p2.id;
 
     // Start test HTTP & WebSocket server
     server = http.createServer(app);
@@ -116,7 +144,7 @@ describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
   });
 
   describe('Connection Validation', () => {
-    it('should connect successfully with valid projectId query parameter', async () => {
+    it('should connect successfully with valid projectId query parameter and valid session', async () => {
       const ws = await connectWs(`/ws?projectId=${project1Id}`);
       expect(ws.readyState).toBe(WebSocket.OPEN);
 
@@ -139,6 +167,51 @@ describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
     });
   });
 
+  describe('WebSocket Session Authentication & Project Authorization Enforcement', () => {
+    it('should reject connection with 4001 status when session token is invalid or expired', async () => {
+      let closeEvent: { code: number; reason: string } | null = null;
+      await new Promise<void>((resolve) => {
+        const client = new WebSocket(`ws://localhost:${serverPort}/ws?projectId=${project1Id}&token=invalid-session-token`);
+        client.on('close', (code, reason) => {
+          closeEvent = { code, reason: reason.toString() };
+          resolve();
+        });
+        client.on('error', () => {});
+      });
+
+      const event1 = closeEvent as { code: number; reason: string } | null;
+      expect(event1).not.toBeNull();
+      expect(event1?.code).toBe(4001);
+    });
+
+    it('should reject connection with 4003 status when user is not a member of the project', async () => {
+      // Create User B and Session B (not a member of Project 1)
+      const userB = await prisma.user.create({
+        data: {
+          walletAddress: '0xwsunauthorizeduser11111111111111111111',
+          displayName: 'Unauthorized WS User',
+        },
+      });
+      const sessionB = await sessionService.createSession(userB.id);
+
+      let closeEvent: { code: number; reason: string } | null = null;
+      await new Promise<void>((resolve) => {
+        const client = new WebSocket(`ws://localhost:${serverPort}/ws?projectId=${project1Id}&token=${sessionB.id}`);
+        client.on('close', (code, reason) => {
+          closeEvent = { code, reason: reason.toString() };
+          resolve();
+        });
+        client.on('error', () => {});
+      });
+
+      const event2 = closeEvent as { code: number; reason: string } | null;
+      expect(event2).not.toBeNull();
+      expect(event2?.code).toBe(4003);
+
+      await prisma.user.delete({ where: { id: userB.id } }).catch(() => {});
+    });
+  });
+
   describe('Connection Manager & Project Rooms', () => {
     it('should register connection and remove it upon socket close', async () => {
       const ws = await connectWs(`/ws?projectId=${project1Id}`);
@@ -158,21 +231,31 @@ describe('PRD #6 WebSocket Infrastructure Integration Tests', () => {
       const wsP1 = await connectWs(`/ws?projectId=${project1Id}`);
       const wsP2 = await connectWs(`/ws?projectId=${project2Id}`);
 
-      const p1MsgPromise = waitForNextMessage(wsP1);
-      let p2ReceivedMsg = false;
-      wsP2.on('message', () => {
-        p2ReceivedMsg = true;
+      // Allow initial connection snapshots to settle
+      await new Promise((r) => setTimeout(r, 100));
+
+      let p2ReceivedTargetMsg = false;
+      wsP2.on('message', (data) => {
+        try {
+          const parsed = JSON.parse(data.toString());
+          if (parsed.type === 'test_event') {
+            p2ReceivedTargetMsg = true;
+          }
+        } catch {
+          // Ignore
+        }
       });
 
+      const p1MsgPromise = waitForNextMessage(wsP1);
       const testPayload = { type: 'test_event', payload: { data: 'hello p1' } };
       connectionManager.broadcastToProject(project1Id, testPayload);
 
       const receivedMsg = await p1MsgPromise;
       expect(receivedMsg).toEqual(testPayload);
 
-      // Small delay to verify P2 did not receive message
+      // Small delay to verify P2 did not receive target message
       await new Promise((r) => setTimeout(r, 100));
-      expect(p2ReceivedMsg).toBe(false);
+      expect(p2ReceivedTargetMsg).toBe(false);
 
       wsP1.close();
       wsP2.close();

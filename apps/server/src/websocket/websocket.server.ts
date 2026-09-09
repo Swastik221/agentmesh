@@ -234,75 +234,96 @@ export class AgentMeshWebSocketServer {
     const clientTypeParam = parsedUrl.searchParams.get('clientType');
     const isUserClient = Boolean((tokenParam && tokenParam.trim() !== '') || clientTypeParam === 'user');
 
-    if (isUserClient && httpSessionId) {
+    if (isUserClient) {
+      if (!httpSessionId) {
+        logger.warn(
+          `[WebSocket] Unauthenticated user connection attempt to project ${projectId}`,
+        );
+        this.sendError(ws, 'UNAUTHORIZED', 'Authentication required. No session provided.');
+        ws.close(4001, 'Unauthorized');
+        connectionManager.removeConnection(metadata.connectionId);
+        return;
+      }
+
+      let session;
       try {
-        const session = await sessionService.validateSession(httpSessionId);
-        if (session && session.userId) {
-          const project = await prisma.project.findUnique({
-            where: { id: projectId },
-            include: { members: true },
-          });
-
-          const isOwner = project?.ownerId === session.userId;
-          const isMember = project?.members.some((m) => m.userId === session.userId);
-
-          if (!isOwner && !isMember) {
-            logger.warn(
-              `[WebSocket] Access denied for user ${session.userId} to project ${projectId}`,
-            );
-            this.sendError(ws, 'FORBIDDEN', 'User is not a member of this workspace');
-            ws.close(4003, 'Forbidden');
-            connectionManager.removeConnection(metadata.connectionId);
-            return;
-          }
-
-          metadata.userId = session.userId;
-          metadata.authenticated = true;
-
-          // Send bounded workspace snapshot
-          if (project) {
-            await this.sendWorkspaceSnapshot(metadata, project);
-          }
-
-          // Broadcast user ONLINE presence if this is user's first connection
-          if (
-            connectionManager.getActiveUserConnectionsCount(projectId, session.userId) === 1
-          ) {
-            const presenceMsg = createWorkspacePresenceChangedMessage(
-              {
-                projectId,
-                senderId: 'server',
-              },
-              {
-                entityType: 'user',
-                entityId: session.userId,
-                status: 'ONLINE',
-                metadata: {
-                  displayName: session.user.displayName,
-                  walletAddress: session.user.walletAddress,
-                },
-              },
-            );
-            connectionManager.broadcastToProjectUsers(
-              projectId,
-              presenceMsg as unknown as WebSocketMessage,
-              metadata.connectionId,
-            );
-            await deltaSequencerService.recordAndBroadcastDelta(projectId, [
-              {
-                entity: 'presence',
-                entityId: session.userId,
-                operation: 'updated',
-                fields: { entityType: 'user', status: 'ONLINE' },
-              },
-            ]);
-          }
-        }
+        session = await sessionService.validateSession(httpSessionId);
       } catch (err) {
-        logger.info(
-          `[WebSocket] Session validation for connection ${metadata.connectionId}:`,
+        logger.warn(
+          `[WebSocket] Invalid or expired session for connection ${metadata.connectionId}:`,
           err,
         );
+        this.sendError(ws, 'UNAUTHORIZED', 'Invalid or expired authentication session');
+        ws.close(4001, 'Unauthorized');
+        connectionManager.removeConnection(metadata.connectionId);
+        return;
+      }
+
+      if (!session || !session.userId) {
+        this.sendError(ws, 'UNAUTHORIZED', 'Invalid or expired authentication session');
+        ws.close(4001, 'Unauthorized');
+        connectionManager.removeConnection(metadata.connectionId);
+        return;
+      }
+
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        include: { members: true },
+      });
+
+      const isOwner = project?.ownerId === session.userId;
+      const isMember = project?.members.some((m) => m.userId === session.userId);
+
+      if (!isOwner && !isMember) {
+        logger.warn(
+          `[WebSocket] Access denied for user ${session.userId} to project ${projectId}`,
+        );
+        this.sendError(ws, 'FORBIDDEN', 'User is not a member of this workspace');
+        ws.close(4003, 'Forbidden');
+        connectionManager.removeConnection(metadata.connectionId);
+        return;
+      }
+
+      metadata.userId = session.userId;
+      metadata.authenticated = true;
+
+      // Send bounded workspace snapshot
+      if (project) {
+        await this.sendWorkspaceSnapshot(metadata, project);
+      }
+
+      // Broadcast user ONLINE presence if this is user's first connection
+      if (
+        connectionManager.getActiveUserConnectionsCount(projectId, session.userId) === 1
+      ) {
+        const presenceMsg = createWorkspacePresenceChangedMessage(
+          {
+            projectId,
+            senderId: 'server',
+          },
+          {
+            entityType: 'user',
+            entityId: session.userId,
+            status: 'ONLINE',
+            metadata: {
+              displayName: session.user.displayName,
+              walletAddress: session.user.walletAddress,
+            },
+          },
+        );
+        connectionManager.broadcastToProjectUsers(
+          projectId,
+          presenceMsg as unknown as WebSocketMessage,
+          metadata.connectionId,
+        );
+        await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+          {
+            entity: 'presence',
+            entityId: session.userId,
+            operation: 'updated',
+            fields: { entityType: 'user', status: 'ONLINE' },
+          },
+        ]);
       }
     }
   }

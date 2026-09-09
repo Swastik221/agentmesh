@@ -1,14 +1,34 @@
 import { ProjectMember, ProjectRole } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { AddMemberInput, UpdateMemberRoleInput } from '../schemas/member.schema.js';
-import { ConflictError, NotFoundError } from '../errors/app-error.js';
+import { ConflictError, NotFoundError, ForbiddenError } from '../errors/app-error.js';
 
 export class MemberService {
-  async addMember(projectId: string, data: AddMemberInput): Promise<ProjectMember> {
-    const project = await prisma.project.findUnique({ where: { id: projectId } });
+  async verifyProjectMembership(projectId: string, userId: string): Promise<void> {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+    });
+
     if (!project) {
       throw new NotFoundError(`Project with ID '${projectId}' not found`);
     }
+
+    const membership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId,
+        },
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenError('User is not a member of this project');
+    }
+  }
+
+  async addMember(projectId: string, actorUserId: string, data: AddMemberInput): Promise<ProjectMember> {
+    await this.verifyProjectMembership(projectId, actorUserId);
 
     const user = await prisma.user.findUnique({ where: { id: data.userId } });
     if (!user) {
@@ -37,11 +57,8 @@ export class MemberService {
     });
   }
 
-  async getProjectMembers(projectId: string) {
-    const project = await prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) {
-      throw new NotFoundError(`Project with ID '${projectId}' not found`);
-    }
+  async getProjectMembers(projectId: string, actorUserId: string) {
+    await this.verifyProjectMembership(projectId, actorUserId);
 
     const members = await prisma.projectMember.findMany({
       where: { projectId },
@@ -62,8 +79,11 @@ export class MemberService {
   async updateMemberRole(
     projectId: string,
     userId: string,
+    actorUserId: string,
     data: UpdateMemberRoleInput,
   ): Promise<ProjectMember> {
+    await this.verifyProjectMembership(projectId, actorUserId);
+
     return await prisma.$transaction(async (tx) => {
       // Row-level lock on the project to ensure concurrency-safe OWNER invariant enforcement
       const projects = await tx.$queryRaw<{ id: string }[]>`
@@ -118,7 +138,13 @@ export class MemberService {
     });
   }
 
-  async removeMember(projectId: string, userId: string): Promise<{ message: string }> {
+  async removeMember(
+    projectId: string,
+    userId: string,
+    actorUserId: string,
+  ): Promise<{ message: string }> {
+    await this.verifyProjectMembership(projectId, actorUserId);
+
     return await prisma.$transaction(async (tx) => {
       // Row-level lock on the project to ensure concurrency-safe OWNER invariant enforcement
       const projects = await tx.$queryRaw<{ id: string }[]>`

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireAuth } from '../auth/auth.middleware.js';
 import {
   createAgent,
   listProjectAgents,
@@ -8,6 +9,8 @@ import {
 } from '../controllers/agent.controller.js';
 
 const router: Router = Router();
+
+router.use(requireAuth);
 
 // Agent Endpoints
 router.post('/projects/:projectId/agents', createAgent);
