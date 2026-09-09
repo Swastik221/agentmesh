@@ -256,7 +256,7 @@ describe('PRD Execution -> Live Status vertical slice', () => {
     wsAgent.send(JSON.stringify(handshakeMsg));
     await waitForMessage(wsAgent, (m) => m.type === AgentMeshMessageType.AGENT_HANDSHAKE_ACCEPTED);
 
-    let executionId: string | null = null;
+    let executionId: string | undefined = undefined;
     const taskRequestReceived = new Promise<void>((resolve) => {
       wsAgent.on('message', (data) => {
         const msg = JSON.parse(data.toString()) as Record<string, unknown>;

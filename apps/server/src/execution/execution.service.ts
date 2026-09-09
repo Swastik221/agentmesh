@@ -118,39 +118,53 @@ export class ExecutionService {
   }
 
   private async syncAgentStatus(agentId: string): Promise<void> {
-    const activeExecutionsCount = await prisma.taskExecution.count({
-      where: {
-        agentId,
-        status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
-      },
-    });
-
-    if (activeExecutionsCount === 0) {
-      await prisma.agent.update({
+    try {
+      const agent = await prisma.agent.findUnique({
         where: { id: agentId },
-        data: { status: 'ONLINE' },
+        select: { id: true, status: true },
       });
+      if (!agent) return;
 
-      // Post-update re-check to guarantee zero race condition where an execution
-      // became active (QUEUED or RUNNING) concurrently during the ONLINE update window.
-      const recheckActiveCount = await prisma.taskExecution.count({
+      const activeExecutionsCount = await prisma.taskExecution.count({
         where: {
           agentId,
           status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
         },
       });
 
-      if (recheckActiveCount > 0) {
-        await prisma.agent.update({
-          where: { id: agentId },
-          data: { status: 'BUSY' },
+      if (activeExecutionsCount === 0) {
+        if (agent.status === 'BUSY') {
+          await prisma.agent.update({
+            where: { id: agentId },
+            data: { status: 'ONLINE' },
+          });
+        }
+
+        // Post-update re-check to guarantee zero race condition where an execution
+        // became active (QUEUED or RUNNING) concurrently during the ONLINE update window.
+        const recheckActiveCount = await prisma.taskExecution.count({
+          where: {
+            agentId,
+            status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
+          },
         });
+
+        if (recheckActiveCount > 0) {
+          await prisma.agent.update({
+            where: { id: agentId },
+            data: { status: 'BUSY' },
+          });
+        }
+      } else {
+        if (agent.status !== 'BUSY') {
+          await prisma.agent.update({
+            where: { id: agentId },
+            data: { status: 'BUSY' },
+          });
+        }
       }
-    } else {
-      await prisma.agent.update({
-        where: { id: agentId },
-        data: { status: 'BUSY' },
-      });
+    } catch (err) {
+      logger.warn(`[Execution] Failed to sync agent status for ${agentId}:`, err);
     }
   }
 
