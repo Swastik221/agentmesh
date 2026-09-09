@@ -22,6 +22,9 @@
     "@agentmesh/agent-protocol": "workspace:*",
     "@agentmesh/shared": "workspace:*",
     "@prisma/client": "^6.4.0",
+    "@x402/core": "^2.25.0",
+    "@x402/express": "^2.25.0",
+    "@x402/hedera": "^2.25.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -34,7 +37,6 @@
   "devDependencies": {
     "@agentmesh/cli": "workspace:*",
     "@agentmesh/config": "workspace:*",
-
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
