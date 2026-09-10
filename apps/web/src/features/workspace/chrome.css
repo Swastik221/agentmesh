@@ -515,6 +515,55 @@ body .app-shell .mesh-dock-item:focus-visible::after {
   opacity: 1;
 }
 
+/* ------------------------------------------------------- connecting nodes */
+/* A handle is a 9px dot, which is a small thing to aim at. The dot stays that
+   size because the board should not be covered in targets, but each one gets
+   a transparent 26px pad around it, so the grab is forgiving even though the
+   drawing is not. Pointer events live on the pad. */
+body .app-shell .product-canvas .react-flow__handle::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+}
+
+/* Resting, the dots sit back. Approaching a card brings its own dots up so it
+   is obvious where a wire can start, and the whole board lights up while a
+   connection is actually being dragged so every landing spot is visible. */
+body .app-shell .product-canvas .react-flow__handle {
+  opacity: 0.45;
+  /* Above the card's own content. On nodes whose body runs to the edge, such
+     as the task board's rows or a note's text area, that content painted over
+     the handle and a wire could not be started from that side at all. */
+  z-index: 6;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+body .app-shell .product-canvas .react-flow__node:hover .react-flow__handle,
+body .app-shell .product-canvas .react-flow__node.selected .react-flow__handle,
+body .app-shell .product-canvas.is-connecting .react-flow__handle {
+  opacity: 1;
+}
+
+body .app-shell .product-canvas .react-flow__handle:hover {
+  transform: scale(1.5);
+}
+
+/* Whatever card the pointer is over during a drag reads as the drop target,
+   which is honest now that releasing anywhere on a card connects to it. */
+body .app-shell .product-canvas.is-connecting .react-flow__node:hover .product-node {
+  border-color: var(--chrome-accent);
+  box-shadow:
+    0 0 0 2px rgb(23 126 137 / 35%),
+    var(--canvas-shadow);
+}
+
+body .app-shell .product-canvas .react-flow__connectionline path {
+  stroke-dasharray: 6 4;
+}
+
 /* --------------------------------------------------- canvas context bar */
 /* The bar above the board is a toolbar, not board content, so it joins the
    floating layer: same card stock, same blur, same soft shadow as the dock
