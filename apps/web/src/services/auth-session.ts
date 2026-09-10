@@ -13,7 +13,6 @@ export interface SiweNonceResponse {
 }
 
 export interface SiweVerifyResponse {
-  ok: boolean;
   user: User;
 }
 
@@ -36,6 +35,9 @@ export class AuthSessionService {
 
   public async fetchNonce(): Promise<string> {
     const res = await apiClient.get<SiweNonceResponse>('/auth/nonce');
+    if (!res || !res.nonce) {
+      throw new Error('SIWE_NONCE_FAILED: Invalid nonce response from server');
+    }
     return res.nonce;
   }
 
@@ -44,8 +46,8 @@ export class AuthSessionService {
       message,
       signature,
     });
-    if (!res.ok || !res.user) {
-      throw new Error('SIWE verification failed');
+    if (!res || !res.user) {
+      throw new Error('SIWE_VERIFICATION_FAILED: Backend did not return user object');
     }
     this.currentUser = res.user;
     return res.user;
@@ -53,13 +55,13 @@ export class AuthSessionService {
 
   public async fetchSession(): Promise<AuthMeResponse> {
     try {
-      const res = await apiClient.get<AuthMeResponse>('/auth/me');
-      if (res.authenticated && res.user) {
+      const res = await apiClient.get<{ user: User }>('/auth/me');
+      if (res && res.user) {
         this.currentUser = res.user;
-      } else {
-        this.currentUser = null;
+        return { authenticated: true, user: res.user };
       }
-      return res;
+      this.currentUser = null;
+      return { authenticated: false, user: null };
     } catch {
       this.currentUser = null;
       return { authenticated: false, user: null };

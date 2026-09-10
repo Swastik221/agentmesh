@@ -8,8 +8,9 @@
 
 export interface User {
   id: string;
-  email: string;
+  email?: string;
   displayName: string;
+  walletAddress?: string;
   avatarUrl?: string;
   createdAt: string;
 }
