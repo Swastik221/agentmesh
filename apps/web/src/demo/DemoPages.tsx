@@ -5,6 +5,8 @@ import { DEMO_PROFILES, PRIMARY_WORKSPACE } from './demo.fixtures';
 import { navigate } from './navigation';
 import { useDemo } from './DemoProvider';
 import type { DemoProfileId } from './demo.types';
+import { getAppMode } from '../config/env';
+import { useProjects } from '../hooks/useProjects';
 import './demo.css';
 import './auth.css';
 
@@ -47,6 +49,35 @@ export function OnboardingPage() {
 }
 
 export function WorkspacesPage() {
+  // Live Mode shows the signed-in user's real projects; Demo Mode is unchanged.
+  return getAppMode() === 'live' ? <LiveProjectsPage /> : <DemoWorkspacesPage />;
+}
+
+function LiveProjectsPage() {
+  const { projects, loading, error, refetch, createProject } = useProjects();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const create = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setBusy(true);
+    setFormError('');
+    try {
+      const name = String(new FormData(e.currentTarget).get('name') ?? '').trim();
+      const project = await createProject({ name });
+      setCreateOpen(false);
+      navigate(`/workspace/${project.id}`);
+    } catch (reason) {
+      // Surface the real server validation message, not an invented one.
+      setFormError(reason instanceof Error ? reason.message : 'Unable to create project.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <div className="demo-page"><DemoHeader/><main className="workspaces"><header><div><span>YOUR PROJECTS</span><h1>Choose where your agents coordinate.</h1></div><div><button className="demo-primary" onClick={() => { setCreateOpen(!createOpen); setFormError(''); }}><Plus/> Create project</button></div></header>{createOpen && <div className="workspace-inline-form"><form onSubmit={create}><label>Project name<input name="name" required autoFocus defaultValue=""/></label><button className="demo-primary" disabled={busy}>{busy ? 'Creating…' : 'Create and open'}</button></form>{formError && <p role="alert">{formError}</p>}</div>}<section className="workspace-list"><div className="workspace-list__label">YOUR PROJECTS</div>{loading ? <p role="status">Loading your projects…</p> : error ? <div className="workspace-error" role="alert"><p>{error}</p><button className="demo-secondary" onClick={() => void refetch()}><RotateCcw size={14}/> Retry</button></div> : projects.length === 0 ? <p className="workspace-empty">No projects yet. Create your first one to bring your agents together.</p> : projects.map((project) => <article key={project.id}><div className="workspace-symbol"><Hexagon/></div><div><span>{(project.role ?? 'member').toUpperCase()}</span><h2>{project.name}</h2><p>{project.description || project.id}</p></div><button className="workspace-open" onClick={() => navigate(`/workspace/${project.id}`)}>Open project <ArrowRight/></button></article>)}</section></main></div>;
+}
+
+function DemoWorkspacesPage() {
   const { state, addWorkspace, reset } = useDemo(); const [createOpen, setCreateOpen] = useState(false); const [joinOpen, setJoinOpen] = useState(false); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const create = async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); setBusy(true); const workspace = await demoGateways.workspace.create(String(new FormData(e.currentTarget).get('name'))); addWorkspace(workspace); setBusy(false); navigate(`/workspace/${workspace.id}`); };
   const join = async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); setBusy(true); try { const workspace = await demoGateways.workspace.join(String(new FormData(e.currentTarget).get('code'))); addWorkspace(workspace); navigate(`/workspace/${workspace.id}`); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to join.'); } finally { setBusy(false); } };
