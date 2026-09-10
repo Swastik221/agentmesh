@@ -1,23 +1,19 @@
 import { TerminalAdapter, TerminalSession } from '../types';
 import { apiClient } from '../../services/api-client';
 
+export class LiveTerminalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LiveTerminalError';
+  }
+}
+
 export const liveTerminalAdapter: TerminalAdapter = {
   async createSession(agentId: string): Promise<TerminalSession> {
     try {
-      const res = await apiClient.post<TerminalSession>('/terminal/sessions', { agentId });
-      return res;
+      return await apiClient.post<TerminalSession>('/terminal/sessions', { agentId });
     } catch {
-      return {
-        sessionId: `term_live_${agentId}_${Date.now()}`,
-        agentId,
-        history: [
-          {
-            id: 'h_1',
-            kind: 'output',
-            text: `AgentMesh Terminal connected to live execution context for ${agentId}.`,
-          },
-        ],
-      };
+      throw new LiveTerminalError(`Live interactive terminal session creation for agent ${agentId} is not supported or backend endpoint unavailable.`);
     }
   },
 
@@ -31,17 +27,13 @@ export const liveTerminalAdapter: TerminalAdapter = {
     payload?: string;
   }> {
     try {
-      const res = await apiClient.post<{
+      return await apiClient.post<{
         output: string[];
         action?: 'connect' | 'status' | 'tasks' | 'claim' | 'publish' | 'approval' | 'clear' | 'unknown';
         payload?: string;
       }>('/terminal/execute', { sessionId, command, workspaceId: context?.workspaceId });
-      return res;
     } catch {
-      return {
-        output: [`$ ${command}`, `Executing in live context: ${command}`],
-        action: 'status',
-      };
+      throw new LiveTerminalError(`Live command execution ('${command}') is not supported or backend execution endpoint unavailable.`);
     }
   },
 };

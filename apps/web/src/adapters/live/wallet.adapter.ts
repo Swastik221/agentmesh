@@ -1,33 +1,54 @@
 import { WalletAdapter, WalletIdentity, ENSIdentity } from '../types';
 import { apiClient } from '../../services/api-client';
 
+export class LiveWalletError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LiveWalletError';
+  }
+}
+
 export const liveWalletAdapter: WalletAdapter = {
   async connectWallet(provider: WalletIdentity['provider'] = 'metamask'): Promise<WalletIdentity> {
-    if (typeof window !== 'undefined' && (window as unknown as { ethereum?: { request: (args: { method: string }) => Promise<string[]> } }).ethereum) {
-      try {
-        const ethereum = (window as unknown as { ethereum: { request: (args: { method: string }) => Promise<string[]> } }).ethereum;
-        const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-        const address = accounts[0] || '0x0000000000000000000000000000000000000000';
-        return {
-          address,
-          truncatedAddress: `${address.slice(0, 6)}...${address.slice(-4)}`,
-          provider,
-          connected: true,
-          chainId: 296, // Hedera Testnet EVM Chain ID
-        };
-      } catch {
-        // Fallback to demo identity if user cancels or provider rejects
-      }
+    if (typeof window === 'undefined' || !(window as unknown as { ethereum?: { request: (args: { method: string }) => Promise<unknown> } }).ethereum) {
+      throw new LiveWalletError('No injected wallet provider (window.ethereum) detected in browser.');
     }
 
-    const fallbackAddress = '0x402a...9185';
-    return {
-      address: '0x402a77777777777777777777777777779185802',
-      truncatedAddress: fallbackAddress,
-      provider: 'demo',
-      connected: true,
-      chainId: 296,
-    };
+    const ethereum = (window as unknown as { ethereum: { request: (args: { method: string }) => Promise<unknown> } }).ethereum;
+
+    try {
+      const accounts = (await ethereum.request({ method: 'eth_requestAccounts' })) as string[];
+      if (!accounts || accounts.length === 0 || !accounts[0]) {
+        throw new LiveWalletError('Wallet connected but returned no active accounts.');
+      }
+
+      const address = accounts[0];
+      let chainIdNum = 1;
+
+      try {
+        const hexChainId = (await ethereum.request({ method: 'eth_chainId' })) as string;
+        if (hexChainId && typeof hexChainId === 'string') {
+          chainIdNum = parseInt(hexChainId, 16) || 1;
+        }
+      } catch {
+        // Fallback chain ID parsing failure
+      }
+
+      return {
+        address,
+        truncatedAddress: `${address.slice(0, 6)}...${address.slice(-4)}`,
+        provider,
+        connected: true,
+        chainId: chainIdNum,
+      };
+    } catch (err) {
+      if (err instanceof LiveWalletError) {
+        throw err;
+      }
+      throw new LiveWalletError(
+        err instanceof Error ? `Wallet connection rejected: ${err.message}` : 'Wallet connection rejected by user.'
+      );
+    }
   },
 
   async resolveEns(address: string): Promise<ENSIdentity> {
@@ -36,21 +57,18 @@ export const liveWalletAdapter: WalletAdapter = {
       return res;
     } catch {
       return {
-        ens: address.endsWith('.eth') ? address : 'developer.eth',
+        ens: address,
         address,
-        resolved: true,
+        resolved: false,
       };
     }
   },
 
-  async signApproval(approvalId: string, _action: string, _spendThreshold?: string): Promise<{ signature: string; txHash: string }> {
-    return {
-      signature: `0x_live_sig_${approvalId}_${Date.now()}`,
-      txHash: `0x_live_tx_${Date.now()}`,
-    };
+  async signApproval(_approvalId: string, _action: string, _spendThreshold?: string): Promise<{ signature: string; txHash: string }> {
+    throw new LiveWalletError('Live approval signing is not implemented yet in Live Mode.');
   },
 
   async disconnect(): Promise<void> {
-    // Teardown wallet state
+    // Teardown wallet state connection
   },
 };

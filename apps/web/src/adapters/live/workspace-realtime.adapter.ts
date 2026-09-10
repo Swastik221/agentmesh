@@ -5,19 +5,7 @@ import { apiClient } from '../../services/api-client';
 export const liveWorkspaceRealtimeAdapter: WorkspaceRealtimeAdapter = {
   async joinWorkspace(workspaceId: string, _user: User): Promise<Workspace> {
     wsClient.connect(workspaceId);
-    try {
-      const res = await apiClient.get<Workspace>(`/projects/${encodeURIComponent(workspaceId)}`);
-      return res;
-    } catch {
-      return {
-        id: workspaceId,
-        name: 'Live AgentMesh Workspace',
-        inviteCode: 'LIVE-2026',
-        memberCount: 2,
-        agentCount: 2,
-        online: true,
-      };
-    }
+    return await apiClient.get<Workspace>(`/projects/${encodeURIComponent(workspaceId)}`);
   },
 
   publishCursor(workspaceId: string, cursor: Cursor): void {

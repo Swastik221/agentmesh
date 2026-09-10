@@ -1,29 +1,24 @@
 import { AuthAdapter, User } from '../types';
 import { authSessionService } from '../../services/auth-session';
 
+export class LiveAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LiveAuthError';
+  }
+}
+
 export const liveAuthAdapter: AuthAdapter = {
-  async login(credentials: { email: string; password?: string; remember?: boolean }): Promise<User> {
-    // Session login check or fallback user lookup
+  async login(_credentials: { email: string; password?: string; remember?: boolean }): Promise<User> {
     const session = await authSessionService.fetchSession();
-    if (session.user) {
+    if (session.authenticated && session.user) {
       return session.user;
     }
-
-    return {
-      id: 'usr_live_' + Date.now(),
-      email: credentials.email,
-      displayName: credentials.email.split('@')[0] || 'Live Developer',
-      createdAt: new Date().toISOString(),
-    };
+    throw new LiveAuthError('No active SIWE authentication session found. Please connect your wallet and complete SIWE authentication.');
   },
 
-  async signup(details: { displayName: string; email: string; password?: string }): Promise<User> {
-    return {
-      id: 'usr_live_' + Date.now(),
-      email: details.email,
-      displayName: details.displayName,
-      createdAt: new Date().toISOString(),
-    };
+  async signup(_details: { displayName: string; email: string; password?: string }): Promise<User> {
+    throw new LiveAuthError('Email/password signup is not supported in Live Mode. AgentMesh uses SIWE (Sign-In with Ethereum) wallet authentication.');
   },
 
   async logout(): Promise<void> {
