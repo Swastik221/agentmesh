@@ -62,7 +62,7 @@ async function scrollScene(selector, progress) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const [start, end] = await section.evaluate((root) => [
       Number(root.dataset.scrollStart),
-      Number(root.dataset.scrollEnd),
+      Number(root.dataset.motionEnd || root.dataset.scrollEnd),
     ]);
     await page.evaluate((y) => scrollTo(0, y), start + (end - start) * progress);
     await settle();
@@ -80,6 +80,7 @@ async function introFrame() {
     burst: root.querySelector('.intro-burst').style.opacity,
     headline: getComputedStyle(root.querySelector('.intro-headline')).opacity,
     coder: root.style.getPropertyValue('--intro-coder'),
+    cardOpacity: getComputedStyle(root.querySelector('.intro-agent')).opacity,
     card: root.querySelector('.intro-agent').style.transform,
     header: getComputedStyle(document.querySelector('.landing-header')).visibility,
   }));
@@ -108,14 +109,35 @@ try {
   assert.equal(await page.locator('.landing img').count(), 0, 'all classical paintings removed');
   assert.equal(await page.locator('.landing .react-flow').count(), 1, 'only one workspace canvas');
   assert.equal(await page.locator('.canvas-demo').count(), 0, 'duplicate lower demo removed');
+  const openingOrder = await page.evaluate(() => ({
+    heroTop: Math.round(document.querySelector('#top').getBoundingClientRect().top),
+    heroHeight: Math.round(document.querySelector('#top').getBoundingClientRect().height),
+    animationTop: Math.round(document.querySelector('.mesh-intro').getBoundingClientRect().top),
+    contentCenter: Math.round(
+      document.querySelector('#top .hero-copy').getBoundingClientRect().top +
+        document.querySelector('#top .hero-copy').getBoundingClientRect().height / 2,
+    ),
+    viewportCenter: Math.round(innerHeight / 2),
+  }));
+  assert.equal(openingOrder.heroTop, 0, 'headline owns the first viewport');
+  assert.ok(
+    openingOrder.animationTop >= openingOrder.heroHeight - 1,
+    'connection animation starts one page below the headline',
+  );
+  assert.match(await page.locator('#top').innerText(), /Your agents\. One team\./);
+  assert.ok(
+    Math.abs(openingOrder.contentCenter - openingOrder.viewportCenter) <= 2,
+    'hero content is vertically centered as one group',
+  );
+  await page.screenshot({ path: `${output}/opening-hero.png` });
   const introScrollScreens = await page.locator('.mesh-intro').evaluate((root) => {
     const start = Number(root.dataset.scrollStart);
     const end = Number(root.dataset.scrollEnd);
     return (end - start) / innerHeight;
   });
   assert.ok(
-    introScrollScreens >= 3.19 && introScrollScreens <= 3.21,
-    'the opening no longer consumes an idle first viewport of scroll',
+    introScrollScreens >= 5.19 && introScrollScreens <= 5.21,
+    'the opening includes the original motion plus a two-viewport completed hold',
   );
   const intro = [];
   for (const [name, p] of [
@@ -131,7 +153,7 @@ try {
   }
   assert.ok(Number(intro[0].wire) > 0.999, 'wire starts visually undrawn');
   assert.equal(intro[0].headline, '0');
-  assert.equal(intro[0].header, 'hidden');
+  assert.equal(intro[0].header, 'visible');
   await scrollScene('.mesh-intro', 0.03);
   const firstMotion = await introFrame();
   assert.equal(firstMotion.stage, 'reaching');
@@ -144,21 +166,58 @@ try {
   assert.equal(intro[2].burst, '0');
   assert.ok(Number(intro[3].burst) > 0);
   assert.equal(intro[3].headline, '0');
+  await scrollScene('.mesh-intro', 0.88);
+  const cleanHandoff = await introFrame();
+  assert.ok(Number(cleanHandoff.coder) < 0.001, 'coder clears before the result appears');
+  assert.ok(
+    Number(cleanHandoff.cardOpacity) < 0.001,
+    'agent cards clear before the result appears',
+  );
+  assert.equal(cleanHandoff.headline, '0', 'result starts from a clean handoff frame');
+  assert.ok(Number(cleanHandoff.burst) > 0, 'connection glow bridges the two scenes');
+  await page.screenshot({ path: `${output}/opening-clean-handoff.png` });
+  await scrollScene('.mesh-intro', 0.94);
+  const resultHandoff = await introFrame();
+  assert.equal(resultHandoff.coder, '0');
+  assert.equal(resultHandoff.cardOpacity, '0');
+  assert.ok(Number(resultHandoff.headline) > 0, 'result reveals after the previous scene clears');
+  await page.screenshot({ path: `${output}/opening-result-handoff.png` });
   assert.equal(intro[4].coder, '0');
   assert.equal(intro[4].headline, '1');
   assert.equal(intro[4].header, 'visible');
+  assert.match(
+    await page.locator('.connection-outcome').innerText(),
+    /payment-api\.json[\s\S]*Two independent coding agents/,
+  );
+  await scrollScene('.mesh-intro', 1);
   assert.ok(
     await page
       .locator('#workspace')
       .evaluate((node) => node.getBoundingClientRect().top >= innerHeight - 1),
     'canvas follows the completed headline',
   );
+  const completedFrame = await introFrame();
+  await page.locator('.mesh-intro').evaluate((root) => {
+    scrollTo(0, Number(root.dataset.motionEnd) + innerHeight * 1.5);
+  });
+  await settle();
+  assert.deepEqual(await introFrame(), completedFrame, 'completed result holds for two scrolls');
+  await page.locator('.mesh-intro').evaluate((root) => {
+    scrollTo(0, Number(root.dataset.scrollEnd) + innerHeight * 0.25);
+  });
+  await settle();
+  assert.ok(
+    await page
+      .locator('#workspace')
+      .evaluate((node) => node.getBoundingClientRect().top < innerHeight),
+    'the next page moves in after the two-scroll hold',
+  );
   await scrollScene('.mesh-intro', 0.35);
   assert.deepEqual(await introFrame(), intro[1]);
   await page.waitForTimeout(300);
   assert.deepEqual(await introFrame(), intro[1]);
   console.log(
-    'Opening: moving agents, arms, wires, embers, burst, headline order, exact reversal and hold passed.',
+    'Opening: hero order, moving agents, wires, generated workspace result and reversal passed.',
   );
   // The shared canvas plays itself once when it comes into view, so it is
   // watched over time rather than scrubbed. Its own page, because by this point

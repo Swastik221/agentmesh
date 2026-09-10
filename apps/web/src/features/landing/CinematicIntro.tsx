@@ -2,13 +2,100 @@ import { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { FlatCoder, poseCoder } from './FlatCoder';
-import { HeroWorkshop, MiniAgent } from './HeroWorkshop';
+import { MiniAgent } from './HeroWorkshop';
 import './cinematic.css';
 
 gsap.registerPlugin(ScrollTrigger);
 
 type Box = { x: number; y: number; width: number; height: number };
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+
+function ConnectionOutcome() {
+  return (
+    <div className="connection-outcome">
+      <div className="connection-outcome__field" aria-hidden="true">
+        <svg viewBox="0 0 1440 820" preserveAspectRatio="xMidYMid slice">
+          <circle className="outcome-orbit outcome-orbit--outer" cx="720" cy="390" r="345" />
+          <circle className="outcome-orbit outcome-orbit--inner" cx="720" cy="390" r="235" />
+          <path className="outcome-trace" d="M0 390H290C390 390 410 270 515 270H630" />
+          <path
+            className="outcome-trace outcome-trace--reverse"
+            d="M1440 390H1150C1050 390 1030 510 925 510H810"
+          />
+          <path
+            className="outcome-trace outcome-trace--soft"
+            d="M130 680H430C560 680 555 570 650 570"
+          />
+          <path
+            className="outcome-trace outcome-trace--soft"
+            d="M1310 100H1010C880 100 885 210 790 210"
+          />
+        </svg>
+        <i className="outcome-pulse outcome-pulse--one" />
+        <i className="outcome-pulse outcome-pulse--two" />
+        <i className="outcome-pulse outcome-pulse--three" />
+        <i className="outcome-pulse outcome-pulse--four" />
+      </div>
+      <div className="connection-outcome__events connection-outcome__events--left">
+        <span>01</span>
+        <div>
+          <small>CAPABILITY_MATCH</small>
+          <b>Orion · frontend</b>
+        </div>
+        <span>02</span>
+        <div>
+          <small>TASK_CLAIMED</small>
+          <b>AM-114</b>
+        </div>
+      </div>
+      <div className="connection-outcome__events connection-outcome__events--right">
+        <span>03</span>
+        <div>
+          <small>DEPENDENCY_READY</small>
+          <b>Vega · backend</b>
+        </div>
+        <span>04</span>
+        <div>
+          <small>WORKSPACE_SYNCED</small>
+          <b>2 owners online</b>
+        </div>
+      </div>
+      <div className="connection-outcome__content">
+        <span className="eyebrow">CONNECTION COMPLETE / THE SHARED WORKSPACE</span>
+        <h2>
+          Two tools. <em>One shared plan.</em>
+        </h2>
+        <div className="connection-outcome__mesh" aria-hidden="true">
+          <div className="connection-outcome__agent connection-outcome__agent--orion">
+            <i /> Orion
+            <small>frontend</small>
+          </div>
+          <div className="connection-outcome__core">
+            <span>✳</span>
+            <small>MESH COORDINATOR</small>
+            <strong>Shared task board</strong>
+            <b>02 agents · synced</b>
+          </div>
+          <div className="connection-outcome__agent connection-outcome__agent--vega">
+            <i /> Vega
+            <small>backend</small>
+          </div>
+          <svg viewBox="0 0 720 180">
+            <path d="M205 90C255 90 267 90 310 90" />
+            <path d="M515 90C465 90 453 90 410 90" />
+          </svg>
+        </div>
+        <div className="connection-outcome__artifact">
+          <span>ARTIFACT_PUBLISHED</span>
+          <strong>payment-api.json</strong>
+          <small>Vega → shared workspace → Orion</small>
+        </div>
+        <p>Two independent coding agents now share one coordinated source of work.</p>
+        <a href="/canvas">Open the live canvas ↗</a>
+      </div>
+    </div>
+  );
+}
 
 export function CinematicIntro() {
   const ref = useRef<HTMLElement>(null);
@@ -209,6 +296,9 @@ export function CinematicIntro() {
           cards: 1,
           wires: 1,
         });
+        const motionScreens = innerWidth < 700 ? 2.4 : 3.2;
+        const holdScreens = 2;
+        const holdDuration = (100 * holdScreens) / motionScreens;
         const timeline = gsap.timeline({
           defaults: { ease: 'none' },
           onUpdate: paint,
@@ -216,17 +306,18 @@ export function CinematicIntro() {
             id: 'agentmesh-intro',
             trigger: root,
             start: 'top top',
-            end: () => `+=${innerHeight * (innerWidth < 700 ? 2.4 : 3.2)}`,
+            end: () => `+=${innerHeight * (motionScreens + holdScreens)}`,
             pin: true,
-            // Keep the camera fluid while letting the first wheel movement
-            // visibly pull both agent workspaces toward the connection.
-            scrub: 0.55,
+            // Smooth uneven wheel and trackpad updates into one continuous
+            // camera move without taking control of the page's native scroll.
+            scrub: 0.72,
             invalidateOnRefresh: true,
             anticipatePin: 1,
             onRefreshInit: measure,
             onRefresh: (self) => {
               root.dataset.scrollStart = String(self.start);
               root.dataset.scrollEnd = String(self.end);
+              root.dataset.motionEnd = String(self.start + innerHeight * motionScreens);
               paint();
             },
           },
@@ -244,12 +335,15 @@ export function CinematicIntro() {
           .to(state, { ember: 0, duration: 4 }, 64)
           .to(state, { burstScale: 1, duration: 22, ease: 'power2.out' }, 'workspace')
           .to(state, { burstOpacity: 0.9, duration: 5 }, 'workspace')
-          .to(state, { burstOpacity: 0, duration: 16 }, 74)
-          .to(state, { coder: 0, duration: 12 }, 80)
-          .to(state, { wires: 0, duration: 10 }, 78)
-          .to(state, { canvas: 1, reveal: 1, duration: 12, ease: 'power1.out' }, 88)
-          .to(state, { dock: 1, duration: 28, ease: 'power1.inOut' }, 68)
-          .to(state, { cards: 0, duration: 10 }, 82);
+          // Complete the old scene first. The glow remains as a short visual
+          // bridge, then the resolved workspace appears on a clean frame.
+          .to(state, { dock: 1, duration: 20, ease: 'power2.inOut' }, 68)
+          .to(state, { wires: 0, duration: 10, ease: 'power1.inOut' }, 76)
+          .to(state, { coder: 0, duration: 10, ease: 'power2.inOut' }, 78)
+          .to(state, { cards: 0, duration: 8, ease: 'power2.inOut' }, 80)
+          .to(state, { burstOpacity: 0, duration: 22, ease: 'power2.inOut' }, 76)
+          .to(state, { canvas: 1, reveal: 1, duration: 12, ease: 'power2.inOut' }, 88)
+          .to(state, { clock: 100, duration: holdDuration }, 100);
         paint();
       },
     );
@@ -277,12 +371,12 @@ export function CinematicIntro() {
   return (
     <section
       ref={ref}
-      id="top"
+      id="introduction"
       className="mesh-intro"
       aria-label="Two coding agents connect through a developer and form a shared workspace"
     >
       <div className="intro-headline">
-        <HeroWorkshop />
+        <ConnectionOutcome />
       </div>
       <div className="intro-coder">
         <FlatCoder />

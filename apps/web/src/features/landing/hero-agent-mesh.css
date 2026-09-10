@@ -1,0 +1,545 @@
+/* ==========================================================================
+   HeroAgentMesh — scroll-scrubbed hero.
+
+   Three developers connect their agents; terminal cards rise from their
+   laptops on glowing cables, drift to the centre, and wire into a mesh that
+   scales up into the product surface. All motion is driven by a GSAP timeline
+   that scrubs a plain state object; this file only describes the resting look
+   of each layer. transform/opacity are the only per-frame properties written.
+   ========================================================================== */
+
+.ham {
+  position: relative;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% -10%, #12182e 0%, transparent 55%),
+    linear-gradient(180deg, #0a0e1c 0%, #0d1220 100%);
+  color: var(--am-text-on-dark, #e8eef6);
+  isolation: isolate;
+  --ham-purple: var(--am-purple, #8b73e6);
+  --ham-cyan: var(--am-cyan, #2ba9c2);
+  --ham-teal: var(--am-teal, #249e91);
+  --ham-green: var(--am-green, #35c98b);
+  --ham-line: #24314a;
+}
+
+/* ------------------------------------------------------------- background */
+.ham-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ham-bg span {
+  position: absolute;
+  border: 1px solid rgb(122 142 178 / 8%);
+  background: rgb(122 142 178 / 3%);
+  border-radius: 10px;
+}
+.ham-bg span:nth-child(1) { width: 240px; height: 120px; left: -60px; top: 12%; transform: skewX(-12deg); }
+.ham-bg span:nth-child(2) { width: 200px; height: 90px; right: -40px; top: 8%; transform: skewX(10deg); }
+.ham-bg span:nth-child(3) { width: 320px; height: 60px; left: 6%; bottom: 6%; opacity: 0.6; }
+.ham-bg span:nth-child(4) { width: 160px; height: 160px; right: 10%; bottom: 4%; border-radius: 50%; }
+.ham-bg span:nth-child(5) { width: 90px; height: 90px; left: 44%; top: 2%; transform: rotate(45deg); }
+
+/* --------------------------------------------------------------- coders */
+.ham-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+/* The round shared table the three developers face. */
+.ham-table {
+  position: absolute;
+  left: 50%;
+  bottom: 6%;
+  width: min(58vw, 720px);
+  height: min(26vw, 320px);
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(60% 80% at 50% 30%, #223049 0%, #1a2740 60%, #141f34 100%);
+  box-shadow: 0 40px 90px rgb(0 0 0 / 45%), inset 0 2px 0 rgb(255 255 255 / 4%);
+}
+.ham-table::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -8%;
+  width: 22%;
+  height: 40%;
+  transform: translateX(-50%);
+  background: #10192b;
+  border-radius: 0 0 40% 40%;
+}
+
+.ham-coder {
+  position: absolute;
+  width: min(30vw, 340px);
+  will-change: transform, opacity;
+}
+.ham-coder .flat-coder {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+/* Top developer clears the 76px fixed header; all three sized to fit. */
+.ham-coder--top { left: 50%; top: 92px; transform: translateX(-50%); width: min(26vw, 290px); z-index: 3; }
+.ham-coder--left { left: 8%; bottom: 0; width: min(23vw, 268px); z-index: 2; }
+.ham-coder--right { right: 8%; bottom: 0; width: min(23vw, 268px); z-index: 2; }
+
+/* The command the developer types, floating just over the laptop. */
+.ham-coder__screen {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translateX(-50%);
+  width: 68%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--ham-line);
+  border-radius: 6px;
+  background: rgb(9 13 26 / 92%);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 40%);
+  font: 500 9px/1.5 var(--am-font-mono);
+  color: #8fa7c0;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+}
+.ham-coder__screen b { color: var(--ham-green); font-weight: 600; }
+.ham-coder__screen .ham-caret {
+  display: inline-block;
+  width: 6px;
+  color: var(--ham-cyan);
+}
+
+/* ---------------------------------------------------------------- cables */
+.ham-cables {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  pointer-events: none;
+  overflow: visible;
+}
+.ham-cable {
+  fill: none;
+  stroke: var(--ham-purple);
+  stroke-width: 2;
+  stroke-linecap: round;
+  /* pathLength=1 on the element, so a single dash fills it and dashoffset
+     1→0 draws the cable as the card rises. */
+  stroke-dasharray: 1;
+}
+.ham-cable--glow { stroke-width: 6; opacity: 0.4; filter: url(#ham-glow); }
+.ham-cable--purple { stroke: var(--ham-purple); }
+.ham-cable--teal { stroke: var(--ham-teal); }
+.ham-cable--cyan { stroke: var(--ham-cyan); }
+
+/* -------------------------------------------------- the mesh (cards+links) */
+.ham-mesh-group {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  transform-origin: 50% 46%;
+  will-change: transform;
+}
+
+.ham-links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 6;
+  pointer-events: none;
+  overflow: visible;
+}
+.ham-link {
+  fill: none;
+  stroke: rgb(159 180 210 / 85%);
+  stroke-width: 2;
+  stroke-dasharray: 1;
+}
+.ham-link--glow { stroke: var(--ham-cyan); stroke-width: 5; opacity: 0.4; filter: url(#ham-glow); }
+.ham-pulse { fill: #d7f4ff; filter: url(#ham-glow); }
+
+.ham-card {
+  position: absolute;
+  width: min(24vw, 288px);
+  will-change: transform, opacity;
+  transform-origin: 50% 100%;
+}
+.ham-card--top { left: 50%; top: 88px; margin-left: calc(min(24vw, 288px) / -2); }
+.ham-card--left { left: 4%; top: 42%; }
+.ham-card--right { right: 4%; top: 42%; }
+
+/* Terminal card body (mirrors the .mini-terminal look, self-contained). */
+.ham-card__inner {
+  border: 1px solid var(--ham-line);
+  border-radius: 9px;
+  background: #151a2c;
+  box-shadow: 0 18px 46px rgb(0 3 12 / 55%);
+  overflow: hidden;
+}
+.ham-card--purple .ham-card__inner { border-color: rgb(139 115 230 / 55%); }
+.ham-card--teal .ham-card__inner { border-color: rgb(36 158 145 / 55%); }
+.ham-card--cyan .ham-card__inner { border-color: rgb(43 169 194 / 55%); }
+
+.ham-card__owner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--ham-line);
+  font: 10px var(--am-font-mono);
+  color: #c7d0e0;
+}
+.ham-card__owner i {
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-size: 9px; font-style: normal;
+}
+.ham-card--purple .ham-card__owner i { color: var(--ham-purple); }
+.ham-card--teal .ham-card__owner i { color: var(--ham-teal); }
+.ham-card--cyan .ham-card__owner i { color: var(--ham-cyan); }
+.ham-card__owner small { color: var(--am-technical-label, #8fa0b6); font-size: 8px; }
+
+.ham-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font: 9px var(--am-font-mono);
+  border-bottom: 1px solid var(--ham-line);
+  color: var(--am-technical-label, #8fa0b6);
+}
+.ham-card__title strong { font-size: 13px; color: #f5f7fc; font-family: var(--am-font-sans); }
+.ham-card__title span { margin-right: auto; }
+.ham-card__title b {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--ham-green);
+  box-shadow: 0 0 8px var(--ham-green);
+}
+.ham-card__title em { font-style: normal; color: #9fb0c6; font-size: 9px; }
+
+.ham-card__code {
+  padding: 12px;
+  font: 10px/2 var(--am-font-mono);
+  min-height: 132px;
+}
+.ham-card__code p { margin: 0; white-space: nowrap; overflow: hidden; }
+.ham-card__code p[data-hidden='1'] { opacity: 0; }
+.ham-card__code p.is-cmd { color: var(--ham-purple); }
+.ham-card__code p.is-ok { color: var(--ham-green); }
+.ham-card__code p.is-branch { color: var(--ham-cyan); }
+.ham-card__code p.is-ready { color: #9fb0c6; }
+
+/* -------------------------------------------------------------- product */
+.ham-product {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+.ham-product__panel {
+  width: min(93vw, 1120px);
+  height: min(84vh, 680px);
+  border: 1px solid var(--ham-line);
+  border-radius: 16px;
+  background:
+    radial-gradient(90% 70% at 50% 0%, #16203a 0%, #0e1526 70%),
+    #0c1322;
+  box-shadow: 0 40px 120px rgb(0 0 0 / 55%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ham-product__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ham-line);
+  font: 600 11px var(--am-font-mono);
+  color: var(--am-technical-label, #8fa0b6);
+  letter-spacing: 0.12em;
+}
+.ham-product__bar i { width: 8px; height: 8px; border-radius: 50%; background: var(--ham-green); box-shadow: 0 0 10px var(--ham-green); }
+.ham-product__bar span { margin-left: auto; color: #c7d0e0; letter-spacing: 0; }
+.ham-product__stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(18px, 3.4vh, 38px);
+  padding: clamp(20px, 4vh, 44px) clamp(22px, 5vw, 60px);
+}
+
+/* --- intro headline fills the upper space ---------------------------------- */
+.ham-product__intro { text-align: center; }
+.ham-product__eyebrow {
+  display: inline-block;
+  font: 600 10px var(--am-font-mono);
+  letter-spacing: 0.2em;
+  color: var(--ham-green);
+}
+.ham-product__title {
+  margin: 10px 0 0;
+  font-family: var(--am-font-sans);
+  font-size: clamp(26px, 3.4vw, 42px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: #f5f7fc;
+}
+.ham-product__title em {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
+  color: #b6a7ff;
+}
+
+/* --- the connected mesh row ------------------------------------------------ */
+.ham-product__mesh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ham-product__node {
+  position: relative;
+  flex: 1 1 0;
+  border: 1px solid var(--ham-line);
+  border-radius: 10px;
+  background: #131a2d;
+  padding: 16px;
+  font: 11px var(--am-font-mono);
+}
+.ham-product__node strong { display: block; font-size: 15px; font-family: var(--am-font-sans); color: #f5f7fc; margin-bottom: 6px; }
+.ham-product__node span { color: var(--am-technical-label, #8fa0b6); }
+.ham-product__node--orion { border-color: rgb(139 115 230 / 45%); box-shadow: 0 0 0 1px rgb(139 115 230 / 12%), 0 10px 30px rgb(139 115 230 / 10%); }
+.ham-product__node--vega { border-color: rgb(36 158 145 / 45%); box-shadow: 0 0 0 1px rgb(36 158 145 / 12%), 0 10px 30px rgb(36 158 145 / 10%); }
+.ham-product__node--nova { border-color: rgb(43 169 194 / 45%); box-shadow: 0 0 0 1px rgb(43 169 194 / 12%), 0 10px 30px rgb(43 169 194 / 10%); }
+
+/* A small "· connected ·" status dot pulsing on each node. */
+.ham-product__node::after {
+  content: '';
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ham-green);
+  box-shadow: 0 0 0 0 rgb(53 201 139 / 55%);
+  animation: ham-node-live 2.4s ease-out infinite;
+}
+@keyframes ham-node-live {
+  0% { box-shadow: 0 0 0 0 rgb(53 201 139 / 45%); }
+  70%, 100% { box-shadow: 0 0 0 7px rgb(53 201 139 / 0%); }
+}
+
+/* -------- animated data-flow connectors between the three agents -------- */
+.ham-product__wire {
+  position: relative;
+  flex: 0 0 clamp(40px, 6vw, 110px);
+  height: 3px;
+  align-self: center;
+  border-radius: 3px;
+  /* A bright, always-visible accent edge with a sweeping highlight so the
+     connection reads clearly and stays visibly "live". */
+  background-repeat: no-repeat;
+  background-size: 45% 100%, 100% 100%;
+  animation: ham-wire-shimmer 1.9s linear infinite;
+}
+.ham-product__wire--a {
+  background-image:
+    linear-gradient(90deg, transparent, rgb(255 255 255 / 0.85), transparent),
+    linear-gradient(90deg, var(--ham-teal), var(--ham-purple));
+  box-shadow: 0 0 14px rgb(90 190 200 / 35%);
+}
+.ham-product__wire--b {
+  background-image:
+    linear-gradient(90deg, transparent, rgb(255 255 255 / 0.85), transparent),
+    linear-gradient(90deg, var(--ham-purple), var(--ham-cyan));
+  box-shadow: 0 0 14px rgb(120 130 230 / 32%);
+  animation-delay: 0.95s;
+}
+@keyframes ham-wire-shimmer {
+  0% { background-position: -60% 0, 0 0; }
+  100% { background-position: 160% 0, 0 0; }
+}
+/* Anchor dots where the wire meets each card, tinted to the two agents. */
+.ham-product__wire::before,
+.ham-product__wire::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.ham-product__wire::before { left: -3px; }
+.ham-product__wire::after { right: -3px; }
+.ham-product__wire--a::before { background: var(--ham-teal); box-shadow: 0 0 8px var(--ham-teal); }
+.ham-product__wire--a::after { background: var(--ham-purple); box-shadow: 0 0 8px var(--ham-purple); }
+.ham-product__wire--b::before { background: var(--ham-purple); box-shadow: 0 0 8px var(--ham-purple); }
+.ham-product__wire--b::after { background: var(--ham-cyan); box-shadow: 0 0 8px var(--ham-cyan); }
+
+/* The travelling data pulse. */
+.ham-product__wire i {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d7f4ff;
+  box-shadow: 0 0 10px 2px var(--ham-cyan);
+  transform: translate(-50%, -50%);
+  animation: ham-wire-flow 1.9s linear infinite;
+}
+.ham-product__wire--b i { animation-delay: 0.95s; }
+@keyframes ham-wire-flow {
+  0% { left: 0; opacity: 0; }
+  14% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
+.ham-product__wire-label {
+  position: absolute;
+  left: 50%;
+  bottom: 9px;
+  transform: translateX(-50%);
+  font: 600 8px var(--am-font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(140 160 195 / 70%);
+  white-space: nowrap;
+}
+/* --- detail row: live activity + workspace stats -------------------------- */
+.ham-product__detail {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: clamp(12px, 1.6vw, 20px);
+}
+.ham-product__card {
+  border: 1px solid var(--ham-line);
+  border-radius: 12px;
+  background: rgb(19 26 45 / 65%);
+  padding: 14px 16px;
+}
+.ham-product__label {
+  display: block;
+  margin-bottom: 12px;
+  font: 600 9px var(--am-font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--am-technical-label, #8fa0b6);
+}
+
+/* activity feed */
+.ham-product__feed ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
+.ham-ev {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font: 11px var(--am-font-mono);
+  color: #c7d0e0;
+  white-space: nowrap;
+}
+.ham-ev i { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; }
+.ham-ev code { font: inherit; letter-spacing: 0.02em; }
+.ham-ev b { color: #f5f7fc; font-weight: 600; }
+.ham-ev em { margin-left: auto; font-style: normal; font-size: 10px; color: var(--am-technical-label, #8fa0b6); }
+.ham-ev--claim i { background: var(--ham-green); box-shadow: 0 0 8px var(--ham-green); }
+.ham-ev--claim code { color: var(--ham-green); }
+.ham-ev--artifact i { background: var(--ham-purple); box-shadow: 0 0 8px var(--ham-purple); }
+.ham-ev--artifact code { color: #b6a7ff; }
+.ham-ev--approval i { background: #e0a23a; box-shadow: 0 0 8px #e0a23a; }
+.ham-ev--approval code { color: #e6b45a; }
+
+/* workspace stats */
+.ham-product__stats dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.ham-product__stats dl div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgb(140 160 195 / 12%);
+}
+.ham-product__stats dt { font: 10px var(--am-font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--am-technical-label, #8fa0b6); }
+.ham-product__stats dd { margin: 0; font: 600 16px var(--am-font-sans); color: #f5f7fc; }
+.ham-product__stats dd span { font: 9px var(--am-font-mono); font-weight: 500; color: var(--ham-cyan); text-transform: uppercase; letter-spacing: 0.08em; }
+
+.ham-product__cta {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-radius: 999px;
+  border: 1px solid rgb(53 201 139 / 55%);
+  color: var(--ham-green);
+  font: 600 12px var(--am-font-sans);
+  text-decoration: none;
+  background: rgb(53 201 139 / 8%);
+}
+
+/* Hint for the very first frame. */
+.ham-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  z-index: 7;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--am-technical-label, #8fa0b6);
+  font: 600 10px var(--am-font-mono);
+  letter-spacing: 0.14em;
+  will-change: opacity;
+}
+.ham-hint i {
+  width: 18px; height: 28px; border: 1px solid currentColor; border-radius: 9px; position: relative;
+}
+.ham-hint i::after {
+  content: ''; position: absolute; left: 50%; top: 5px; width: 3px; height: 6px;
+  border-radius: 2px; background: currentColor; transform: translateX(-50%);
+  animation: ham-scroll-dot 1.6s ease-in-out infinite;
+}
+@keyframes ham-scroll-dot { 0%,100% { opacity: 0.3; transform: translate(-50%, 0); } 50% { opacity: 1; transform: translate(-50%, 8px); } }
+
+/* --------------------------------------------------------- reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ham-hint,
+  .ham-hint i::after,
+  .ham-product__node::after,
+  .ham-product__wire,
+  .ham-product__wire i { animation: none; }
+  .ham-product__wire i { opacity: 1; left: 50%; }
+}
+
+@media (max-width: 720px) {
+  .ham-coder--top { width: 58vw; }
+  .ham-coder--left { width: 46vw; left: 2%; }
+  .ham-coder--right { width: 46vw; right: 2%; }
+  .ham-card { width: 66vw; }
+  .ham-card--top { margin-left: -33vw; }
+  .ham-card__code { min-height: 118px; font-size: 9px; }
+}

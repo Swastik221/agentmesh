@@ -10,15 +10,16 @@ import {
   X,
 } from 'lucide-react';
 import { artifact, chapters, faqs, features, repository } from './landing.content';
-import { MiniAgent } from './HeroWorkshop';
+import { HeroWorkshop, MiniAgent } from './HeroWorkshop';
 import './landing.css';
+import './cinematic.css';
 import './story-scenes.css';
 import './shared-canvas.css';
 import './coordination-scene.css';
 import { paintChapter, useScrollScene } from './useScrollScene';
 import { ChapterScene, sceneCopy, type SceneRole } from './ChapterScene';
 import { ScrollWorkspace } from './ScrollWorkspace';
-import { CinematicIntro } from './CinematicIntro';
+import { HeroAgentMesh } from './HeroAgentMesh';
 function Chapter({
   id,
   children,
@@ -212,7 +213,7 @@ export default function LandingPage() {
         <a className="header-github" href={repository}>
           <Code2 size={16} /> GitHub <ArrowUpRight size={14} />
         </a>
-        <a className="landing-button primary" href="/canvas">
+        <a className="landing-button primary" href="/signup">
           Explore demo <ArrowUpRight size={16} />
         </a>
       </header>
@@ -227,7 +228,8 @@ export default function LandingPage() {
         </a>
       </nav>
       <main id="main">
-        <CinematicIntro />
+        <HeroWorkshop />
+        <HeroAgentMesh />
         <ScrollWorkspace />
         <Chapter
           id="agents"
@@ -302,7 +304,7 @@ export default function LandingPage() {
                   <p>Vega publishes the schema. Orion receives it and continues.</p>
                 </li>
               </ol>
-              <a className="text-link" href="/canvas">
+              <a className="text-link" href="/login">
                 Watch the agents coordinate <ArrowUpRight size={17} />
               </a>
             </div>
@@ -516,7 +518,7 @@ export default function LandingPage() {
           </h2>
           <p>Turn separate coding sessions into coordinated work.</p>
           <div className="button-row">
-            <a className="landing-button primary" href="/canvas">
+            <a className="landing-button primary" href="/signup">
               Explore demo <ArrowUpRight size={18} />
             </a>
             <a className="text-link" href={repository}>

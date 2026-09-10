@@ -61,7 +61,7 @@ export function paintChapter(element: HTMLElement, reduced: boolean) {
   const target = reduced
     ? 1
     : clampProgress((innerHeight * 0.9 - bounds.top) / (innerHeight * 0.85));
-  const progress = ease(element, 'chapter', target, 6);
+  const progress = ease(element, 'chapter', target, 5.2);
   element.style.setProperty('--chapter-progress', String(progress));
   element.style.setProperty('--chapter-enter', String(segmentProgress(progress, 0, 0.55)));
   const cover = element.querySelector<HTMLElement>('.chapter-cover');
@@ -78,7 +78,7 @@ export function paintChapter(element: HTMLElement, reduced: boolean) {
         : clampProgress((innerHeight - coverBounds.top) / (innerHeight + coverBounds.height * 0.3));
     // The cover carries the chapter's whole illustrated beat, so it is damped a
     // little slower than the surrounding copy: the drawing trails the scroll.
-    const coverProgress = ease(cover, 'cover', coverTarget, 4.5);
+    const coverProgress = ease(cover, 'cover', coverTarget, 4.2);
     cover.style.setProperty('--cover-progress', String(coverProgress));
     const scene = cover.querySelector<HTMLElement>('.chapter-scene');
     if (scene) paintScene(scene, coverProgress);
@@ -95,7 +95,7 @@ export function paintChapter(element: HTMLElement, reduced: boolean) {
       : clampProgress(
           (innerHeight * 0.88 - rect.top) / Math.min(innerHeight * 0.7, rect.height + 100),
         );
-    const visualProgress = ease(visual, 'visual', visualTarget, 5.5);
+    const visualProgress = ease(visual, 'visual', visualTarget, 4.8);
     visual.style.setProperty('--visual-progress', String(visualProgress));
     visual.style.setProperty('--visual-first', String(segmentProgress(visualProgress, 0.05, 0.5)));
     visual.style.setProperty('--visual-second', String(segmentProgress(visualProgress, 0.4, 0.9)));
