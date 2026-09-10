@@ -66,6 +66,9 @@ describe('PRD #15 — Git / Worktree Integration', () => {
     await prisma.agent.deleteMany();
     await prisma.projectMember.deleteMany();
     await prisma.projectBrainEntry.deleteMany();
+    await prisma.payment.deleteMany();
+    await prisma.approvalRequest.deleteMany();
+    await prisma.policy.deleteMany();
     await prisma.project.deleteMany();
     await prisma.authSession.deleteMany();
     await prisma.user.deleteMany();
