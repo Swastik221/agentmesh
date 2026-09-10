@@ -5,7 +5,7 @@
  * and user state against backend auth routes (/auth/*).
  */
 
-import { apiClient } from './api-client';
+import { apiClient, ApiError } from './api-client';
 import { User, WalletIdentity } from '../adapters/types';
 
 export interface SiweNonceResponse {
@@ -13,13 +13,14 @@ export interface SiweNonceResponse {
 }
 
 export interface SiweVerifyResponse {
-  ok: boolean;
   user: User;
 }
 
 export interface AuthMeResponse {
   authenticated: boolean;
   user: User | null;
+  status: 'authenticated' | 'unauthenticated' | 'error';
+  error?: string;
 }
 
 export class AuthSessionService {
@@ -36,6 +37,9 @@ export class AuthSessionService {
 
   public async fetchNonce(): Promise<string> {
     const res = await apiClient.get<SiweNonceResponse>('/auth/nonce');
+    if (!res || !res.nonce) {
+      throw new Error('SIWE_NONCE_FAILED: Invalid nonce response from server');
+    }
     return res.nonce;
   }
 
@@ -44,8 +48,8 @@ export class AuthSessionService {
       message,
       signature,
     });
-    if (!res.ok || !res.user) {
-      throw new Error('SIWE verification failed');
+    if (!res || !res.user) {
+      throw new Error('SIWE_VERIFICATION_FAILED: Backend did not return user object');
     }
     this.currentUser = res.user;
     return res.user;
@@ -53,28 +57,27 @@ export class AuthSessionService {
 
   public async fetchSession(): Promise<AuthMeResponse> {
     try {
-      const res = await apiClient.get<AuthMeResponse>('/auth/me');
-      if (res.authenticated && res.user) {
+      const res = await apiClient.get<{ user: User }>('/auth/me');
+      if (res && res.user) {
         this.currentUser = res.user;
-      } else {
-        this.currentUser = null;
+        return { authenticated: true, user: res.user, status: 'authenticated' };
       }
-      return res;
-    } catch {
       this.currentUser = null;
-      return { authenticated: false, user: null };
+      return { authenticated: false, user: null, status: 'unauthenticated' };
+    } catch (err: unknown) {
+      this.currentUser = null;
+      if (err instanceof ApiError && err.status === 401) {
+        return { authenticated: false, user: null, status: 'unauthenticated' };
+      }
+      const errorMsg = err instanceof Error ? err.message : 'Backend authentication service error';
+      return { authenticated: false, user: null, status: 'error', error: errorMsg };
     }
   }
 
   public async logout(): Promise<void> {
-    try {
-      await apiClient.post('/auth/logout');
-    } catch {
-      // Ignore network errors during logout teardown
-    } finally {
-      this.currentUser = null;
-      this.currentWallet = null;
-    }
+    await apiClient.post('/auth/logout');
+    this.currentUser = null;
+    this.currentWallet = null;
   }
 
   public setWalletIdentity(identity: WalletIdentity | null): void {

@@ -1,12 +1,10 @@
-# INT-1 — Integration Foundation Architecture & Specification
+# INT-1 & INT-2 — Real Browser Wallet + SIWE Authentication Specification
 
 ## Objective
 
-The INT-1 Integration Foundation establishes the clean, typed architectural bridge between the AgentMesh React frontend (`apps/web`) and Express/Prisma/x402 backend (`apps/server`).
-
-This foundation ensures:
+The INT-2 Real Browser Wallet + SIWE Authentication layer establishes production-quality, end-to-end authentication for AgentMesh:
 1. **Isolated Demo Mode:** The judge experience remains 100% deterministic and standalone without requiring real network or database dependencies.
-2. **Truthful Live Mode:** Full REST API client, WebSocket manager, and SIWE session handler enable production multi-agent collaboration and real Hedera settlement.
+2. **Real Production Live Mode:** Integrates browser wallet providers (`window.ethereum`) with backend SIWE verification (`/auth/nonce`, `/auth/verify`, `/auth/me`, `/auth/logout`) and HTTP-only session cookies (`agentmesh_session`).
 
 ---
 
@@ -21,7 +19,6 @@ Application execution mode is controlled via `envConfig` (`apps/web/src/config/e
 ```ts
 import { setAppMode, getAppMode } from './config/env';
 
-// Inspect or set active mode at runtime:
 if (getAppMode() === 'demo') {
   console.log('Running in isolated Demo Mode');
 }
@@ -29,26 +26,33 @@ if (getAppMode() === 'demo') {
 
 ---
 
-## 2. Adapter Layer & Isolation Strategy
+## 2. Real SIWE Authentication Lifecycle Flow
 
-The adapter abstraction (`apps/web/src/adapters/`) decouples UI components from storage and communication implementations:
+The INT-2 SIWE browser authentication flow follows a strict server-authoritative lifecycle:
 
-- **`demoAdapters` (`apps/web/src/adapters/demo/`):**
-  Uses in-memory deterministic state, mocked workflow events, and instant local responses. Guaranteed non-blocking and isolated.
+```text
+Browser Wallet (window.ethereum)
+               ↓
+     1. connectWallet()
+               ↓
+    Detect account & chainId
+               ↓
+    2. fetchNonce() ────► GET /auth/nonce ───► Backend generates & stores nonce
+               ↓
+    Construct SIWE Message (domain, address, URI, chainId, nonce, issuedAt)
+               ↓
+    3. personal_sign ───► Wallet prompts user to sign
+               ↓
+    4. verifySiwe() ────► POST /auth/verify ──► Backend verifies SIWE & sets HTTP-only cookie
+               ↓
+    5. fetchSession() ──► GET /auth/me ─────► Backend returns authenticated user
+               ↓
+    6. Protected API ───► GET /projects ────► Backend accepts authenticated session cookie
+```
 
-- **`liveAdapters` (`apps/web/src/adapters/live/`):**
-  Integrates with real HTTP API endpoints (`/projects`, `/tasks`, `/agents`, `/artifacts`, `/approvals`) and WebSocket events.
-
-- **Dynamic Adapter Proxy (`apps/web/src/adapters/index.ts`):**
-  All UI components consume `adapters`. Calls automatically route to `liveAdapters` when `VITE_APP_MODE=live` or `demoAdapters` when `VITE_APP_MODE=demo`.
-
-### Strict Live Mode Truthfulness Rule (INT-1-C1)
-- **Demo Mode** may use deterministic fixtures.
-- **Live Mode** NEVER fabricates successful backend results (no fake users `usr_live_*`, no fake addresses `0x402a...`, no fake signatures `0x_live_sig_*`, no fake ENS `developer.eth`, no fake tasks `Claimed Task`, no fake file comments).
-- When a Live Mode operation succeeds, it returns the real backend result.
-- When a Live Mode operation fails or a backend endpoint is unavailable, it surfaces/throws a real, structured error.
-- Live Mode NEVER silently falls back to Demo Mode or invents fake success data.
-- Unsupported Live capabilities explicitly throw controlled `Error` instances indicating feature status.
+### Critical Identity Distinction
+- **Wallet Connected:** The browser extension (`window.ethereum`) has granted account access (`eth_requestAccounts`). The user's address is known to the client, but **no backend session exists yet**.
+- **Backend Authenticated:** The user signed a server-issued SIWE nonce, the backend verified the cryptographic signature, created a session in PostgreSQL, and issued an `agentmesh_session` HTTP-only cookie. Protected API requests (`/projects`, `/agents`, `/tasks`) are authorized.
 
 ---
 
@@ -57,14 +61,16 @@ The adapter abstraction (`apps/web/src/adapters/`) decouples UI components from 
 | Live capability | Frontend method | Backend route/protocol | Status |
 | :--- | :--- | :--- | :--- |
 | **Session** | `liveAuthAdapter.login/logout/getCurrentUser` | `GET /auth/me`, `POST /auth/logout` | REAL |
-| **Wallet connect** | `liveWalletAdapter.connectWallet` | Browser wallet provider (`window.ethereum`) | REAL/PARTIAL |
+| **Wallet connect** | `liveWalletAdapter.connectWallet` | Browser wallet provider (`window.ethereum`) | REAL |
+| **SIWE Authentication** | `authSessionService.verifySiwe` | `GET /auth/nonce`, `POST /auth/verify` | REAL |
 | **ENS** | `liveWalletAdapter.resolveEns` | `ensService` / viem reverse resolution | REAL/PARTIAL |
 | **Projects** | `liveWorkspaceRealtimeAdapter.joinWorkspace` | `GET /projects/:projectId` | REAL |
 | **Agents** | `liveAgentConnectionAdapter.getAvailableAgents` | `GET /projects/:projectId/agents` | REAL |
-| **Agent connect** | `liveAgentConnectionAdapter.connectAgent/disconnectAgent/announce` | None | UNSUPPORTED UNTIL LATER PRD |
+| **Agent connect** | `liveAgentConnectionAdapter.connectAgent/disconnectAgent/announce` | None | UNSUPPORTED UNTIL INT-3 |
 | **Tasks** | `liveTaskProtocolAdapter.getTasks` | `GET /projects/:projectId/tasks` | REAL |
-| **Task claim** | `liveTaskProtocolAdapter.submitPrd/claimTask/autoAssignTask` | None | UNSUPPORTED UNTIL LATER PRD |
+| **Task claim** | `liveTaskProtocolAdapter.submitPrd/claimTask/autoAssignTask` | None | UNSUPPORTED UNTIL INT-4 |
 | **Approvals** | `liveTaskProtocolAdapter.requestApproval/decideApproval` | `POST /approvals`, `POST /approvals/:id/approve`, `POST /approvals/:id/reject` | REAL/PARTIAL |
+| **Approval signing** | `liveWalletAdapter.signApproval` | None | UNSUPPORTED UNTIL INT-5 |
 | **Artifact creation** | `liveFileAdapter.publishArtifact` | `POST /projects/:projectId/tasks/:taskId/artifacts` | REAL |
 | **File browser** | `liveFileAdapter.getFiles/readFile` | None | UNSUPPORTED UNTIL LATER PRD |
 | **Terminal** | `liveTerminalAdapter.createSession/executeCommand` | None | UNSUPPORTED UNTIL LATER PRD |
@@ -79,12 +85,6 @@ The adapter abstraction (`apps/web/src/adapters/`) decouples UI components from 
 - Class `ApiClient` with typed `.get()`, `.post()`, `.put()`, `.patch()`, `.delete()`.
 - Automatically passes `credentials: 'include'` to preserve SIWE cookie sessions.
 - Throws structured `ApiError` instance containing `status`, `statusText`, `message`, and error payloads.
-
-### WebSocket Boundary (`apps/web/src/services/ws-client.ts`)
-- Class `WebSocketClient` for realtime project collaboration (`/ws?projectId=...`).
-- Built-in reconnection logic with exponential backoff.
-- Status event emitter (`CONNECTED`, `CONNECTING`, `DISCONNECTED`, `RECONNECTING`).
-- Pub/Sub typed message dispatcher.
 
 ### SIWE Auth Session (`apps/web/src/services/auth-session.ts`)
 - Manages Sign-In with Ethereum lifecycle via backend `/auth/*` endpoints:
