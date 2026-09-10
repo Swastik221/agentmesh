@@ -18,9 +18,15 @@ function AgentCard({
 }) {
   return (
     <g className={`coord-agent coord-agent--${side}`} transform={`translate(${x} 125)`}>
-      <rect width="220" height="108" rx="7" fill="#0d1117" stroke="#232c40" />
-      <path d="M0 34H220" stroke="#232c40" />
-      <circle cx="14" cy="17" r="3" fill="#3ddc97" />
+      <rect
+        width="220"
+        height="108"
+        rx="7"
+        fill="var(--am-ink-900)"
+        stroke="var(--am-border-dark)"
+      />
+      <path d="M0 34H220" stroke="var(--am-border-dark)" />
+      <circle cx="14" cy="17" r="3" fill="var(--am-green)" />
       <text x="25" y="21" className="coord-primary">
         {name}
       </text>
@@ -51,7 +57,12 @@ function AgentCard({
 function Cursor({ side, label }: { side: 'anand' | 'swastik'; label: string }) {
   return (
     <g className={`coord-cursor coord-cursor--${side}`}>
-      <path d="M2 2L19 14L11 17L7 25Z" fill="currentColor" stroke="#0a0e17" strokeWidth="2" />
+      <path
+        d="M2 2L19 14L11 17L7 25Z"
+        fill="currentColor"
+        stroke="var(--am-ink-950)"
+        strokeWidth="2"
+      />
       <rect x="17" y="-5" width="112" height="25" rx="4" fill="currentColor" />
       <text x="26" y="11" className="coord-cursor-label">
         {label}
@@ -75,7 +86,7 @@ function TaskRow({
 }) {
   return (
     <g transform={`translate(0 ${y})`}>
-      <path d="M0 0H360" stroke="#232c40" />
+      <path d="M0 0H360" stroke="var(--am-border-dark)" />
       <text x="13" y="18" className="coord-task-id">
         {id}
       </text>
@@ -156,8 +167,14 @@ export function CoordinationScene() {
       />
 
       <g className="coord-board" transform="translate(530 285)">
-        <rect width="360" height="207" rx="7" fill="#0d1117" stroke="#232c40" />
-        <path d="M0 42H360" stroke="#232c40" />
+        <rect
+          width="360"
+          height="207"
+          rx="7"
+          fill="var(--am-ink-900)"
+          stroke="var(--am-border-dark)"
+        />
+        <path d="M0 42H360" stroke="var(--am-border-dark)" />
         <text x="14" y="26" className="coord-primary">
           Shared task board
         </text>

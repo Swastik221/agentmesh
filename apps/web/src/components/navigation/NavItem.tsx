@@ -26,6 +26,8 @@ export function NavItem({ id, label, icon: Icon, active, reserved, onSelect }: N
       type="button"
       className={`app-nav${active ? ' app-nav--active' : ''}${reserved ? ' app-nav--reserved' : ''}`}
       aria-current={active ? 'page' : undefined}
+      /* Read by the rail's tooltip while it is collapsed to an icon. */
+      data-label={label}
       disabled={reserved}
       title={reserved ? `${label} — coming in a later pass` : label}
       onClick={() => onSelect(id)}

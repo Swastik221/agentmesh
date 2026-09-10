@@ -6,7 +6,10 @@ import {
   Globe,
   LayoutDashboard,
   ListChecks,
+  PanelLeftClose,
+  PanelLeftOpen,
   Terminal,
+  StickyNote,
 } from 'lucide-react';
 import { NavItem, type NavItemIconProps } from './NavItem';
 import { navItems } from '../../data/workspace';
@@ -20,10 +23,13 @@ const SECTION_ICONS: Record<SectionId, ComponentType<NavItemIconProps>> = {
   activity: Activity,
   terminal: Terminal,
   browser: Globe,
+  notes: StickyNote,
 };
 
 export interface SidebarProps {
   activeSection: SectionId;
+  collapsed: boolean;
+  onCollapse: () => void;
   onSelect: (section: SectionId) => void;
 }
 
@@ -31,7 +37,7 @@ export interface SidebarProps {
  * Left rail. Reserved sections stay visible so the eventual shape of the app
  * is legible, but they are disabled rather than silently inert.
  */
-export function Sidebar({ activeSection, onSelect }: SidebarProps) {
+export function Sidebar({ activeSection, collapsed, onCollapse, onSelect }: SidebarProps) {
   return (
     <nav className="app-sidebar" aria-label="Workspace sections">
       <ul className="app-sidebar__list">
@@ -48,6 +54,16 @@ export function Sidebar({ activeSection, onSelect }: SidebarProps) {
           </li>
         ))}
       </ul>
+      <button
+        type="button"
+        className="app-sidebar__toggle"
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        onClick={onCollapse}
+      >
+        {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+        <span>{collapsed ? 'Expand' : 'Collapse sidebar'}</span>
+      </button>
     </nav>
   );
 }

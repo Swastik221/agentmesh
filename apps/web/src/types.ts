@@ -2,7 +2,7 @@ import type { Node } from '@xyflow/react';
 
 /** Sections in the left rail. Terminal and Browser are reserved for a later pass. */
 export type SectionId =
-  'overview' | 'agents' | 'tasks' | 'files' | 'activity' | 'terminal' | 'browser';
+  'overview' | 'agents' | 'tasks' | 'files' | 'activity' | 'terminal' | 'browser' | 'notes';
 
 export interface NavItem {
   id: SectionId;

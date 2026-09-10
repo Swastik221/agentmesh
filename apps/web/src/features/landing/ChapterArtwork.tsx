@@ -32,11 +32,11 @@ export function ChapterArtwork({ chapter }: { chapter: string }) {
             className="chapter-art-wire"
             pathLength="1"
             d="M665 290C740 230 770 420 828 375"
-            stroke="#22d3ee"
+            stroke="var(--am-cyan)"
             strokeWidth="2"
           />
           <g className="chapter-art-front">
-            <path d="m708 365 57-33 60 34-57 34Z" fill="#eeece2" />
+            <path d="m708 365 57-33 60 34-57 34Z" fill="var(--am-canvas)" />
             <path d="m708 365 60 35v17l-60-35Z" fill="#839d93" />
             <path d="m768 400 57-34v17l-57 34Z" fill="#bdd2b9" />
             <circle cx="766" cy="364" r="8" stroke="#45616a" />
@@ -55,23 +55,28 @@ export function ChapterArtwork({ chapter }: { chapter: string }) {
             <path d="m807 49 178 102-47 29-131-75Z" fill="#d4d8c3" />
           </g>
           <g className="chapter-art-mid">
-            <path d="M744 220v259l139 79V298Z" fill="#203339" stroke="#f0b458" strokeWidth="2" />
             <path
-              d="m771 303 46-10 43 55v62c0 36-21 48-43 50-25-28-46-65-46-97Z"
-              stroke="#f0b458"
+              d="M744 220v259l139 79V298Z"
+              fill="#203339"
+              stroke="var(--am-amber)"
               strokeWidth="2"
             />
-            <path d="m802 366 14 22 24-16" stroke="#f0b458" strokeWidth="3" />
+            <path
+              d="m771 303 46-10 43 55v62c0 36-21 48-43 50-25-28-46-65-46-97Z"
+              stroke="var(--am-amber)"
+              strokeWidth="2"
+            />
+            <path d="m802 366 14 22 24-16" stroke="var(--am-amber)" strokeWidth="3" />
           </g>
           <path
             className="chapter-art-wire"
             pathLength="1"
             d="M503 435 622 367 744 437"
-            stroke="#f0b458"
+            stroke="var(--am-amber)"
             strokeWidth="2"
           />
           <g className="chapter-art-front">
-            <path d="m566 375 44-26 45 26-44 27Z" fill="#eeece2" />
+            <path d="m566 375 44-26 45 26-44 27Z" fill="var(--am-canvas)" />
             <path d="m566 375 45 27v26l-45-27Z" fill="#8f9c8a" />
             <path d="m611 402 44-27v26l-44 27Z" fill="#b8c4a7" />
           </g>
@@ -100,7 +105,7 @@ export function ChapterArtwork({ chapter }: { chapter: string }) {
             strokeWidth="2"
           />
           <g className="chapter-art-front">
-            <circle cx="557" cy="343" r="30" fill="#eeece2" stroke="#6b7f71" />
+            <circle cx="557" cy="343" r="30" fill="var(--am-canvas)" stroke="#6b7f71" />
             <circle cx="557" cy="334" r="8" stroke="#6b7f71" />
             <path d="M542 358c0-18 30-18 30 0" stroke="#6b7f71" />
           </g>

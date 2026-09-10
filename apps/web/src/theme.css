@@ -1,0 +1,47 @@
+:root {
+  --am-ink-950: #0b1220;
+  --am-ink-900: #111b2e;
+  --am-ink-800: #18253a;
+  --am-canvas: #f2f6f3;
+  --am-surface: #fbfdfc;
+  --am-surface-muted: #eaf1ed;
+
+  --am-border-dark: #2b3a52;
+  --am-border-light: #c5d2cc;
+  --am-text-on-dark: #e8eef6;
+  --am-text-primary: #17262d;
+  --am-text-secondary: #687a86;
+  --am-text-muted: #8d9ba6;
+  --am-technical-label: #8fa0b6;
+
+  --am-green: #35c98b;
+  --am-green-soft: #e1f5ec;
+  --am-cyan: #2ba9c2;
+  --am-cyan-soft: #dff3f6;
+  --am-purple: #8b73e6;
+  --am-purple-soft: #eeeafe;
+  --am-teal: #249e91;
+  --am-teal-soft: #def2ee;
+  --am-amber: #d99a32;
+  --am-amber-soft: #fff1d6;
+  --am-red: #d96262;
+  --am-red-soft: #fbe6e6;
+
+  --color-identity: var(--am-purple);
+  --color-connected: var(--am-green);
+  --color-data-flow: var(--am-cyan);
+  --color-pending: var(--am-amber);
+  --color-danger: var(--am-red);
+  --color-developer-one: var(--am-purple);
+  --color-developer-two: var(--am-teal);
+
+  --am-base: var(--am-ink-950);
+  --am-border: var(--am-border-dark);
+  --am-success: var(--am-green);
+  --am-flow: var(--am-cyan);
+  --am-warning: var(--am-amber);
+  --am-identity: var(--am-purple);
+  --am-window-close: var(--am-red);
+  --am-text: var(--am-text-on-dark);
+  --am-text-dim: var(--am-text-secondary);
+}

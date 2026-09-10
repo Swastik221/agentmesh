@@ -88,7 +88,7 @@ function CanvasWires({ wires }: { wires: Wire[] }) {
               d={path}
               pathLength="1"
               fill="none"
-              stroke="#22d3ee"
+              stroke="var(--am-cyan)"
               strokeWidth="2"
               strokeDasharray="1"
               strokeDashoffset={1 - wire.draw}
@@ -96,7 +96,7 @@ function CanvasWires({ wires }: { wires: Wire[] }) {
             <path
               className="canvas-edge-arrow"
               d={arrowHead(wire.to.x, wire.to.y, wire.to.side)}
-              fill="#22d3ee"
+              fill="var(--am-cyan)"
               opacity={wire.arrive}
             />
           </g>
@@ -352,7 +352,7 @@ function CanvasScene({ progress, beat }: { progress: number; beat: number }) {
         minZoom={0.2}
         maxZoom={2}
       >
-        <Background color="#232c40" gap={28} size={1} />
+        <Background color="var(--am-border-dark)" gap={28} size={1} />
         <ViewportPortal>
           <CanvasWires wires={wires} />
           {cursors.map(({ state, owner }, i) => (
@@ -374,14 +374,14 @@ function CanvasScene({ progress, beat }: { progress: number; beat: number }) {
                 <path
                   d="M2 2L20 15L11 17L7 25Z"
                   fill="currentColor"
-                  stroke="#0a0e17"
+                  stroke="var(--am-ink-950)"
                   strokeWidth="2"
                   opacity={1 - state.hold}
                 />
                 <path
                   d="M5 14V9Q5 6 8 9V5Q9 2 11 5V9Q13 5 15 8V11Q18 8 19 12V20L15 25H8L3 18Q1 14 5 14Z"
                   fill="currentColor"
-                  stroke="#0a0e17"
+                  stroke="var(--am-ink-950)"
                   strokeWidth="2"
                   opacity={state.hold}
                 />

@@ -1,3 +1,4 @@
+import type { UtilityFlowNode } from './UtilityNode';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import type {
   ApprovalRequest,
@@ -19,6 +20,7 @@ type ApprovalData = {
   onDecision: (decision: 'approved' | 'rejected') => void;
 } & Record<string, unknown>;
 export type ProductNode =
+  | UtilityFlowNode
   | Node<AgentData, 'productAgent'>
   | Node<TaskData, 'productTasks'>
   | Node<CoordinatorData, 'coordinator'>

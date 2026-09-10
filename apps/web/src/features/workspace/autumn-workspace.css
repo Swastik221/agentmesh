@@ -1,0 +1,1244 @@
+/* ==========================================================================
+   AgentMesh Light Autumn-Tech Design System
+   Matches landing page aesthetic with high contrast and readable canvas nodes.
+   ========================================================================== */
+
+:root {
+  --mesh-bg-app: #F6F4EC;
+  --mesh-bg-scenery-overlay: rgba(246, 244, 236, 0.42);
+  --mesh-bg-chrome: #EEF1E8;
+  --mesh-bg-card: #FFFDF7;
+  --mesh-bg-card-solid: #FFFDF7;
+  --mesh-bg-secondary: #F3F0E7;
+  
+  --mesh-text-main: #1E2B26;
+  --mesh-text-muted: #68746D;
+  --mesh-text-dim: #8D9993;
+  
+  --mesh-border-subtle: #D6D8C9;
+  --mesh-border-strong: #AEB8A8;
+  
+  --mesh-primary-green: #2F7D5C;
+  --mesh-soft-mint: #DDF4E8;
+  --mesh-flow-cyan: #177E89;
+  
+  --mesh-owner-anand: #8B6FE8;
+  --mesh-owner-anand-bg: #F3EFFF;
+  --mesh-owner-swastik: #36B37E;
+  --mesh-owner-swastik-bg: #EAF7EF;
+  
+  --mesh-coordinator-lime: #A8D95F;
+  --mesh-coordinator-bg: #F4F9E6;
+  --mesh-approval-amber: #D99A32;
+  --mesh-approval-bg: #FFF8EB;
+  --mesh-error-red: #C94F4F;
+  --mesh-error-bg: #FDF2F2;
+  --mesh-artifact-lavender: #E8E0FF;
+  --mesh-artifact-bg: #F8F5FF;
+
+  --mesh-shadow-node: 0 4px 20px rgba(30, 43, 38, 0.08), 0 1px 3px rgba(30, 43, 38, 0.05);
+  --mesh-shadow-float: 0 8px 30px rgba(30, 43, 38, 0.12), 0 2px 6px rgba(30, 43, 38, 0.06);
+  --mesh-shadow-selected: 0 0 0 2px var(--mesh-primary-green), 0 8px 24px rgba(47, 125, 92, 0.18);
+
+  --mesh-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mesh-font-mono: 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* ==========================================================================
+   Shell Overrides
+   ========================================================================== */
+.app-shell {
+  background-color: var(--mesh-bg-app);
+  color: var(--mesh-text-main);
+  font-family: var(--mesh-font-sans);
+}
+
+.app-header {
+  background-color: var(--mesh-bg-chrome);
+  border-bottom: 1px solid var(--mesh-border-subtle);
+  color: var(--mesh-text-main);
+}
+
+.app-sidebar {
+  background-color: var(--mesh-bg-chrome);
+  border-right: 1px solid var(--mesh-border-subtle);
+}
+
+.app-sidebar__item,
+.app-nav {
+  color: var(--mesh-text-muted);
+  border-left: 2px solid transparent;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.app-sidebar__item:hover,
+.app-nav:hover {
+  background-color: rgba(255, 253, 247, 0.6);
+  color: var(--mesh-text-main);
+}
+
+.app-sidebar__item.is-active,
+.app-nav.app-nav--active {
+  background-color: var(--mesh-bg-card);
+  color: var(--mesh-primary-green);
+  font-weight: 600;
+  border-left-color: var(--mesh-primary-green);
+  box-shadow: 0 1px 4px rgba(30, 43, 38, 0.04);
+}
+
+.app-status {
+  background-color: var(--mesh-bg-chrome);
+  border-top: 1px solid var(--mesh-border-subtle);
+  color: var(--mesh-text-muted);
+}
+
+/* ==========================================================================
+   Pixel Scenery & Falling Leaves
+   ========================================================================== */
+.mesh-scenery-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background-color: var(--mesh-bg-app);
+}
+
+.mesh-scenery-image {
+  position: absolute;
+  inset: 0;
+  background-image: url('/workspace/autumn-lake.png');
+  background-position: center bottom;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 1;
+  filter: saturate(1.15) contrast(1.05) brightness(1.03);
+  transform: translateZ(0);
+  image-rendering: auto;
+}
+
+.mesh-scenery-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(246, 244, 236, 0.18) 0%,
+    rgba(246, 244, 236, 0.30) 25%,
+    rgba(246, 244, 236, 0.48) 55%,
+    rgba(246, 244, 236, 0.62) 100%
+  );
+}
+
+.mesh-scenery-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(174, 184, 168, 0.5) 0.8px, transparent 0.8px);
+  background-size: 32px 32px;
+  opacity: 0.15;
+}
+
+/* Falling Maple Leaves Container */
+.falling-leaves-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.falling-leaf {
+  position: absolute;
+  top: -40px;
+  will-change: transform;
+  pointer-events: none;
+  animation-name: leaf-drift-down;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes leaf-drift-down {
+  0% {
+    transform: translate3d(var(--leaf-start-x, 0), -40px, 0) rotate(0deg) rotateY(0deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.92;
+  }
+  85% {
+    opacity: 0.92;
+  }
+  100% {
+    transform: translate3d(calc(var(--leaf-start-x, 0) + var(--leaf-drift-x, 80px)), calc(100vh + 60px), 0)
+      rotate(var(--leaf-rot-end, 360deg)) rotateY(180deg);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .falling-leaf {
+    display: none !important;
+  }
+}
+
+/* ==========================================================================
+   Canvas Nodes
+   ========================================================================== */
+.product-node {
+  background-color: var(--mesh-bg-card);
+  border: 1px solid var(--mesh-border-strong);
+  border-radius: 12px;
+  color: var(--mesh-text-main);
+  box-shadow: var(--mesh-shadow-node);
+  font-family: var(--mesh-font-sans);
+  position: relative;
+  transition: box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.product-node:hover {
+  box-shadow: var(--mesh-shadow-float);
+}
+
+.react-flow__node.selected .product-node {
+  box-shadow: var(--mesh-shadow-selected);
+  border-color: var(--mesh-primary-green);
+}
+
+/* Ports / Handles */
+.product-handle {
+  width: 9px !important;
+  height: 9px !important;
+  border-radius: 50% !important;
+  background-color: var(--mesh-bg-card) !important;
+  border: 2px solid var(--mesh-flow-cyan) !important;
+  transition: transform 0.15s ease, background-color 0.15s ease !important;
+}
+
+.product-handle:hover {
+  transform: scale(1.35);
+  background-color: var(--mesh-flow-cyan) !important;
+}
+
+/* Window dots */
+.product-window-dots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.product-window-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.product-window-dots i:nth-child(1) { background-color: #FF5F56; }
+.product-window-dots i:nth-child(2) { background-color: #FFBD2E; }
+.product-window-dots i:nth-child(3) { background-color: #27C93F; }
+
+/* Status badge pills */
+.product-status-pill {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.product-status-pill::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.product-status-pill--connected {
+  background-color: var(--mesh-soft-mint);
+  color: var(--mesh-primary-green);
+}
+.product-status-pill--connected::before {
+  background-color: var(--mesh-primary-green);
+}
+
+.product-status-pill--working {
+  background-color: #E6F4FF;
+  color: #096DD9;
+}
+.product-status-pill--working::before {
+  background-color: #1890FF;
+  animation: pulse-dot 1.2s infinite ease-in-out;
+}
+
+.product-status-pill--waiting {
+  background-color: var(--mesh-approval-bg);
+  color: var(--mesh-approval-amber);
+}
+.product-status-pill--waiting::before {
+  background-color: var(--mesh-approval-amber);
+}
+
+.product-status-pill--idle {
+  background-color: #F0F2EE;
+  color: var(--mesh-text-muted);
+}
+.product-status-pill--idle::before {
+  background-color: var(--mesh-text-muted);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* Owner-specific Agent styling */
+.product-agent--anand {
+  border-color: var(--mesh-owner-anand);
+}
+.product-agent--anand .product-agent__header {
+  background-color: var(--mesh-owner-anand-bg);
+  border-bottom: 1px solid rgba(139, 111, 232, 0.25);
+}
+.product-agent--anand .product-agent__owner-badge {
+  color: var(--mesh-owner-anand);
+  background-color: rgba(139, 111, 232, 0.12);
+}
+
+.product-agent--swastik {
+  border-color: var(--mesh-owner-swastik);
+}
+.product-agent--swastik .product-agent__header {
+  background-color: var(--mesh-owner-swastik-bg);
+  border-bottom: 1px solid rgba(54, 179, 126, 0.25);
+}
+.product-agent--swastik .product-agent__owner-badge {
+  color: var(--mesh-owner-swastik);
+  background-color: rgba(54, 179, 126, 0.12);
+}
+
+/* Agent Node Content */
+.product-agent {
+  width: 320px;
+  overflow: hidden;
+}
+
+.product-agent__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.product-agent__body {
+  padding: 12px;
+}
+
+.product-agent__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.product-agent__identity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.product-agent__identity-label {
+  color: var(--mesh-text-muted);
+}
+
+.product-agent__identity-value {
+  font-family: var(--mesh-font-mono);
+  font-weight: 500;
+  color: var(--mesh-text-main);
+}
+
+.product-agent__caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.product-agent__cap-pill {
+  font-size: 10px;
+  background-color: var(--mesh-bg-secondary);
+  border: 1px solid var(--mesh-border-subtle);
+  color: var(--mesh-text-main);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--mesh-font-mono);
+}
+
+.product-agent__terminal {
+  background-color: #172420;
+  color: #D6E8DE;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: var(--mesh-font-mono);
+  font-size: 10px;
+  line-height: 1.45;
+  max-height: 90px;
+  overflow-y: auto;
+}
+
+.product-agent__log-line {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.product-agent__log-prefix {
+  color: #7AA695;
+  user-select: none;
+}
+
+/* ==========================================================================
+   Coordinator Node
+   ========================================================================== */
+.product-coordinator {
+  width: 280px;
+  background-color: var(--mesh-coordinator-bg);
+  border-color: var(--mesh-coordinator-lime);
+  padding: 14px;
+}
+
+.product-coordinator__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.product-coordinator__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--mesh-text-main);
+}
+
+.product-coordinator__status {
+  background-color: #FFFDF7;
+  border: 1px solid var(--mesh-border-subtle);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--mesh-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.product-coordinator__btn {
+  width: 100%;
+  padding: 6px 10px;
+  background-color: var(--mesh-bg-card);
+  border: 1px solid var(--mesh-border-strong);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mesh-text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.product-coordinator__btn:hover {
+  background-color: #F1F4EB;
+  border-color: var(--mesh-primary-green);
+  color: var(--mesh-primary-green);
+}
+
+/* ==========================================================================
+   Task Board Node
+   ========================================================================== */
+.product-taskboard {
+  width: 380px;
+  overflow: hidden;
+}
+
+.product-taskboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background-color: var(--mesh-bg-secondary);
+  border-bottom: 1px solid var(--mesh-border-subtle);
+}
+
+.product-taskboard__header strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.product-taskboard__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.product-taskboard__item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--mesh-border-subtle);
+  background-color: var(--mesh-bg-card);
+  transition: background-color 0.15s ease;
+}
+
+.product-taskboard__item:last-child {
+  border-bottom: none;
+}
+
+.product-taskboard__item:hover {
+  background-color: #FAF8F2;
+}
+
+.product-taskboard__item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.product-taskboard__id {
+  font-family: var(--mesh-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mesh-flow-cyan);
+}
+
+.product-taskboard__item-title {
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--mesh-text-main);
+}
+
+.product-taskboard__item-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.product-taskboard__claim-btn {
+  background-color: var(--mesh-soft-mint);
+  border: 1px solid var(--mesh-primary-green);
+  color: var(--mesh-primary-green);
+  font-weight: 600;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.product-taskboard__claim-btn:hover {
+  background-color: var(--mesh-primary-green);
+  color: #FFFFFF;
+}
+
+.product-taskboard__countdown {
+  font-family: var(--mesh-font-mono);
+  color: var(--mesh-approval-amber);
+  font-size: 10px;
+}
+
+.product-taskboard__assigned {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--mesh-text-muted);
+}
+
+/* ==========================================================================
+   Human Approval Node
+   ========================================================================== */
+.product-approval {
+  width: 320px;
+  background-color: var(--mesh-approval-bg);
+  border-color: var(--mesh-approval-amber);
+  overflow: hidden;
+}
+
+.product-approval__header {
+  padding: 10px 14px;
+  background-color: rgba(217, 154, 50, 0.12);
+  border-bottom: 1px solid rgba(217, 154, 50, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8A5800;
+}
+
+.product-approval__body {
+  padding: 14px;
+}
+
+.product-approval__risk-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background-color: #FFECC8;
+  color: #B56E00;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.product-approval__action {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--mesh-text-main);
+}
+
+.product-approval__detail {
+  font-size: 11px;
+  color: var(--mesh-text-muted);
+  font-family: var(--mesh-font-mono);
+  margin-bottom: 8px;
+}
+
+.product-approval__authority {
+  font-size: 10px;
+  color: var(--mesh-text-muted);
+  font-style: italic;
+  margin-bottom: 12px;
+}
+
+.product-approval__buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.product-approval__btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.product-approval__btn--approve {
+  background-color: var(--mesh-primary-green);
+  border: 1px solid var(--mesh-primary-green);
+  color: #FFFFFF;
+}
+
+.product-approval__btn--approve:hover {
+  background-color: #246549;
+}
+
+.product-approval__btn--reject {
+  background-color: #FFFFFF;
+  border: 1px solid var(--mesh-border-strong);
+  color: var(--mesh-error-red);
+}
+
+.product-approval__btn--reject:hover {
+  background-color: var(--mesh-error-bg);
+  border-color: var(--mesh-error-red);
+}
+
+.product-approval__decision-badge {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.product-approval__decision-badge--approved {
+  background-color: var(--mesh-soft-mint);
+  color: var(--mesh-primary-green);
+  border: 1px solid var(--mesh-primary-green);
+}
+
+.product-approval__decision-badge--rejected {
+  background-color: var(--mesh-error-bg);
+  color: var(--mesh-error-red);
+  border: 1px solid var(--mesh-error-red);
+}
+
+/* ==========================================================================
+   Artifact Node
+   ========================================================================== */
+.product-artifact {
+  width: 290px;
+  background-color: var(--mesh-artifact-bg);
+  border-color: var(--mesh-artifact-lavender);
+  overflow: hidden;
+}
+
+.product-artifact__header {
+  padding: 10px 12px;
+  background-color: var(--mesh-artifact-lavender);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.product-artifact__body {
+  padding: 12px;
+  font-size: 11px;
+}
+
+.product-artifact__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.product-artifact__label {
+  color: var(--mesh-text-muted);
+}
+
+.product-artifact__val {
+  font-family: var(--mesh-font-mono);
+  color: var(--mesh-text-main);
+}
+
+/* ==========================================================================
+   Terminal Node
+   ========================================================================== */
+.product-terminal-node {
+  width: 420px;
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: #172420;
+  border-color: #2F4D41;
+  color: #D6E8DE;
+}
+
+.product-terminal-node__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: #111B18;
+  border-bottom: 1px solid #243831;
+  font-size: 11px;
+  font-family: var(--mesh-font-mono);
+}
+
+.product-terminal-node__body {
+  flex: 1;
+  padding: 10px 12px;
+  font-family: var(--mesh-font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-y: auto;
+}
+
+.product-terminal-node__input-form {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #111B18;
+  border-top: 1px solid #243831;
+  gap: 6px;
+}
+
+.product-terminal-node__prompt {
+  color: #55D688;
+  font-family: var(--mesh-font-mono);
+  font-size: 11px;
+}
+
+.product-terminal-node__input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #FFFFFF;
+  font-family: var(--mesh-font-mono);
+  font-size: 11px;
+}
+
+/* ==========================================================================
+   Browser Preview Node
+   ========================================================================== */
+.product-browser-node {
+  width: 440px;
+  height: 320px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--mesh-bg-card);
+}
+
+.product-browser-node__topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background-color: var(--mesh-bg-chrome);
+  border-bottom: 1px solid var(--mesh-border-subtle);
+}
+
+.product-browser-node__url-bar {
+  flex: 1;
+  background-color: var(--mesh-bg-card);
+  border: 1px solid var(--mesh-border-subtle);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: var(--mesh-font-mono);
+  font-size: 11px;
+  color: var(--mesh-text-muted);
+}
+
+.product-browser-node__tabs {
+  display: flex;
+  background-color: var(--mesh-bg-secondary);
+  border-bottom: 1px solid var(--mesh-border-subtle);
+  padding: 0 8px;
+}
+
+.product-browser-node__tab {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--mesh-text-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.product-browser-node__tab.is-active {
+  color: var(--mesh-primary-green);
+  border-bottom-color: var(--mesh-primary-green);
+  font-weight: 600;
+  background-color: var(--mesh-bg-card);
+}
+
+.product-browser-node__content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ==========================================================================
+   Notes Node
+   ========================================================================== */
+.product-note-node {
+  width: 260px;
+  height: 200px;
+  background-color: #FFFDF0;
+  border-color: #E2DAC2;
+  box-shadow: var(--mesh-shadow-node);
+  display: flex;
+  flex-direction: column;
+}
+
+.product-note-node__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px dashed #E2DAC2;
+  font-size: 11px;
+  font-weight: 600;
+  color: #796F53;
+}
+
+.product-note-node__textarea {
+  flex: 1;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 10px 12px;
+  font-family: var(--mesh-font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #3B3629;
+  resize: none;
+}
+
+/* ==========================================================================
+   File Explorer Node
+   ========================================================================== */
+.product-file-node {
+  width: 380px;
+  height: 290px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.product-file-node__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: var(--mesh-bg-chrome);
+  border-bottom: 1px solid var(--mesh-border-subtle);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.product-file-node__body {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  flex: 1;
+  overflow: hidden;
+}
+
+.product-file-node__tree {
+  border-right: 1px solid var(--mesh-border-subtle);
+  background-color: var(--mesh-bg-secondary);
+  padding: 8px 0;
+  overflow-y: auto;
+}
+
+.product-file-node__tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--mesh-text-muted);
+  user-select: none;
+}
+
+.product-file-node__tree-item:hover {
+  background-color: rgba(255, 253, 247, 0.7);
+  color: var(--mesh-text-main);
+}
+
+.product-file-node__tree-item.is-active {
+  background-color: var(--mesh-bg-card);
+  color: var(--mesh-primary-green);
+  font-weight: 600;
+}
+
+.product-file-node__preview {
+  padding: 10px;
+  overflow: auto;
+  font-family: var(--mesh-font-mono);
+  font-size: 10px;
+  line-height: 1.45;
+  background-color: var(--mesh-bg-card);
+  color: var(--mesh-text-main);
+  white-space: pre-wrap;
+}
+
+/* ==========================================================================
+   Custom Protocol Edges
+   ========================================================================== */
+.react-flow__edge-path {
+  stroke-width: 1.8px !important;
+}
+
+.mesh-edge-label {
+  font-family: var(--mesh-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(30, 43, 38, 0.08);
+  pointer-events: all;
+  user-select: none;
+}
+
+.mesh-edge-label--proposal {
+  background-color: #E8F7F9;
+  border: 1px solid var(--mesh-flow-cyan);
+  color: var(--mesh-flow-cyan);
+}
+
+.mesh-edge-label--claimed {
+  background-color: var(--mesh-soft-mint);
+  border: 1px solid var(--mesh-primary-green);
+  color: var(--mesh-primary-green);
+}
+
+.mesh-edge-label--dependency {
+  background-color: var(--mesh-owner-anand-bg);
+  border: 1px solid var(--mesh-owner-anand);
+  color: var(--mesh-owner-anand);
+}
+
+.mesh-edge-label--approval {
+  background-color: var(--mesh-approval-bg);
+  border: 1px solid var(--mesh-approval-amber);
+  color: var(--mesh-approval-amber);
+}
+
+/* ==========================================================================
+   Bottom Command Composer & Tool Dock
+   ========================================================================== */
+.mesh-canvas-controls {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 48px));
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.mesh-canvas-controls > * {
+  pointer-events: auto;
+}
+
+.mesh-command-composer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--mesh-bg-card);
+  border: 1px solid var(--mesh-border-strong);
+  border-radius: 14px;
+  padding: 8px 12px;
+  box-shadow: var(--mesh-shadow-float);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mesh-command-composer:focus-within {
+  border-color: var(--mesh-primary-green);
+  box-shadow: 0 0 0 3px rgba(47, 125, 92, 0.15), var(--mesh-shadow-float);
+}
+
+.mesh-command-composer input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--mesh-text-main);
+  font-family: var(--mesh-font-sans);
+  font-size: 13px;
+}
+
+.mesh-command-composer input::placeholder {
+  color: var(--mesh-text-dim);
+}
+
+.mesh-composer-btn {
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--mesh-text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.mesh-composer-btn:hover {
+  background-color: var(--mesh-bg-secondary);
+  color: var(--mesh-text-main);
+}
+
+.mesh-composer-btn--send {
+  background-color: var(--mesh-primary-green);
+  color: #FFFFFF;
+}
+
+.mesh-composer-btn--send:hover {
+  background-color: #246549;
+  color: #FFFFFF;
+}
+
+.mesh-tool-dock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background-color: rgba(238, 241, 232, 0.94);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--mesh-border-strong);
+  border-radius: 12px;
+  box-shadow: var(--mesh-shadow-node);
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.mesh-dock-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 44px;
+  border-radius: 8px;
+  background-color: var(--mesh-bg-card);
+  border: 1px solid var(--mesh-border-subtle);
+  color: var(--mesh-text-muted);
+  cursor: grab;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease, background-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.mesh-dock-item:active {
+  cursor: grabbing;
+}
+
+.mesh-dock-item:hover {
+  transform: translateY(-4px);
+  border-color: var(--mesh-primary-green);
+  color: var(--mesh-primary-green);
+  box-shadow: 0 4px 12px rgba(30, 43, 38, 0.08);
+}
+
+.mesh-dock-item span {
+  display: none;
+}
+
+/* Tool dock color accents */
+.mesh-dock-item--purple { color: var(--mesh-owner-anand); }
+.mesh-dock-item--purple:hover { border-color: var(--mesh-owner-anand); color: var(--mesh-owner-anand); }
+.mesh-dock-item--green { color: var(--mesh-owner-swastik); }
+.mesh-dock-item--green:hover { border-color: var(--mesh-owner-swastik); color: var(--mesh-owner-swastik); }
+.mesh-dock-item--lime { color: #6F9E18; }
+.mesh-dock-item--lime:hover { border-color: var(--mesh-coordinator-lime); color: #6F9E18; }
+.mesh-dock-item--amber { color: var(--mesh-approval-amber); }
+.mesh-dock-item--amber:hover { border-color: var(--mesh-approval-amber); color: var(--mesh-approval-amber); }
+
+/* ==========================================================================
+   Multiplayer Cursors
+   ========================================================================== */
+.live-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  will-change: transform;
+}
+
+.live-cursor svg {
+  width: 20px;
+  height: 24px;
+  filter: drop-shadow(0 2px 4px rgba(30, 43, 38, 0.25));
+}
+
+.live-cursor__badge {
+  font-family: var(--mesh-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: #FFFFFF;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(30, 43, 38, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.live-cursor--purple svg { color: var(--mesh-owner-anand); }
+.live-cursor--purple .live-cursor__badge { background-color: var(--mesh-owner-anand); }
+
+.live-cursor--green svg { color: var(--mesh-owner-swastik); }
+.live-cursor--green .live-cursor__badge { background-color: var(--mesh-owner-swastik); }
+
+/* ==========================================================================
+   Demo Replay Controller Bar
+   ========================================================================== */
+.mesh-replay-bar {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  background-color: var(--mesh-bg-card);
+  border: 1px solid var(--mesh-border-strong);
+  border-radius: 999px;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: var(--mesh-shadow-float);
+  font-size: 12px;
+}
+
+.mesh-replay-step-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mesh-replay-step-num {
+  font-family: var(--mesh-font-mono);
+  font-weight: 700;
+  color: var(--mesh-primary-green);
+  background-color: var(--mesh-soft-mint);
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+.mesh-replay-step-title {
+  font-weight: 600;
+  color: var(--mesh-text-main);
+}
+
+.mesh-replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-left: 1px solid var(--mesh-border-subtle);
+  padding-left: 8px;
+}
+
+.mesh-replay-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--mesh-text-muted);
+  padding: 4px 6px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  transition: all 0.15s ease;
+}
+
+.mesh-replay-btn:hover {
+  background-color: var(--mesh-bg-secondary);
+  color: var(--mesh-text-main);
+}
+
+/* ==========================================================================
+   Activity Stream & Side Rails
+   ========================================================================== */
+.protocol-events strong {
+  color: var(--mesh-flow-cyan);
+}
+
+.protocol-events span {
+  color: var(--mesh-owner-anand);
+}

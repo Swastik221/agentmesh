@@ -1,0 +1,80 @@
+/* Scoped workspace palette: landing scenes keep their existing theme. */
+.app-shell,.product-workspace {
+ --canvas-ink:#F6F4EC;--canvas-deep:#EEF1E8;--canvas-panel:#FFFDF7;--canvas-panel-solid:#FFFDF7;--canvas-line:#D6D8C9;--canvas-line-strong:#AEB8A8;--canvas-copy:#1E2B26;--canvas-muted:#68746D;--canvas-dim:#68746D;--canvas-violet:#8B6FE8;--canvas-teal:#36B37E;--canvas-cyan:#177E89;--canvas-amber:#D99A32;--canvas-green:#2F7D5C;--canvas-red:#C94F4F;--canvas-glass:none;--canvas-shadow:0 6px 20px #243e2910;
+ --am-green:#2F7D5C;--am-cyan:#177E89;--am-purple:#8B6FE8;--am-red:#C94F4F;
+}
+/* Keep application controls out of the document flow so the canvas owns the viewport. */
+body .app-shell {grid-template-rows:58px minmax(0,1fr);background:var(--canvas-ink);color:var(--canvas-copy)}
+body .app-shell .app-header,body .app-shell .app-sidebar,body .app-shell .app-status {background:#EEF1E8;box-shadow:none;color:var(--canvas-copy)}
+body .app-shell .app-header__actions button,body .app-shell .app-sidebar__toggle,.app-shell .canvas-context__tools button,.app-shell .canvas-command-dock button {background:#FFFDF7;color:var(--canvas-copy);border-color:var(--canvas-line)}
+body .app-shell .app-header__actions button:nth-child(3) {background:var(--canvas-green);color:white}
+.app-shell .product-canvas {background:#F6F4EC;animation:none;container-type:inline-size}
+.app-shell .product-canvas::before,.app-shell .product-canvas::after {display:none}
+.autumn-background {position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:linear-gradient(#f6f4ecd1,#f6f4ecd1),url('/workspace/autumn-lake.png') center/cover}
+.falling-leaves {position:absolute;inset:0;overflow:hidden}
+.falling-leaves > span {position:absolute;left:var(--leaf-x);top:-30px;width:16px;color:#b66038;opacity:.28;animation:autumn-fall var(--leaf-duration) var(--leaf-delay) linear infinite}
+.falling-leaves > span:nth-child(2n){color:#ce883b;width:11px}
+@keyframes autumn-fall {0%{transform:translate3d(-20px,-30px,0) rotate(0)}50%{transform:translate3d(30px,45vh,0) rotate(150deg)}100%{transform:translate3d(-5px,110vh,0) rotate(320deg)}}
+.app-shell .app-header {min-height:58px;padding-inline:18px}
+.app-shell .app-header__brand {gap:8px}
+.app-shell .app-header__name {font-size:19px}
+.app-shell .app-header__project {font-size:12px}
+.app-shell .app-header__identity {gap:6px}
+.app-shell .app-header__actions {gap:5px}
+.app-shell .app-header__actions button {min-height:30px;padding-inline:8px;font-size:11px}
+.app-shell .canvas-context {left:50%;right:auto;width:min(860px,calc(100% - 46px));transform:translateX(-50%);background:#fffdf7f5;box-shadow:0 3px 14px #1e2b2608;min-height:50px;flex-wrap:nowrap;gap:8px}
+.app-shell .canvas-context > div:first-child {flex:1;min-width:170px}
+.app-shell .canvas-context__tools {flex:none}
+.app-shell .product-node,.app-shell .react-flow__node.selected .product-node {color:var(--canvas-copy);background:#FFFDF7;border-color:var(--canvas-line-strong);backdrop-filter:none;box-shadow:var(--canvas-shadow)}
+.app-shell .canvas-owner-purple .product-agent {background:#f3efff;border-color:var(--canvas-violet)}
+.app-shell .canvas-owner-green .product-agent {background:#eaf7ef;border-color:var(--canvas-teal)}
+.app-shell .product-node header strong {color:var(--canvas-copy);font-size:16px}
+.app-shell .product-node header {background:#fffdf760}
+.app-shell .product-agent__identity small,.app-shell .product-agent__identity b {color:#635680;font-size:12px}
+.app-shell .product-owner--green .product-agent__identity small,.app-shell .product-owner--green .product-agent__identity b {color:#376b55}
+.app-shell .product-capabilities span {color:#4d5c53;background:#fffdf7;border-color:var(--canvas-line);font-size:11px}
+.app-shell .product-terminal {background:#fffdf7b0}
+.app-shell .product-terminal p {color:#44574d;font-size:11px}
+.app-shell .product-coordinator {background:#e8f4ce;border-color:#93b957}
+.app-shell .product-artifact {background:#E8E0FF;border-color:#a590d9}
+.app-shell .product-approval {background:#fff0d3;border-color:#D99A32}
+.app-shell .product-taskboard li,.app-shell .product-taskboard li.is-assigned {background:#FFFDF7}
+.app-shell .product-taskboard strong {color:var(--canvas-copy);font-size:14px}
+.app-shell .product-taskboard small,.app-shell .product-taskboard code,.app-shell .product-artifact dt,.app-shell .product-artifact dd {color:var(--canvas-muted);font-size:11px}
+.app-shell .product-taskboard button {color:var(--canvas-green);border-color:var(--canvas-green);background:#f6faf4;font-size:11px}
+.app-shell .product-state,.app-shell .task-state {font-size:10px}
+.app-shell .product-canvas .react-flow__edge-path {filter:none}
+.app-shell .product-canvas .react-flow__edge-text {fill:#334a3d}
+.app-shell .product-canvas .react-flow__edge-textbg {fill:#FFFDF7;stroke:#AEB8A8}
+.app-shell .workspace-inspector-panel,.app-shell .protocol-rail {background:#FFFDF7;box-shadow:none;backdrop-filter:none}
+.app-shell .workspace-panel__close,.app-shell .canvas-command-dock,.app-shell .product-canvas .react-flow__controls,.app-shell .product-minimap {background:#fffdf7f5!important;box-shadow:0 3px 12px #1e2b2610}
+.app-shell .product-minimap .react-flow__minimap-mask {fill:#eef1e8aa}
+.app-shell .protocol-events strong {color:#177E89}.app-shell .protocol-events span,.app-shell .workspace-inspector-panel .identity-value {color:#7354bf}
+.app-shell .canvas-command-dock {bottom:16px;padding:5px}
+.app-shell .canvas-command-dock__status {display:none}
+.app-shell .canvas-tools {position:absolute;z-index:8;bottom:12px;left:50%;transform:translateX(-50%);width:min(710px,calc(100% - 42px));color:var(--canvas-copy)}
+.canvas-tools form {display:flex;align-items:center;gap:8px;background:#FFFDF7;border:1px solid #AEB8A8;border-radius:14px;padding:10px;box-shadow:0 8px 28px #243e2915}
+.canvas-tools input {min-width:0;flex:1;border:0;outline:none;background:transparent;color:#1E2B26;font:13px var(--am-font-sans)}
+.canvas-tools button {display:grid;place-items:center;cursor:pointer;border:0;background:transparent;color:#52675a;border-radius:8px;padding:7px}
+.canvas-tools .composer-send {background:#2F7D5C;color:white}
+.tool-dock {display:flex;justify-content:center;gap:5px;margin:8px auto 0;padding:7px;background:#eef1e8f5;border:1px solid #AEB8A8;border-radius:12px;width:max-content;max-width:100%;overflow:auto}
+.tool-dock button {width:49px;height:42px;background:#FFFDF7;border:1px solid #D6D8C9;flex-shrink:0;transition:transform .15s}
+.tool-dock button:hover {transform:translateY(-3px);border-color:#2F7D5C}
+.tool-dock button:nth-child(1),.tool-dock button:nth-child(3){color:#8B6FE8}.tool-dock button:nth-child(2){color:#2F7D5C}
+.tool-dock button span {display:none}
+.canvas-tools > small {display:block;text-align:center;font-size:10px;margin-top:5px;color:#536557}
+.app-shell .product-minimap {bottom:18px!important}.app-shell .product-canvas .react-flow__controls {bottom:18px}.app-shell .canvas-navigation-hint {display:none}
+.app-shell .demo-toolbar,.app-shell .app-status {display:none!important}
+.app-shell .demo-panel,.app-shell .demo-panel>header,.app-shell .demo-terminal form,.app-shell .demo-browser nav {background:#EEF1E8;color:#1E2B26;border-color:#AEB8A8;box-shadow:none}
+.app-shell .demo-terminal__output,.app-shell .demo-browser article {background:#FFFDF7;color:#263d30}
+.app-shell .demo-terminal__output p.is-command {color:#7354bf}.app-shell .demo-terminal__output p.is-success {color:#2F7D5C}.app-shell .demo-terminal__output p.is-error {color:#C94F4F}
+.app-shell .demo-panel button,.app-shell .demo-terminal input,.app-shell .demo-browser input {color:#344e3e}.app-shell .demo-browser input,.app-shell .demo-browser pre {background:#FFFDF7;color:#177E89;border-color:#D6D8C9}
+.app-shell .demo-browser article h2 {color:#1E2B26}.app-shell .demo-browser article p {color:#68746D}
+.app-shell .workspace-view {background:#F6F4EC;color:#1E2B26}
+.app-shell .workspace-metric-row article,.app-shell .agent-directory__card,.app-shell .task-table,.app-shell .task-table__head,.app-shell .file-tree,.app-shell .artifact-preview,.app-shell .activity-layout>aside,.app-shell .activity-stream {background:#FFFDF7;backdrop-filter:none;box-shadow:none}
+.app-shell .agent-directory__card {background:#f3efff}.app-shell .agent-directory__card--teal {background:#eaf7ef}
+.app-shell .workspace-view button,.app-shell .workspace-list-tools input,.app-shell .artifact-preview pre {background:#FFFDF7;color:#344e3e}
+.app-shell .activity-layout>aside button.is-active {background:#DDF4E8;color:#1E2B26}
+.utility-node {width:330px;min-height:200px;height:100%;overflow:hidden}.utility-node textarea {display:block;width:100%;min-height:155px;height:calc(100% - 46px);resize:none;border:0;padding:18px;background:#fff2c9;color:#4a422c;font:14px/1.6 var(--am-font-sans);outline:none}.utility-node pre,.utility-log {white-space:pre-wrap;padding:16px;max-height:250px;overflow:auto;font:12px/1.6 var(--am-font-mono)}.utility-node form {display:flex;padding:10px;border-top:1px solid #D6D8C9;gap:8px}.utility-node input {min-width:0;width:100%;border:1px solid #D6D8C9;padding:6px;background:#FFFDF7;color:#1E2B26}.utility-node button {border:0;background:#2F7D5C;color:white;padding:6px 10px;border-radius:5px}
+@container (max-width:900px) {.canvas-legend,.canvas-sync {display:none!important}.canvas-command-dock {display:none!important}.product-minimap {display:none!important}}
+@media(prefers-reduced-motion:reduce){.falling-leaves{display:none}.tool-dock button,.app-workspace-stack{transition:none}}

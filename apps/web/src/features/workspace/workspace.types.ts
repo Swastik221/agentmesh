@@ -39,13 +39,19 @@ export type ProtocolEventType =
   | 'TASK_PROPOSAL'
   | 'TASK_PREFERENCE'
   | 'TASK_CLAIMED'
+  | 'TASK_AUTO_ASSIGNED'
   | 'DEPENDENCY_REQUEST'
   | 'ARTIFACT_PUBLISHED'
   | 'APPROVAL_REQUESTED'
-  | 'APPROVAL_APPROVED'
+  | 'APPROVAL_GRANTED'
   | 'APPROVAL_REJECTED';
 export interface ProtocolEvent {
   id: string;
+  workspaceId?: string;
+  actor?: string;
+  agentIdentity?: string;
+  timestamp?: string;
+  correlationId?: string;
   time: string;
   sender: string;
   receiver: string;

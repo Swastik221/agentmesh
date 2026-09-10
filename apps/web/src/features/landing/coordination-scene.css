@@ -12,26 +12,26 @@
   opacity: 0;
 }
 .scene--coordination .coord-workflow {
-  color: #a78bfa;
+  color: var(--am-purple);
   opacity: var(--coord-presence, 0);
 }
 .scene--coordination .coord-workflow text {
   font-family: var(--am-font-mono);
 }
 .coord-primary {
-  fill: #f8fafc;
+  fill: var(--am-text-on-dark);
   font-size: 11px;
 }
 .coord-muted {
-  fill: #94a3b8;
+  fill: var(--am-technical-label);
   font-size: 8px;
 }
 .coord-owner {
-  fill: #a78bfa;
+  fill: var(--am-purple);
   font-size: 8px;
 }
 .coord-capability {
-  fill: #22d3ee;
+  fill: var(--am-cyan);
   font-size: 8px;
 }
 .coord-agent {
@@ -44,6 +44,15 @@
 .coord-agent--vega {
   scale: calc(1 + var(--coord-claimed-b, 0) * 0.018);
 }
+.coord-agent--orion > rect {
+  stroke: var(--am-purple);
+}
+.coord-agent--vega > rect {
+  stroke: var(--am-teal);
+}
+.coord-agent--vega .coord-owner {
+  fill: var(--am-teal);
+}
 .coord-agent-idle,
 .coord-agent-working,
 .coord-agent-blocked {
@@ -51,18 +60,18 @@
   letter-spacing: 0.08em;
 }
 .coord-agent-idle {
-  fill: #94a3b8;
+  fill: var(--am-technical-label);
   opacity: calc(1 - var(--coord-claim, 0));
 }
 .coord-agent-working {
-  fill: #3ddc97;
+  fill: var(--am-green);
   opacity: var(--coord-claim, 0);
 }
 .coord-agent--orion .coord-agent-working {
   opacity: calc(var(--coord-claim, 0) - var(--coord-blocked, 0));
 }
 .coord-agent-blocked {
-  fill: #f0b458;
+  fill: var(--am-amber);
   opacity: var(--coord-blocked, 0);
 }
 .coord-board {
@@ -71,7 +80,7 @@
   transform-origin: center;
 }
 .coord-task-id {
-  fill: #64748b;
+  fill: var(--am-text-secondary);
   font-size: 7px;
   letter-spacing: 0.06em;
 }
@@ -80,28 +89,28 @@
 }
 .coord-status {
   fill: transparent;
-  stroke: #232c40;
+  stroke: var(--am-border-dark);
 }
 .coord-status-text {
-  fill: #94a3b8;
+  fill: var(--am-technical-label);
   font-size: 6px;
   letter-spacing: 0.05em;
 }
 .coord-status--waiting {
-  stroke: #f0b458;
+  stroke: var(--am-amber);
 }
 .coord-status-text--waiting {
-  fill: #f0b458;
+  fill: var(--am-amber);
 }
 .coord-claimed-status {
   opacity: var(--coord-claim, 0);
 }
 .coord-claimed-status rect {
-  fill: #0d1117;
-  stroke: #3ddc97;
+  fill: var(--am-ink-900);
+  stroke: var(--am-green);
 }
 .coord-claimed-status text {
-  fill: #3ddc97;
+  fill: var(--am-green);
   font-size: 6px;
   letter-spacing: 0.05em;
 }
@@ -116,23 +125,23 @@
   stroke-linecap: round;
 }
 .coord-proposal-line {
-  stroke: #22d3ee;
+  stroke: var(--am-cyan);
   stroke-dashoffset: calc(1 - var(--coord-proposal, 0));
   opacity: var(--coord-proposal, 0);
 }
 .coord-dependency-base {
-  stroke: #f0b458;
+  stroke: var(--am-amber);
   stroke-dasharray: 4 7;
   stroke-dashoffset: calc(1 - var(--coord-dependency, 0));
   opacity: var(--coord-dependency-amber, 0);
 }
 .coord-dependency-live {
-  stroke: #22d3ee;
+  stroke: var(--am-cyan);
   stroke-dashoffset: calc(1 - var(--coord-complete, 0));
   opacity: var(--coord-complete, 0);
 }
 .coord-artifact-path {
-  stroke: #22d3ee;
+  stroke: var(--am-cyan);
   stroke-dashoffset: calc(1 - var(--coord-handoff, 0));
   opacity: var(--coord-artifact-visible, 0);
 }
@@ -141,13 +150,13 @@
   will-change: transform;
 }
 .coord-cursor--anand {
-  color: #a78bfa;
+  color: var(--am-purple);
 }
 .coord-cursor--swastik {
-  color: #3ddc97;
+  color: var(--am-teal);
 }
 .coord-cursor-label {
-  fill: #0a0e17;
+  fill: var(--am-ink-950);
   font-size: 8px;
 }
 .coord-task-token {
@@ -155,14 +164,14 @@
   will-change: transform;
 }
 .coord-task-token rect {
-  fill: #0d1117;
-  stroke: #a78bfa;
+  fill: var(--am-ink-900);
+  stroke: var(--am-purple);
 }
 .coord-task-token--115 rect {
-  stroke: #3ddc97;
+  stroke: var(--am-teal);
 }
 .coord-task-token text {
-  fill: #f8fafc;
+  fill: var(--am-text-on-dark);
   font: 7px var(--am-font-mono);
 }
 .coord-dependency-chip,
@@ -175,10 +184,10 @@
 }
 .coord-dependency-chip rect {
   fill: #201b13;
-  stroke: #f0b458;
+  stroke: var(--am-amber);
 }
 .coord-dependency-chip text {
-  fill: #f0b458;
+  fill: var(--am-amber);
   font: 7px var(--am-font-mono);
   letter-spacing: 0.05em;
 }
@@ -186,30 +195,30 @@
   opacity: var(--coord-artifact-visible, 0);
 }
 .coord-artifact rect {
-  fill: #0d1117;
-  stroke: #3ddc97;
+  fill: var(--am-ink-900);
+  stroke: var(--am-green);
 }
 .coord-artifact text {
-  fill: #b7f7d8;
+  fill: var(--am-green);
   font: 7px var(--am-font-mono);
 }
 .coord-artifact text:last-child {
-  fill: #94a3b8;
+  fill: var(--am-technical-label);
   font-size: 6px;
 }
 .coord-packet {
-  fill: #22d3ee;
+  fill: var(--am-cyan);
   opacity: var(--coord-packet-opacity, 0);
 }
 .coord-chip {
   opacity: 0;
 }
 .coord-chip rect {
-  fill: #0d1117;
-  stroke: #232c40;
+  fill: var(--am-ink-900);
+  stroke: var(--am-border-dark);
 }
 .coord-chip text {
-  fill: #94a3b8;
+  fill: var(--am-technical-label);
   font: 6px var(--am-font-mono);
   letter-spacing: 0.04em;
 }
@@ -232,17 +241,17 @@
 .coord-event-claim-a rect,
 .coord-event-claim-b rect,
 .coord-event-unblocked rect {
-  stroke: #3ddc97;
+  stroke: var(--am-green);
 }
 .coord-event-dependency rect {
-  stroke: #f0b458;
+  stroke: var(--am-amber);
 }
 .coord-event-artifact rect,
 .coord-event-proposal rect {
-  stroke: #22d3ee;
+  stroke: var(--am-cyan);
 }
 .coord-caption {
-  fill: #f8fafc;
+  fill: var(--am-text-on-dark);
   font: 10px var(--am-font-sans);
   opacity: 0;
 }

@@ -10,18 +10,18 @@ export function FlatCoder({ role = 'connect' }: { role?: CoderRole }) {
       fill="none"
       aria-hidden="true"
     >
-      <ellipse cx="260" cy="551" rx="165" ry="12" fill="#0d1117" />
-      <g className="coder-chair" stroke="#232c40" strokeWidth="4">
+      <ellipse cx="260" cy="551" rx="165" ry="12" fill="var(--am-ink-900)" />
+      <g className="coder-chair" stroke="var(--am-border-dark)" strokeWidth="4">
         <rect x="182" y="209" width="156" height="219" rx="48" fill="#131e2c" />
         <path d="M260 415V533M260 521L204 547M260 521L318 547" />
         <rect x="178" y="398" width="165" height="24" rx="12" fill="#233044" />
       </g>
-      <g className="coder-legs" stroke="#0a0e17" strokeWidth="3">
-        <path d="M202 341H260L250 438L224 520H184L202 427Z" fill="#232c40" />
+      <g className="coder-legs" stroke="var(--am-ink-950)" strokeWidth="3">
+        <path d="M202 341H260L250 438L224 520H184L202 427Z" fill="var(--am-border-dark)" />
         <path d="M260 341H317L326 436L338 521H295L276 442Z" fill="#1b2537" />
-        <path d="M184 514H226L227 540Q202 548 166 540L168 528Z" fill="#a78bfa" />
-        <path d="M294 514H337L355 532V541H294Z" fill="#a78bfa" />
-        <path d="M168 541H227M295 541H355" stroke="#e2e8f0" strokeWidth="4" />
+        <path d="M184 514H226L227 540Q202 548 166 540L168 528Z" fill="var(--am-purple)" />
+        <path d="M294 514H337L355 532V541H294Z" fill="var(--am-purple)" />
+        <path d="M168 541H227M295 541H355" stroke="var(--am-text-on-dark)" strokeWidth="4" />
       </g>
       <g className="coder-torso">
         <path
@@ -36,7 +36,7 @@ export function FlatCoder({ role = 'connect' }: { role?: CoderRole }) {
           stroke="#3b5660"
           strokeWidth="2"
         />
-        <path d="M238 196L260 217L283 195" stroke="#3ddc97" strokeWidth="2" />
+        <path d="M238 196L260 217L283 195" stroke="var(--am-green)" strokeWidth="2" />
         <path
           d="M240 217L235 266M281 216L286 265"
           stroke="#8fa7b6"
@@ -46,7 +46,7 @@ export function FlatCoder({ role = 'connect' }: { role?: CoderRole }) {
         <path d="M232 301Q260 314 289 301L296 331H225Z" fill="#1a303c" />
         <path
           d="M253 252L244 260L253 268M267 252L276 260L267 268"
-          stroke="#3ddc97"
+          stroke="var(--am-green)"
           strokeWidth="2"
           strokeLinecap="round"
         />
@@ -63,14 +63,14 @@ export function FlatCoder({ role = 'connect' }: { role?: CoderRole }) {
           fill="#171e2c"
         />
         <g className="coder-eyes">
-          <g className="coder-eyes-open" fill="#232c40">
+          <g className="coder-eyes-open" fill="var(--am-border-dark)">
             <ellipse cx="242" cy="137" rx="3.2" ry="3.8" />
             <ellipse cx="281" cy="137" rx="3.2" ry="3.8" />
           </g>
           <path
             className="coder-eyes-closed"
             d="M238 137H246M277 137H285"
-            stroke="#232c40"
+            stroke="var(--am-border-dark)"
             strokeWidth="3"
             strokeLinecap="round"
           />
@@ -87,7 +87,7 @@ export function FlatCoder({ role = 'connect' }: { role?: CoderRole }) {
             stroke="#3e566a"
             strokeWidth="10"
           />
-          <path d="M212 108Q215 73 260 73Q304 73 309 108" stroke="#22d3ee" strokeWidth="2" />
+          <path d="M212 108Q215 73 260 73Q304 73 309 108" stroke="var(--am-cyan)" strokeWidth="2" />
           <rect
             x="204"
             y="119"
@@ -95,7 +95,7 @@ export function FlatCoder({ role = 'connect' }: { role?: CoderRole }) {
             height="37"
             rx="8"
             fill="#142533"
-            stroke="#22d3ee"
+            stroke="var(--am-cyan)"
             strokeWidth="2"
           />
           <rect
@@ -105,14 +105,14 @@ export function FlatCoder({ role = 'connect' }: { role?: CoderRole }) {
             height="37"
             rx="8"
             fill="#142533"
-            stroke="#22d3ee"
+            stroke="var(--am-cyan)"
             strokeWidth="2"
           />
           <path d="M309 150Q315 174 278 172" stroke="#3e566a" strokeWidth="3" />
-          <rect x="271" y="169" width="13" height="6" rx="3" fill="#22d3ee" />
+          <rect x="271" y="169" width="13" height="6" rx="3" fill="var(--am-cyan)" />
         </g>
       </g>
-      <g className="coder-desk" stroke="#232c40" strokeWidth="3">
+      <g className="coder-desk" stroke="var(--am-border-dark)" strokeWidth="3">
         <path d="M120 351L103 547M400 351L420 547" stroke="#405464" strokeWidth="9" />
         <path d="M118 377H403" stroke="#263948" strokeWidth="6" />
         <path d="M112 327H411L430 347V360H94V347Z" fill="#223343" />
@@ -124,7 +124,7 @@ export function FlatCoder({ role = 'connect' }: { role?: CoderRole }) {
         <path d="M218 328H299M208 332H313" stroke="#172536" strokeWidth="2" />
         <path
           d="M253 296L247 302L253 308M267 296L273 302L267 308"
-          stroke="#22d3ee"
+          stroke="var(--am-cyan)"
           strokeWidth="2.5"
           strokeLinecap="round"
         />
@@ -133,8 +133,16 @@ export function FlatCoder({ role = 'connect' }: { role?: CoderRole }) {
       {role === 'control' && (
         <g className="coder-control-console">
           <path d="M331 316H390L399 340H326Z" fill="#172536" stroke="#60768a" strokeWidth="2" />
-          <rect x="340" y="320" width="42" height="14" rx="7" fill="#33291c" stroke="#f0b458" />
-          <circle className="coder-control-light" cx="350" cy="327" r="3" fill="#f0b458" />
+          <rect
+            x="340"
+            y="320"
+            width="42"
+            height="14"
+            rx="7"
+            fill="#33291c"
+            stroke="var(--am-amber)"
+          />
+          <circle className="coder-control-light" cx="350" cy="327" r="3" fill="var(--am-amber)" />
           <text x="358" y="330" fill="#f7d28c" fontSize="8" fontWeight="700">
             HOLD
           </text>
@@ -163,9 +171,9 @@ export function FlatCoder({ role = 'connect' }: { role?: CoderRole }) {
             />
             <g className="coder-hand" fill="#e3ae7f" stroke="#b8815f" strokeWidth="1.5">
               {side === 'right' && role === 'review' && (
-                <g fill="none" stroke="#f0b458" strokeWidth="4">
+                <g fill="none" stroke="var(--am-amber)" strokeWidth="4">
                   <path d="M8 0L36 -25" />
-                  <circle cx="51" cy="-42" r="25" fill="#22d3ee16" />
+                  <circle cx="51" cy="-42" r="25" fill="rgb(43 169 194 / 9%)" />
                   <path d="M43 -51L60 -34" stroke="#9bd6e3" strokeWidth="2" />
                 </g>
               )}

@@ -4,38 +4,97 @@ const browser = await chromium.launch({
   headless: true,
   ...(process.env.BROWSER_EXECUTABLE ? { executablePath: process.env.BROWSER_EXECUTABLE } : {}),
 });
-const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 try {
   await page.goto(process.env.WORKSPACE_URL || 'http://127.0.0.1:5173/canvas');
   await page.waitForSelector('.product-workspace .react-flow__node');
   assert.equal(await page.locator('.product-workspace .react-flow__node').count(), 6);
-  assert.equal(await page.locator('.product-presence').count(), 2);
+  assert.equal(await page.locator('.product-presence').count(), 0);
   assert.equal(await page.locator('.workspace-inspector-panel').count(), 0);
   assert.equal(await page.locator('.protocol-rail').count(), 0);
-  assert.match(
+  assert.equal(
     await page
       .locator('.product-canvas')
-      .evaluate((element) => getComputedStyle(element).backgroundImage),
-    /203, 244, 122/,
+      .evaluate((element) => getComputedStyle(element).backgroundColor),
+    'rgb(7, 16, 30)',
   );
-  assert.match(
+  assert.equal(
     await page
       .locator('.product-coordinator')
-      .evaluate((element) => getComputedStyle(element).backgroundImage),
-    /218, 250, 156/,
+      .evaluate((element) => getComputedStyle(element).borderColor),
+    'rgba(56, 199, 229, 0.76)',
   );
-  assert.match(
+  assert.equal(
     await page
       .locator('.product-artifact')
-      .evaluate((element) => getComputedStyle(element).backgroundImage),
-    /230, 224, 245/,
+      .evaluate((element) => getComputedStyle(element).backgroundColor),
+    'rgb(47, 37, 79)',
+  );
+  assert.equal(
+    await page
+      .locator('.canvas-owner-green .product-agent')
+      .evaluate((element) => getComputedStyle(element).borderColor),
+    'rgba(47, 209, 188, 0.78)',
+  );
+  assert.equal(
+    await page
+      .locator('.product-node header strong')
+      .first()
+      .evaluate((element) => getComputedStyle(element).fontSize),
+    '15px',
   );
   assert.equal(await page.locator('.canvas-legend span').count(), 3);
   assert.equal(await page.locator('.product-minimap').count(), 1);
-  assert.match(await page.locator('.product-presence--purple').innerText(), /Anand-demo/);
-  assert.match(await page.locator('.product-presence--green').innerText(), /Swastik-demo/);
+
+  await page.getByRole('button', { name: 'Agents', exact: true }).click();
+  assert.match(await page.locator('.workspace-view').innerText(), /Connected agents/);
+  assert.equal(await page.locator('.agent-directory__card').count(), 2);
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  assert.equal(await page.locator('.task-table article').count(), 4);
+  await page.getByRole('button', { name: 'Files', exact: true }).click();
+  assert.match(await page.locator('.artifact-preview').innerText(), /payment-api\.json/);
+  await page.getByRole('button', { name: 'Activity', exact: true }).click();
+  assert.match(await page.locator('.activity-stream').innerText(), /TASK_PROPOSAL/);
+  await page.getByRole('button', { name: 'Project' }).click();
+  await page.waitForSelector('.product-workspace .react-flow__node');
+
+  // The rail now opens from its collapsed icon state rather than the other way
+  // round: it starts as a 46px strip, matching the reference chrome.
+  const collapsedSidebar = await page.locator('.app-sidebar').boundingBox();
+  assert.equal(await page.locator('.app-nav__label').first().isVisible(), false);
+  await page.getByRole('button', { name: 'Expand sidebar' }).click();
+  await page.waitForTimeout(260);
+  const expandedSidebar = await page.locator('.app-sidebar').boundingBox();
+  assert.ok(expandedSidebar && collapsedSidebar && collapsedSidebar.width < expandedSidebar.width);
+  assert.equal(await page.locator('.app-nav__label').first().isVisible(), true);
+  await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+  await page.waitForTimeout(260);
+
+  await page.getByRole('button', { name: 'Focus view' }).click();
+  // The shell always names its rail state now, so the class list is matched
+  // rather than compared whole.
+  assert.match(await page.locator('.app-shell').getAttribute('class'), /is-focus-view/);
+  assert.equal(await page.locator('.app-header').isVisible(), false);
+  assert.equal(await page.locator('.app-sidebar').isVisible(), false);
+  assert.equal(await page.locator('.app-status').isVisible(), false);
+  await page.keyboard.press('Escape');
+  assert.doesNotMatch(await page.locator('.app-shell').getAttribute('class'), /is-focus-view/);
+
+  const collaborator = await page.context().newPage();
+  await collaborator.goto(process.env.WORKSPACE_URL || 'http://127.0.0.1:5173/canvas');
+  await collaborator.waitForSelector('.product-workspace .react-flow__node');
+  const collaboratorCanvas = await collaborator.locator('.product-canvas').boundingBox();
+  await collaborator.mouse.move(
+    collaboratorCanvas.x + collaboratorCanvas.width * 0.66,
+    collaboratorCanvas.y + collaboratorCanvas.height * 0.42,
+  );
+  await page.locator('.live-collaborator-cursor').waitFor();
+  assert.match(await page.locator('.live-collaborator-cursor').innerText(), /dev1\.eth/);
+  await collaborator.close();
+  await page.locator('.live-collaborator-cursor').waitFor({ state: 'detached' });
   await page.screenshot({ path: '/private/tmp/agentmesh-product-workspace-default.png' });
 
   await page
@@ -57,6 +116,22 @@ try {
     await page.locator('.workspace-inspector-panel').innerText(),
     /Cannot access wallet keys/,
   );
+
+  await page.locator('.app-status').getByRole('button', { name: 'Terminal' }).click();
+  await page.waitForTimeout(320);
+  const terminalBox = await page.locator('.demo-terminal').boundingBox();
+  const adjustedActivityBox = await page.locator('.protocol-rail').boundingBox();
+  const adjustedInspectorBox = await page.locator('.workspace-inspector-panel').boundingBox();
+  assert.ok(terminalBox && adjustedActivityBox && adjustedInspectorBox);
+  assert.ok(terminalBox.y >= adjustedActivityBox.y + adjustedActivityBox.height - 1);
+  assert.ok(terminalBox.y >= adjustedInspectorBox.y + adjustedInspectorBox.height - 1);
+  await page.locator('.app-status').getByRole('button', { name: 'Terminal' }).click();
+
+  await page.locator('.app-status').getByRole('button', { name: 'Browser' }).click();
+  await page.waitForTimeout(320);
+  const browserBox = await page.locator('.demo-browser').boundingBox();
+  assert.ok(browserBox && browserBox.y >= adjustedActivityBox.y + adjustedActivityBox.height - 1);
+  await page.locator('.app-status').getByRole('button', { name: 'Browser' }).click();
 
   const countdown = Number(
     (await page.locator('.product-taskboard time').first().innerText()).match(/\d+/)[0],
@@ -87,7 +162,7 @@ try {
   await page.mouse.move(before.x + 100, before.y + 20);
   await page.mouse.down();
   await page.mouse.move(before.x + 155, before.y + 55, { steps: 8 });
-  assert.match(await page.locator('.product-presence--purple').innerText(), /is moving Orion/);
+  assert.match(await page.locator('.canvas-move-status').innerText(), /Moving Orion/);
   await page.mouse.up();
   const after = await orion.boundingBox();
   assert.ok(after.x > before.x + 25 && after.y > before.y + 15);
@@ -124,9 +199,7 @@ try {
     true,
   );
   assert.deepEqual(errors, []);
-  console.log(
-    'PASS: product canvas layout, countdown, claim, inspector, drag, edges, approval and replay.',
-  );
+  console.log('PASS: workspace layout, focus view, sidebar, live cursors and canvas interactions.');
 } finally {
   await browser.close();
 }

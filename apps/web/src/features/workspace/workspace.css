@@ -175,7 +175,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #3ddc97;
+  background: var(--am-green);
 }
 
 .product-node {
@@ -209,7 +209,7 @@
 .product-handle.react-flow__handle {
   width: 7px;
   height: 7px;
-  border: 1px solid #22d3ee;
+  border: 1px solid var(--am-cyan);
   border-radius: 2px;
   background: var(--workspace-deep);
 }
@@ -221,13 +221,13 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #f87171;
+  background: var(--am-red);
 }
 .product-window-dots i:nth-child(2) {
-  background: #f0b458;
+  background: var(--am-amber);
 }
 .product-window-dots i:nth-child(3) {
-  background: #3ddc97;
+  background: var(--am-green);
 }
 .product-state {
   padding: 2px 6px;
@@ -237,10 +237,10 @@
   letter-spacing: 0.05em;
 }
 .product-state--connected {
-  color: #3ddc97 !important;
+  color: var(--am-green) !important;
 }
 .product-state--flow {
-  color: #22d3ee !important;
+  color: var(--am-cyan) !important;
 }
 
 .product-agent {
@@ -251,10 +251,10 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 3px;
-  background: #a78bfa;
+  background: var(--am-purple);
 }
 .product-owner--green::before {
-  background: #3ddc97;
+  background: var(--am-green);
 }
 .product-agent__identity {
   display: grid;
@@ -266,11 +266,11 @@
   font-size: 11px;
 }
 .product-agent__identity small {
-  color: #a78bfa;
+  color: var(--am-purple);
   font: 9px var(--am-font-mono);
 }
 .product-owner--green .product-agent__identity small {
-  color: #3ddc97;
+  color: var(--am-green);
 }
 .product-agent__identity b {
   color: #64748b;
@@ -307,7 +307,7 @@
   font-style: normal;
 }
 .product-terminal p span {
-  color: #22d3ee;
+  color: var(--am-cyan);
 }
 
 .product-coordinator {
@@ -330,7 +330,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #22d3ee;
+  background: var(--am-cyan);
 }
 
 .product-taskboard {
@@ -373,7 +373,7 @@
   font: 8px var(--am-font-mono);
 }
 .product-taskboard li > p span {
-  color: #22d3ee;
+  color: var(--am-cyan);
 }
 .task-state {
   padding: 2px 5px;
@@ -384,26 +384,26 @@
   text-transform: uppercase;
 }
 .task-state--claimed {
-  color: #3ddc97;
-  border-color: #3ddc97;
+  color: var(--am-green);
+  border-color: var(--am-green);
 }
 .task-state--auto-assigned {
-  color: #f0b458;
-  border-color: #f0b458;
+  color: var(--am-amber);
+  border-color: var(--am-amber);
 }
 .product-taskboard footer {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 6px;
-  color: #3ddc97;
+  color: var(--am-green);
   font: 7px var(--am-font-mono);
 }
 .product-taskboard footer button {
   padding: 4px 7px;
-  border: 1px solid #22d3ee;
+  border: 1px solid var(--am-cyan);
   border-radius: 999px;
-  color: #22d3ee;
+  color: var(--am-cyan);
   background: transparent;
   font: 7px var(--am-font-mono);
   cursor: pointer;
@@ -414,11 +414,11 @@
 }
 .product-taskboard footer button:hover {
   color: var(--workspace-ink);
-  background: #22d3ee;
+  background: var(--am-cyan);
   transform: translateY(-1px);
 }
 .product-taskboard footer time {
-  color: #f0b458;
+  color: var(--am-amber);
 }
 .product-taskboard footer small {
   max-width: 235px;
@@ -459,7 +459,7 @@
 }
 .product-approval__risk {
   margin-top: 10px;
-  color: #f87171;
+  color: var(--am-red);
   font: 8px var(--am-font-mono);
   text-transform: uppercase;
 }
@@ -469,7 +469,7 @@
 }
 .product-approval > p {
   margin-top: 5px;
-  color: #f0b458;
+  color: var(--am-amber);
   font: 9px var(--am-font-mono);
 }
 .product-approval > small {
@@ -499,37 +499,37 @@
   transform: translateY(-1px);
 }
 .product-approval .approve:hover {
-  background: #3ddc97;
+  background: var(--am-green);
 }
 .product-approval .reject:hover {
-  background: #f87171;
+  background: var(--am-red);
 }
 .product-approval .approve {
-  border: 1px solid #3ddc97;
-  color: #3ddc97;
+  border: 1px solid var(--am-green);
+  color: var(--am-green);
 }
 .product-approval .reject {
-  border: 1px solid #f87171;
-  color: #f87171;
+  border: 1px solid var(--am-red);
+  color: var(--am-red);
 }
 .product-approval__decision {
   margin-block: 12px;
-  color: #3ddc97;
+  color: var(--am-green);
   font: 9px var(--am-font-mono);
 }
 .product-approval--rejected .product-approval__decision {
-  color: #f87171;
+  color: var(--am-red);
 }
 
 .react-flow__node.selected .product-node {
-  border-color: #22d3ee;
+  border-color: var(--am-cyan);
   background: #101820;
 }
 .react-flow__node.canvas-owner-purple.selected .product-node {
-  border-color: #a78bfa;
+  border-color: var(--am-purple);
 }
 .react-flow__node.canvas-owner-green.selected .product-node {
-  border-color: #3ddc97;
+  border-color: var(--am-green);
 }
 .product-canvas .react-flow__edge-path {
   stroke-dasharray: 7 7;
@@ -563,12 +563,12 @@
   display: flex;
   align-items: flex-start;
   pointer-events: none;
-  --presence-color: #a78bfa;
+  --presence-color: var(--am-purple);
   color: var(--presence-color);
   transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .product-presence--green {
-  --presence-color: #3ddc97;
+  --presence-color: var(--am-green);
 }
 .product-presence svg {
   width: 18px;
@@ -634,7 +634,7 @@
   overflow-wrap: anywhere;
 }
 .workspace-inspector-panel .identity-value {
-  color: #a78bfa;
+  color: var(--am-purple);
 }
 .permission-list {
   display: grid;
@@ -645,10 +645,10 @@
   font: 9px var(--am-font-mono);
 }
 .permission-list .yes {
-  color: #3ddc97;
+  color: var(--am-green);
 }
 .permission-list .no {
-  color: #f87171;
+  color: var(--am-red);
 }
 .inspector-events ol {
   display: grid;
@@ -658,7 +658,7 @@
 }
 .inspector-events li {
   padding-left: 8px;
-  border-left: 1px solid #22d3ee;
+  border-left: 1px solid var(--am-cyan);
 }
 .inspector-events strong,
 .inspector-events span {
@@ -666,7 +666,7 @@
   font: 8px/1.5 var(--am-font-mono);
 }
 .inspector-events strong {
-  color: #22d3ee;
+  color: var(--am-cyan);
 }
 .inspector-events span {
   color: var(--workspace-muted);
@@ -707,7 +707,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #3ddc97;
+  background: var(--am-green);
 }
 .protocol-events {
   height: calc(100% - 38px);
@@ -732,13 +732,13 @@
 .protocol-events strong {
   display: block;
   margin-top: 7px;
-  color: #22d3ee;
+  color: var(--am-cyan);
   font: 8px var(--am-font-mono);
 }
 .protocol-events span {
   display: block;
   margin-top: 6px;
-  color: #a78bfa;
+  color: var(--am-purple);
   font: 7px var(--am-font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -805,7 +805,7 @@
   color: var(--workspace-paper-muted);
 }
 .product-handle.react-flow__handle {
-  border-color: #456f76;
+  border-color: var(--am-cyan);
   background: var(--workspace-ivory-paper);
 }
 .product-agent {
@@ -814,7 +814,7 @@
   border-color: var(--workspace-line);
 }
 .product-agent .product-handle.react-flow__handle {
-  border-color: #22d3ee;
+  border-color: var(--am-cyan);
   background: var(--workspace-deep);
 }
 .product-agent header {
@@ -842,7 +842,7 @@
   color: var(--workspace-paper-muted);
 }
 .product-coordinator__pulse {
-  background: #456f76;
+  background: var(--am-cyan);
 }
 .product-taskboard {
   background: var(--workspace-ivory-paper);
@@ -855,14 +855,14 @@
 }
 .product-taskboard li > p span,
 .product-taskboard footer button {
-  color: #456f76;
+  color: var(--am-cyan);
 }
 .product-taskboard footer button {
-  border-color: #456f76;
+  border-color: var(--am-cyan);
 }
 .product-taskboard footer button:hover {
   color: var(--workspace-ivory-paper);
-  background: #456f76;
+  background: var(--am-cyan);
 }
 .task-state {
   color: var(--workspace-paper-muted);
@@ -883,15 +883,15 @@
   color: #806d42;
 }
 .react-flow__node.selected .product-node {
-  border-color: #456f76;
-  background: #f4f3e9;
+  border-color: var(--am-cyan);
+  background: var(--am-surface);
 }
 .react-flow__node.canvas-owner-purple.selected .product-node {
-  border-color: #a78bfa;
+  border-color: var(--am-purple);
   background: var(--workspace-deep);
 }
 .react-flow__node.canvas-owner-green.selected .product-node {
-  border-color: #3ddc97;
+  border-color: var(--am-green);
   background: var(--workspace-deep);
 }
 .product-canvas .react-flow__controls {
@@ -912,7 +912,7 @@
 
 .workspace-inspector-panel {
   color: var(--workspace-ink);
-  background: #f4f3e9;
+  background: var(--am-surface);
 }
 .workspace-inspector-panel > header,
 .workspace-inspector-panel section {
@@ -931,13 +931,13 @@
   color: var(--workspace-paper-muted);
 }
 .workspace-inspector-panel .identity-value {
-  color: #766496;
+  color: var(--am-purple);
 }
 .inspector-events li {
-  border-color: #456f76;
+  border-color: var(--am-cyan);
 }
 .inspector-events strong {
-  color: #456f76;
+  color: var(--am-cyan);
 }
 
 @media (max-width: 1200px) {
@@ -1033,18 +1033,18 @@
   color: #a8c1c8;
 }
 .canvas-context b {
-  color: #f5f2e9;
+  color: var(--am-surface);
 }
 .canvas-context__tools button {
-  color: #dce9e7;
+  color: var(--am-cyan-soft);
   background: rgb(10 35 49 / 72%);
   border-color: rgb(146 190 193 / 38%);
 }
 .canvas-context__tools button:hover,
 .canvas-context__tools button[aria-pressed='true'] {
   color: #101b20;
-  background: #cbf47a;
-  border-color: #cbf47a;
+  background: var(--am-green-soft);
+  border-color: var(--am-green-soft);
 }
 
 .product-node,
@@ -1053,7 +1053,7 @@
 .react-flow__node.selected .product-node,
 .react-flow__node.canvas-owner-purple.selected .product-node,
 .react-flow__node.canvas-owner-green.selected .product-node {
-  color: #f5f2e9;
+  color: var(--am-surface);
   background: rgb(7 17 28 / 88%);
   border-color: rgb(118 166 178 / 52%);
   box-shadow:
@@ -1083,7 +1083,7 @@
   color: #91aab3;
 }
 .product-agent__identity span {
-  color: #f5f2e9;
+  color: var(--am-surface);
 }
 .product-terminal {
   background: rgb(3 12 21 / 54%);
@@ -1096,7 +1096,7 @@
 .product-coordinator {
   color: #16221d;
   background: rgb(203 244 122 / 90%);
-  border-color: #cbf47a;
+  border-color: var(--am-green-soft);
 }
 .product-coordinator > div,
 .product-coordinator header strong {
@@ -1123,7 +1123,7 @@
 .product-handle.react-flow__handle,
 .product-agent .product-handle.react-flow__handle {
   background: #092033;
-  border-color: #69c8d6;
+  border-color: var(--am-cyan);
   box-shadow: 0 0 0 3px rgb(105 200 214 / 13%);
 }
 .product-canvas .react-flow__edge-path {
@@ -1147,15 +1147,15 @@
   backdrop-filter: blur(14px);
 }
 .product-canvas .react-flow__controls-button {
-  color: #dce9e7;
-  fill: #dce9e7;
+  color: var(--am-cyan-soft);
+  fill: var(--am-cyan-soft);
   background: transparent;
   border-color: rgb(146 190 193 / 22%);
 }
 .product-canvas .react-flow__controls-button:hover {
   color: #101b20;
   fill: #101b20;
-  background: #cbf47a;
+  background: var(--am-green-soft);
 }
 .product-minimap {
   right: 18px !important;
@@ -1209,14 +1209,14 @@
 }
 .canvas-command-dock__status svg {
   flex: 0 0 auto;
-  color: #766496;
+  color: var(--am-purple);
 }
 .canvas-command-dock__status i {
   flex: 0 0 auto;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #42d69a;
+  background: var(--am-green);
   box-shadow: 0 0 0 4px rgb(66 214 154 / 12%);
 }
 .canvas-command-dock button {
@@ -1226,7 +1226,7 @@
   justify-content: center;
   gap: 6px;
   padding: 0 12px;
-  border: 1px solid #b6c6ba;
+  border: 1px solid var(--am-border-light);
   border-radius: 10px;
   color: #26383d;
   background: rgb(255 255 255 / 66%);
@@ -1238,8 +1238,8 @@
     border-color 180ms ease;
 }
 .canvas-command-dock button:hover {
-  background: #cbf47a;
-  border-color: #92b952;
+  background: var(--am-green-soft);
+  border-color: var(--am-green);
   transform: translateY(-1px);
 }
 .canvas-navigation-hint {
@@ -1310,7 +1310,7 @@
 /* Light glass workspace: the canvas stays open by default and secondary
    information becomes an explicit, smoothly fitted view. */
 .app-shell {
-  background: #eaf5dc;
+  background: var(--am-canvas);
 }
 .app-header {
   color: #151e24;
@@ -1336,17 +1336,17 @@
 .app-header__actions button {
   color: #52616a;
   background: rgb(255 255 255 / 56%);
-  border-color: #b6c6ba;
+  border-color: var(--am-border-light);
 }
 .app-header__actions button:hover {
   color: #151e24;
-  background: #dff5b8;
+  background: var(--am-green-soft);
   border-color: #819b8c;
 }
 .app-header__actions button:nth-child(3) {
   color: #151e24;
-  background: #cbf47a;
-  border-color: #92b952;
+  background: var(--am-green-soft);
+  border-color: var(--am-green);
 }
 
 .app-sidebar {
@@ -1356,8 +1356,8 @@
 }
 .app-nav--active,
 .app-nav--active:hover:not(:disabled) {
-  background: #dff5b8;
-  border-left-color: #6e983f;
+  background: var(--am-green-soft);
+  border-left-color: var(--am-green);
 }
 .app-nav--active svg {
   color: #52745c;
@@ -1381,7 +1381,7 @@
 .product-workspace.is-activity-open {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  background: #eaf5dc;
+  background: var(--am-canvas);
 }
 .product-workspace.is-inspector-open {
   grid-template-columns: minmax(0, 1fr) 310px;
@@ -1451,16 +1451,16 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #42d69a;
+  background: var(--am-green);
 }
 .canvas-legend .is-owner {
-  background: #a78bfa;
+  background: var(--am-purple);
 }
 .canvas-legend .is-dependency {
   width: 11px;
   height: 2px;
   border-radius: 1px;
-  background: #69c8d6;
+  background: var(--am-cyan);
 }
 .canvas-context__tools button {
   height: 31px;
@@ -1468,7 +1468,7 @@
   align-items: center;
   gap: 6px;
   padding: 0 10px;
-  border: 1px solid #b6c6ba;
+  border: 1px solid var(--am-border-light);
   border-radius: 999px;
   color: #41535a;
   background: rgb(255 255 255 / 72%);
@@ -1482,7 +1482,7 @@
 }
 .canvas-context__tools button:hover,
 .canvas-context__tools button[aria-pressed='true'] {
-  background: #dff5b8;
+  background: var(--am-green-soft);
   border-color: #819b8c;
   transform: translateY(-1px);
 }
@@ -1491,7 +1491,7 @@
   padding: 2px 5px;
   border-radius: 999px;
   color: #31523d;
-  background: #cbf47a;
+  background: var(--am-green-soft);
   font: 8px var(--am-font-mono);
 }
 
@@ -1544,11 +1544,11 @@
   color: #197a52 !important;
 }
 .product-state--flow {
-  color: #39737a !important;
+  color: var(--am-cyan) !important;
 }
 .product-coordinator {
   background: rgb(203 244 122 / 74%);
-  border-color: #92b952;
+  border-color: var(--am-green);
 }
 .product-taskboard {
   background: rgb(255 255 255 / 82%);
@@ -1614,10 +1614,10 @@
   color: #657273;
 }
 .protocol-events strong {
-  color: #39737a;
+  color: var(--am-cyan);
 }
 .protocol-events span {
-  color: #766496;
+  color: var(--am-purple);
 }
 
 @media (max-width: 1200px) {
