@@ -1,0 +1,169 @@
+/* ==========================================================================
+   Shared autumn scenery — one instance behind every workspace page.
+
+   Painted once inside `.app-workspace-stack`, beneath `.app-main`. Every view
+   (the Project canvas and the Agents / Tasks / Files / Activity pages) sits on
+   top of it with a transparent background so the lake and the falling maple
+   leaves read through as the common backdrop.
+
+   Performance notes (the whole point of this rewrite):
+     • no `filter:` on the full-screen lake image — a filter on a 1440px cover
+       image is re-rasterised constantly; the look is baked into the asset.
+     • leaves animate transform/opacity only (see FallingLeaves.tsx), never a
+       per-leaf drop-shadow.
+     • `contain` + `content-visibility` keep the layer off the main layout path.
+   ========================================================================== */
+
+.app-workspace-stack {
+  position: relative;
+}
+
+.workspace-scenery {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: #eef1e8;
+  contain: strict;
+}
+
+.workspace-scenery__image {
+  position: absolute;
+  inset: 0;
+  background-image: url('/workspace/autumn-lake.png');
+  background-position: center bottom;
+  background-size: cover;
+  background-repeat: no-repeat;
+  /* Promote to its own layer once; do NOT animate it. */
+  transform: translateZ(0);
+}
+
+.workspace-scenery__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(246, 244, 236, 0.16) 0%,
+    rgba(246, 244, 236, 0.28) 26%,
+    rgba(246, 244, 236, 0.46) 58%,
+    rgba(246, 244, 236, 0.6) 100%
+  );
+}
+
+.workspace-scenery__grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(174, 184, 168, 0.5) 0.8px, transparent 0.8px);
+  background-size: 32px 32px;
+  opacity: 0.14;
+}
+
+/* ------------------------------------------------------------ falling leaves */
+
+.falling-leaves-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  contain: strict;
+}
+
+.falling-leaves-container.is-paused .falling-leaf {
+  animation-play-state: paused;
+}
+
+/* Scoped under `.workspace-scenery` so this optimized rule always wins over the
+   legacy `.falling-leaf` in autumn-workspace.css regardless of import order,
+   and a unique keyframe name avoids clashing with its `leaf-drift-down`. */
+.workspace-scenery .falling-leaf {
+  position: absolute;
+  top: -44px;
+  will-change: transform, opacity;
+  pointer-events: none;
+  animation-name: am-leaf-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.workspace-scenery .falling-leaf svg {
+  display: block;
+}
+
+@keyframes am-leaf-fall {
+  0% {
+    transform: translate3d(0, -44px, 0) rotate(0deg);
+    opacity: 0;
+  }
+  6% {
+    opacity: 0.9;
+  }
+  86% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(var(--leaf-drift-x, 80px), calc(100vh + 60px), 0)
+      rotate(var(--leaf-rot-end, 360deg));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .falling-leaf {
+    display: none !important;
+  }
+}
+
+/* ==========================================================================
+   Reveal the shared scenery through every view.
+
+   The canvas and the pages all paint their own opaque/near-opaque background
+   normally; here they are made transparent so the single scenery layer behind
+   `.app-main` is what shows between and around their cards.
+   ========================================================================== */
+
+/* The shell forces `--canvas-ink` onto the content column (high specificity in
+   workspace-spatial.css); clear it so the scenery layer behind it shows. */
+body .app-shell .app-main,
+body .app-shell .overview,
+body .app-shell .overview__canvas,
+body .app-shell .overview__canvas-frame {
+  background: transparent !important;
+}
+
+/* ----- Project canvas: drop its private background + the 32s pan animation - */
+.overview__canvas-frame {
+  background: transparent !important;
+}
+
+.overview__canvas-frame {
+  border-color: transparent;
+}
+
+body .app-shell .product-canvas {
+  background: transparent !important;
+  animation: none !important;
+}
+
+/* The canvas' own blueprint grid/vignette is redundant now the lake is behind
+   it, and the ::after radial dots were another always-composited layer. */
+body .app-shell .product-canvas::before,
+body .app-shell .product-canvas::after {
+  display: none !important;
+}
+
+/* React Flow's own dotted background would double up with the scenery grid. */
+.product-canvas .react-flow__background {
+  opacity: 0 !important;
+}
+
+/* `.product-workspace` and React Flow both paint the opaque dark canvas ink;
+   clear them so the lake shows behind the nodes. */
+body .app-shell .product-workspace {
+  background: transparent !important;
+}
+
+body .app-shell .product-canvas .react-flow {
+  background: transparent !important;
+}

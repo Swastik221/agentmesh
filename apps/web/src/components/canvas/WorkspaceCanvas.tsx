@@ -29,6 +29,7 @@ import {
   type Edge,
   type Node,
   type NodeMouseHandler,
+  type OnConnectEnd,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -37,7 +38,6 @@ import '../../features/workspace/workspace-spatial.css';
 import '../../features/workspace/autumn-workspace.css';
 import '../../features/workspace/chrome.css';
 
-import { PixelSceneryBackground } from './PixelSceneryBackground';
 import { workspaceNodeTypes } from './nodes';
 import { ProtocolEdge } from './ProtocolEdge';
 import { ToolDock, type DockToolType } from './ToolDock';
@@ -231,8 +231,13 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
 
+  /* Drives the board's connecting affordances: every handle comes up and the
+     card under the pointer reads as the drop target. */
+  const [connecting, setConnecting] = useState(false);
   const nodesRef = useRef<Node[]>(nodes);
   nodesRef.current = nodes;
+  const edgesRef = useRef<Edge[]>(edges);
+  edgesRef.current = edges;
 
   const [selectedId, setSelectedId] = useState('orion');
   const [movingNode, setMovingNode] = useState<string | null>(null);
@@ -697,7 +702,7 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
     []
   );
 
-  const onConnect = useCallback(
+  const linkNodes = useCallback(
     (connection: Connection) =>
       setEdges((current) =>
         addEdge(
@@ -712,6 +717,39 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
         )
       ),
     [setEdges, linkLabel]
+  );
+
+  const onConnect = useCallback((connection: Connection) => linkNodes(connection), [linkNodes]);
+
+  /**
+   * Dropping the arrow anywhere on a node connects to it.
+   *
+   * React Flow only completes a connection when the pointer is released on a
+   * handle, which means aiming at a 9px dot. Handles have a wide invisible hit
+   * area and the connection radius snaps near misses, but a release over the
+   * middle of a card would still be thrown away. This finishes those: if the
+   * drag ended over some other node and React Flow did not already make the
+   * edge, link the two directly.
+   */
+  const onConnectEnd = useCallback<OnConnectEnd>(
+    (event, connectionState) => {
+      setConnecting(false);
+      if (connectionState.isValid) return;
+      const from = connectionState.fromNode?.id;
+      if (!from) return;
+      /* React Flow reports a target node only when the release lands on a
+         handle, and not having to hit the handle is the whole point, so the
+         card under the pointer is looked up directly. */
+      const point = 'changedTouches' in event ? event.changedTouches[0] : event;
+      const landed = document
+        .elementFromPoint(point.clientX, point.clientY)
+        ?.closest('.react-flow__node');
+      const to = landed instanceof HTMLElement ? landed.dataset.id : undefined;
+      if (!to || to === from) return;
+      if (edgesRef.current.some((edge) => edge.source === from && edge.target === to)) return;
+      linkNodes({ source: from, target: to, sourceHandle: null, targetHandle: null });
+    },
+    [linkNodes]
   );
 
   const arrangeAgents = useCallback(() => {
@@ -733,7 +771,7 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
         activityOpen ? 'is-activity-open' : ''
       }`}
     >
-      <div className="product-canvas">
+      <div className={`product-canvas${connecting ? ' is-connecting' : ''}`}>
         {/* Context bar inside canvas */}
         <div className="canvas-context">
           <div>
@@ -773,8 +811,9 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
           </div>
         </div>
 
-        {/* Scenic Pixel Background with Mt. Fuji & Falling Leaves */}
-        <PixelSceneryBackground />
+        {/* The autumn scenery is now painted once for the whole workspace
+            (see App.tsx → WorkspaceScenery); the canvas is transparent so it
+            shows through here too. */}
 
         {/* 19-Step Replay Controller Bar */}
         {replayActive && (
@@ -818,7 +857,12 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
              direction rather than only source-to-target. The wider radius
              means the drop does not have to land exactly on the dot. */
           connectionMode={ConnectionMode.Loose}
-          connectionRadius={34}
+          /* Generous enough that releasing near a card's edge snaps to its
+             nearest handle rather than doing nothing. */
+          connectionRadius={60}
+          onConnectStart={() => setConnecting(true)}
+          onConnectEnd={onConnectEnd}
+          connectionLineStyle={{ stroke: '#177E89', strokeWidth: 2 }}
           onNodeClick={onNodeClick}
           onNodeDragStart={(_e, node) => setMovingNode(node.id)}
           onNodeDragStop={(_e, node) => {

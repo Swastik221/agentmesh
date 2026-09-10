@@ -189,9 +189,12 @@ body {
 
 .app-main {
   position: relative;
+  z-index: 1;
   min-width: 0;
   overflow-y: auto;
-  background: var(--am-base);
+  /* Transparent so the shared autumn scenery (behind the stack) shows through
+     every page. */
+  background: transparent;
 }
 
 /* --------------------------------------------------------------- overview */

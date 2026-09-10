@@ -231,3 +231,129 @@
 @media (prefers-reduced-motion: reduce) {
   .workspace-view { background-attachment: scroll; }
 }
+
+/* ==========================================================================
+   Autumn skin for the workspace pages.
+
+   The Agents / Tasks / Files / Activity pages previously painted a dark navy
+   blueprint over themselves. They now share the one autumn scenery behind
+   `.app-main`, so the page background is transparent and the cards are the
+   same warm paper stock as the canvas nodes — the whole workspace reads as
+   one design. Cards are near-opaque (no backdrop-filter blur) so they stay
+   readable over the lake and, crucially, do not force a per-frame blur
+   recompute as leaves drift behind them.
+   ========================================================================== */
+
+.workspace-view {
+  /* Light autumn palette — the same values the canvas nodes use. */
+  --canvas-copy: #1e2b26;
+  --canvas-muted: #5f6b64;
+  --canvas-dim: #7c8981;
+  --canvas-ink: #f6f4ec;
+  --canvas-line: #d6d8c9;
+  --canvas-line-strong: #aeb8a8;
+  --canvas-violet: #8b6fe8;
+  --canvas-teal: #1f9e8f;
+  --canvas-cyan: #177e89;
+  --canvas-amber: #c07d1e;
+  --canvas-green: #2f7d5c;
+  --canvas-red: #c94f4f;
+  --canvas-shadow: 0 6px 22px rgba(36, 62, 41, 0.12), 0 1px 3px rgba(36, 62, 41, 0.08);
+
+  background: transparent !important;
+}
+
+/* --- cards: warm paper, soft shadow, no blur -------------------------------- */
+.workspace-metric-row article,
+.agent-directory__card,
+.task-table,
+.file-tree,
+.artifact-preview,
+.activity-layout > aside,
+.activity-stream {
+  background: rgb(255 253 247 / 0.94) !important;
+  box-shadow: var(--canvas-shadow);
+  backdrop-filter: none !important;
+}
+
+.agent-directory__card {
+  border-color: rgba(139, 111, 232, 0.5);
+}
+
+.agent-directory__card--teal {
+  background: rgb(247 253 251 / 0.94) !important;
+  border-color: rgba(31, 158, 143, 0.5);
+}
+
+.agent-directory__mark {
+  background: rgba(139, 111, 232, 0.1);
+}
+
+.agent-directory__card--teal .agent-directory__mark {
+  background: rgba(31, 158, 143, 0.1);
+}
+
+.agent-directory__capabilities span {
+  color: #33413a;
+  background: rgba(30, 43, 38, 0.05);
+}
+
+.task-table__head {
+  background: rgb(241 244 235 / 0.96) !important;
+}
+
+/* --- header + tool buttons -------------------------------------------------- */
+.workspace-view__header > button,
+.agent-directory footer button,
+.artifact-preview > button {
+  color: var(--canvas-copy);
+  background: rgb(255 253 247 / 0.92);
+}
+
+.workspace-view__header > button:hover,
+.agent-directory footer button:hover,
+.artifact-preview > button:hover {
+  background: rgba(23, 126, 137, 0.1);
+}
+
+.workspace-list-tools input {
+  color: var(--canvas-copy);
+  background: rgb(255 255 255 / 0.9);
+}
+
+.workspace-list-tools button.is-active {
+  background: rgba(30, 43, 38, 0.08);
+}
+
+.workspace-list-tools__primary {
+  color: #f4fff9 !important;
+}
+
+/* --- file tree + activity accents ------------------------------------------ */
+.file-tree li.is-selected {
+  color: #5a3fc0;
+  background: rgba(139, 111, 232, 0.14);
+}
+
+.activity-layout > aside button.is-active {
+  background: rgba(23, 126, 137, 0.1);
+}
+
+/* --- artifact JSON block: stays a dark code panel, same as canvas logs ------ */
+.artifact-preview pre {
+  color: #bdeef6;
+  background: #0e1c17;
+}
+
+/* Header hairline sits a touch stronger over the busy scene. */
+.workspace-view__header {
+  border-bottom-color: var(--canvas-line-strong);
+}
+
+/* A soft paper halo lifts the header type off the busy leaf canopy without
+   hiding the scenery behind it. */
+.workspace-view__header > div > span,
+.workspace-view__header h1,
+.workspace-view__header p {
+  text-shadow: 0 1px 12px rgba(246, 244, 236, 0.95), 0 1px 3px rgba(246, 244, 236, 0.9);
+}

@@ -58,10 +58,10 @@ export function MiniAgent({
   );
 }
 
-/** Marketing copy follows the cinematic sequence instead of overlaying it. */
+/** The product promise owns the first viewport before the connection story begins. */
 export function HeroWorkshop() {
   return (
-    <section id="introduction" className="landing-introduction" data-theme="dark" tabIndex={-1}>
+    <section id="top" className="landing-introduction" data-theme="dark" tabIndex={-1}>
       <div className="hero-copy">
         <div className="eyebrow">
           <span className="tiny-cross">✳</span> AGENTMESH / THE CONNECTED WORKSHOP
@@ -73,7 +73,7 @@ export function HeroWorkshop() {
           Bring your coding agents into one shared workspace. Choose responsibilities, exchange
           dependencies, and keep your team in control.
         </p>
-        <a className="landing-button primary" href="/canvas">
+        <a className="landing-button primary" href="/signup">
           Explore the canvas <ArrowUpRight size={18} />
         </a>
         <span className="hero-caption">
