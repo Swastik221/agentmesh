@@ -7,7 +7,10 @@ import { navItems } from './data/workspace';
 import type { SectionId } from './types';
 import { BrowserPanel, TerminalPanel } from './demo/DemoPanels';
 import { ActivityView, AgentsView, FilesView, TasksView } from './pages/Workspace/WorkspaceViews';
+import { WorkspaceScenery } from './components/canvas/WorkspaceScenery';
+import './features/workspace/scenery.css';
 import './pages/Workspace/workspace-views.css';
+import './demo/demo-panels-autumn.css';
 
 /**
  * Workspace shell: a compact header, left rail, and uninterrupted canvas.
@@ -36,6 +39,8 @@ export function App() {
         />
 
         <div className={`app-workspace-stack${panel ? ' has-utility-panel' : ''}`}>
+          {/* One shared autumn backdrop behind every view. */}
+          <WorkspaceScenery />
           <main className="app-main">
             {activeSection === 'overview' || activeSection === 'terminal' || activeSection === 'browser' ? (
               <OverviewPage focusView={focusView} onFocusViewChange={setFocusView} />

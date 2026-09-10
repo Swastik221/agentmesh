@@ -38,7 +38,6 @@ import '../../features/workspace/workspace-spatial.css';
 import '../../features/workspace/autumn-workspace.css';
 import '../../features/workspace/chrome.css';
 
-import { PixelSceneryBackground } from './PixelSceneryBackground';
 import { workspaceNodeTypes } from './nodes';
 import { ProtocolEdge } from './ProtocolEdge';
 import { ToolDock, type DockToolType } from './ToolDock';
@@ -812,8 +811,9 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
           </div>
         </div>
 
-        {/* Scenic Pixel Background with Mt. Fuji & Falling Leaves */}
-        <PixelSceneryBackground />
+        {/* The autumn scenery is now painted once for the whole workspace
+            (see App.tsx → WorkspaceScenery); the canvas is transparent so it
+            shows through here too. */}
 
         {/* 19-Step Replay Controller Bar */}
         {replayActive && (
