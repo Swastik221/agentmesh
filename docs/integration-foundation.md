@@ -54,16 +54,22 @@ The adapter abstraction (`apps/web/src/adapters/`) decouples UI components from 
 
 ## 3. Live Adapter Integration Status Matrix
 
-| Adapter Module | Integration Status | Notes / Capabilities |
-| :--- | :---: | :--- |
-| **`auth.adapter.ts`** | `REAL` | Integrates with SIWE session endpoints (`/auth/nonce`, `/auth/verify`, `/auth/me`, `/auth/logout`). Throws `LiveAuthError` when unauthenticated. |
-| **`wallet.adapter.ts`** | `REAL` (Account & Chain) / `UNSUPPORTED` (Signing) | Connects via `window.ethereum` (`eth_requestAccounts`, `eth_chainId`). ENS resolution queries `/api/ens/resolve/:address`. `signApproval()` throws `LiveWalletError` as live x402 signing belongs to a later PRD. |
-| **`agent-connection.adapter.ts`** | `REAL` | Connects via `/agents` REST endpoints. `announceCapabilities()` throws `LiveAgentConnectionError` until live broadcast is wired. |
-| **`workspace-realtime.adapter.ts`** | `REAL` | Integrates with `/projects` REST API and `wsClient` WebSocket manager (`CURSOR_MOVE`, `NODE_MOVE`, `PROTOCOL_EVENT`). |
-| **`task-protocol.adapter.ts`** | `REAL` | Connects via `/projects/:id/tasks`, `/projects/:id/approvals`, and `/approvals/:id/decide` REST API routes. |
-| **`file.adapter.ts`** | `REAL` | Connects via `/projects/:id/files`, `/projects/:id/files/read`, and `/projects/:id/artifacts` REST API routes. |
-| **`terminal.adapter.ts`** | `UNSUPPORTED UNTIL LATER PRD` | `createSession()` & `executeCommand()` throw `LiveTerminalError` as production PTY execution is not exposed. |
-| **`browser-preview.adapter.ts`** | `PARTIALLY INTEGRATED` | Performs direct `fetch(url)`. Throws `LiveBrowserPreviewError` on HTTP failure or CORS restriction. |
+| Live capability | Frontend method | Backend route/protocol | Status |
+| :--- | :--- | :--- | :--- |
+| **Session** | `liveAuthAdapter.login/logout/getCurrentUser` | `GET /auth/me`, `POST /auth/logout` | REAL |
+| **Wallet connect** | `liveWalletAdapter.connectWallet` | Browser wallet provider (`window.ethereum`) | REAL/PARTIAL |
+| **ENS** | `liveWalletAdapter.resolveEns` | `ensService` / viem reverse resolution | REAL/PARTIAL |
+| **Projects** | `liveWorkspaceRealtimeAdapter.joinWorkspace` | `GET /projects/:projectId` | REAL |
+| **Agents** | `liveAgentConnectionAdapter.getAvailableAgents` | `GET /projects/:projectId/agents` | REAL |
+| **Agent connect** | `liveAgentConnectionAdapter.connectAgent/disconnectAgent/announce` | None | UNSUPPORTED UNTIL LATER PRD |
+| **Tasks** | `liveTaskProtocolAdapter.getTasks` | `GET /projects/:projectId/tasks` | REAL |
+| **Task claim** | `liveTaskProtocolAdapter.submitPrd/claimTask/autoAssignTask` | None | UNSUPPORTED UNTIL LATER PRD |
+| **Approvals** | `liveTaskProtocolAdapter.requestApproval/decideApproval` | `POST /approvals`, `POST /approvals/:id/approve`, `POST /approvals/:id/reject` | REAL/PARTIAL |
+| **Artifact creation** | `liveFileAdapter.publishArtifact` | `POST /projects/:projectId/tasks/:taskId/artifacts` | REAL |
+| **File browser** | `liveFileAdapter.getFiles/readFile` | None | UNSUPPORTED UNTIL LATER PRD |
+| **Terminal** | `liveTerminalAdapter.createSession/executeCommand` | None | UNSUPPORTED UNTIL LATER PRD |
+| **Browser preview** | `liveBrowserPreviewAdapter.getPreview` | None | UNSUPPORTED UNTIL LATER PRD |
+| **WebSocket** | `liveWorkspaceRealtimeAdapter.joinWorkspace/subscribe` | `/ws?projectId=...` snapshot & presence protocol | REAL/PARTIAL |
 
 ---
 

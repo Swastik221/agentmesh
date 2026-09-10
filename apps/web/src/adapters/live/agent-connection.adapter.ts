@@ -9,19 +9,22 @@ export class LiveAgentConnectionError extends Error {
 }
 
 export const liveAgentConnectionAdapter: AgentConnectionAdapter = {
-  async getAvailableAgents(): Promise<Agent[]> {
-    return await apiClient.get<Agent[]>('/agents');
+  async getAvailableAgents(projectId?: string): Promise<Agent[]> {
+    if (!projectId) {
+      throw new LiveAgentConnectionError('Project ID is required to fetch available agents in Live Mode.');
+    }
+    return await apiClient.get<Agent[]>(`/projects/${encodeURIComponent(projectId)}/agents`);
   },
 
-  async connectAgent(agentId: string, options?: { provider?: string; repoScope?: string }): Promise<Agent> {
-    return await apiClient.post<Agent>(`/agents/${encodeURIComponent(agentId)}/connect`, options);
+  async connectAgent(_agentId: string, _options?: { provider?: string; repoScope?: string }): Promise<Agent> {
+    throw new LiveAgentConnectionError('Agent connect capability is unsupported in Live Mode in INT-1.');
   },
 
-  async disconnectAgent(agentId: string): Promise<void> {
-    await apiClient.post(`/agents/${encodeURIComponent(agentId)}/disconnect`);
+  async disconnectAgent(_agentId: string): Promise<void> {
+    throw new LiveAgentConnectionError('Agent disconnect capability is unsupported in Live Mode in INT-1.');
   },
 
   async announceCapabilities(_agentId: string, _capabilities: string[]): Promise<ProtocolEvent> {
-    throw new LiveAgentConnectionError('Live capability announcement event broadcasting is not supported directly via this adapter in Live Mode.');
+    throw new LiveAgentConnectionError('Live capability announcement event broadcasting is unsupported in Live Mode in INT-1.');
   },
 };

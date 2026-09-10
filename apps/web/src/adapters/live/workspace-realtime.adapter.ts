@@ -8,55 +8,30 @@ export const liveWorkspaceRealtimeAdapter: WorkspaceRealtimeAdapter = {
     return await apiClient.get<Workspace>(`/projects/${encodeURIComponent(workspaceId)}`);
   },
 
-  publishCursor(workspaceId: string, cursor: Cursor): void {
-    wsClient.send({
-      type: 'CURSOR_MOVE',
-      workspaceId,
-      cursor,
-    });
+  publishCursor(_workspaceId: string, _cursor: Cursor): void {
+    // Spatial UI cursor movements are local-only in INT-1 as backend WS protocol does not process custom cursor events
   },
 
-  subscribeCursors(_workspaceId: string, callback: (cursors: Cursor[]) => void): () => void {
-    return wsClient.onMessage((data: unknown) => {
-      if (typeof data === 'object' && data !== null && (data as { type?: string }).type === 'CURSOR_UPDATE') {
-        callback((data as { cursors: Cursor[] }).cursors || []);
-      }
-    });
+  subscribeCursors(_workspaceId: string, _callback: (cursors: Cursor[]) => void): () => void {
+    return () => {};
   },
 
-  publishNodeMovement(workspaceId: string, nodeId: string, position: { x: number; y: number }): void {
-    wsClient.send({
-      type: 'NODE_MOVE',
-      workspaceId,
-      nodeId,
-      position,
-    });
+  publishNodeMovement(_workspaceId: string, _nodeId: string, _position: { x: number; y: number }): void {
+    // Spatial UI node movements are local-only in INT-1 as backend WS protocol does not process custom node movement events
   },
 
   subscribeNodeMovements(
     _workspaceId: string,
-    callback: (update: { nodeId: string; position: { x: number; y: number }; actor?: string }) => void
+    _callback: (update: { nodeId: string; position: { x: number; y: number }; actor?: string }) => void
   ): () => void {
-    return wsClient.onMessage((data: unknown) => {
-      if (typeof data === 'object' && data !== null && (data as { type?: string }).type === 'NODE_MOVED') {
-        callback(data as { nodeId: string; position: { x: number; y: number }; actor?: string });
-      }
-    });
+    return () => {};
   },
 
-  publishEvent(workspaceId: string, event: ProtocolEvent): void {
-    wsClient.send({
-      type: 'PROTOCOL_EVENT',
-      workspaceId,
-      event,
-    });
+  publishEvent(_workspaceId: string, _event: ProtocolEvent): void {
+    // Custom protocol events are handled via REST and WS snapshot/presence in INT-1
   },
 
-  subscribeEvents(_workspaceId: string, callback: (event: ProtocolEvent) => void): () => void {
-    return wsClient.onMessage((data: unknown) => {
-      if (typeof data === 'object' && data !== null && (data as { type?: string }).type === 'PROTOCOL_EVENT') {
-        callback((data as { event: ProtocolEvent }).event);
-      }
-    });
+  subscribeEvents(_workspaceId: string, _callback: (event: ProtocolEvent) => void): () => void {
+    return () => {};
   },
 };

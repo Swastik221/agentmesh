@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { liveWalletAdapter, LiveWalletError } from '../wallet.adapter';
 import { liveAuthAdapter, LiveAuthError } from '../auth.adapter';
 import { liveAgentConnectionAdapter, LiveAgentConnectionError } from '../agent-connection.adapter';
-import { liveTaskProtocolAdapter } from '../task-protocol.adapter';
-import { liveFileAdapter } from '../file.adapter';
+import { liveTaskProtocolAdapter, LiveTaskProtocolError } from '../task-protocol.adapter';
+import { liveFileAdapter, LiveFileAdapterError } from '../file.adapter';
 import { liveTerminalAdapter, LiveTerminalError } from '../terminal.adapter';
 import { liveBrowserPreviewAdapter, LiveBrowserPreviewError } from '../browser-preview.adapter';
 import { liveWorkspaceRealtimeAdapter } from '../workspace-realtime.adapter';
@@ -11,7 +11,7 @@ import { demoAdapters } from '../../demo/index';
 import { getAdapters, adapters } from '../../index';
 import { setAppMode, getAppMode } from '../../../config/env';
 
-describe('INT-1-C1 Live Adapters Correctness & Mode Isolation Tests', () => {
+describe('INT-1-C2 Live Adapters Contract Alignment & Mode Isolation Tests', () => {
   describe('1. Wallet Adapter Correctness', () => {
     it('throws LiveWalletError when window.ethereum is missing', async () => {
       const originalWindow = global.window;
@@ -60,7 +60,29 @@ describe('INT-1-C1 Live Adapters Correctness & Mode Isolation Tests', () => {
       global.window = originalWindow;
     });
 
-    it('returns real wallet identity when provider succeeds without inventing fallback address', async () => {
+    it('throws LiveWalletError when eth_chainId fails or returns invalid value without defaulting to chain 1', async () => {
+      const originalWindow = global.window;
+      Object.defineProperty(global, 'window', {
+        value: {
+          ethereum: {
+            request: vi.fn().mockImplementation(async (args: { method: string }) => {
+              if (args.method === 'eth_requestAccounts') return ['0x1111111111111111111111111111111111111111'];
+              if (args.method === 'eth_chainId') throw new Error('RPC error querying chainId');
+              return null;
+            }),
+          },
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      await expect(liveWalletAdapter.connectWallet('metamask')).rejects.toThrow(LiveWalletError);
+      await expect(liveWalletAdapter.connectWallet('metamask')).rejects.toThrow(/eth_chainId/);
+
+      global.window = originalWindow;
+    });
+
+    it('returns real wallet identity when provider succeeds', async () => {
       const originalWindow = global.window;
       Object.defineProperty(global, 'window', {
         value: {
@@ -86,14 +108,11 @@ describe('INT-1-C1 Live Adapters Correctness & Mode Isolation Tests', () => {
 
     it('throws LiveWalletError on signApproval without inventing fake signatures or txHashes', async () => {
       await expect(liveWalletAdapter.signApproval('app_1', 'action_1')).rejects.toThrow(LiveWalletError);
-      await expect(liveWalletAdapter.signApproval('app_1', 'action_1')).rejects.toThrow(/not implemented yet/);
+      await expect(liveWalletAdapter.signApproval('app_1', 'action_1')).rejects.toThrow(/Wallet approval signing is not implemented in INT-1/);
     });
 
-    it('does not return developer.eth fallback on ENS resolution error', async () => {
-      const res = await liveWalletAdapter.resolveEns('0x9999999999999999999999999999999999999999');
-      expect(res.ens).toBe('0x9999999999999999999999999999999999999999');
-      expect(res.resolved).toBe(false);
-      expect(res.ens).not.toContain('developer.eth');
+    it('propagates ENS resolution error without converting to fake resolved: false or developer.eth', async () => {
+      await expect(liveWalletAdapter.resolveEns('0x9999999999999999999999999999999999999999')).rejects.toThrow();
     });
   });
 
@@ -107,33 +126,38 @@ describe('INT-1-C1 Live Adapters Correctness & Mode Isolation Tests', () => {
     });
   });
 
-  describe('3. Agent & Task & File & Realtime Adapter Error Propagation', () => {
-    it('throws LiveAgentConnectionError on unsupported capability announcement', async () => {
+  describe('3. Unsupported Capabilities Correctness', () => {
+    it('throws LiveAgentConnectionError on getAvailableAgents without projectId or on connect/disconnect/announce', async () => {
+      await expect(liveAgentConnectionAdapter.getAvailableAgents()).rejects.toThrow(LiveAgentConnectionError);
+      await expect(liveAgentConnectionAdapter.connectAgent('ag_1')).rejects.toThrow(LiveAgentConnectionError);
+      await expect(liveAgentConnectionAdapter.disconnectAgent('ag_1')).rejects.toThrow(LiveAgentConnectionError);
       await expect(liveAgentConnectionAdapter.announceCapabilities('ag_1', ['cap'])).rejects.toThrow(LiveAgentConnectionError);
     });
 
-    it('propagates API error when fetching tasks for non-existent workspace in Live Mode', async () => {
-      await expect(liveTaskProtocolAdapter.getTasks('invalid_ws')).rejects.toThrow();
+    it('throws LiveTaskProtocolError on submitPrd, claimTask, and autoAssignTask', async () => {
+      await expect(liveTaskProtocolAdapter.submitPrd('ws_1', 'prd text')).rejects.toThrow(LiveTaskProtocolError);
+      await expect(liveTaskProtocolAdapter.claimTask('ws_1', 'task_1', 'ag_1')).rejects.toThrow(LiveTaskProtocolError);
+      await expect(liveTaskProtocolAdapter.autoAssignTask('ws_1', 'task_1', 'ag_1')).rejects.toThrow(LiveTaskProtocolError);
     });
 
-    it('propagates API error when reading files in Live Mode without fake comments', async () => {
-      await expect(liveFileAdapter.readFile('ws_1', 'nonexistent.txt')).rejects.toThrow();
+    it('throws LiveFileAdapterError on file operations (getFiles, readFile, getArtifacts without taskId, publishArtifact without taskId)', async () => {
+      await expect(liveFileAdapter.getFiles('ws_1')).rejects.toThrow(LiveFileAdapterError);
+      await expect(liveFileAdapter.readFile('ws_1', 'file.txt')).rejects.toThrow(LiveFileAdapterError);
+      await expect(liveFileAdapter.getArtifacts('ws_1')).rejects.toThrow(LiveFileAdapterError);
+      await expect(liveFileAdapter.publishArtifact('ws_1', { id: 'art_1', name: 'n', schema: 's', hash: 'h', publishedBy: 'p', usedBy: 'u' })).rejects.toThrow(LiveFileAdapterError);
     });
 
-    it('throws LiveTerminalError on createSession when execution endpoint is unvailable', async () => {
+    it('throws LiveTerminalError on createSession and executeCommand', async () => {
       await expect(liveTerminalAdapter.createSession('agent_1')).rejects.toThrow(LiveTerminalError);
+      await expect(liveTerminalAdapter.executeCommand('sess_1', 'ls')).rejects.toThrow(LiveTerminalError);
     });
 
-    it('throws LiveBrowserPreviewError on fetch failure', async () => {
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockRejectedValue(new Error('Connection refused'));
-
-      await expect(liveBrowserPreviewAdapter.getPreview('http://localhost:59999')).rejects.toThrow(LiveBrowserPreviewError);
-
-      global.fetch = originalFetch;
+    it('throws LiveBrowserPreviewError on getPreview', async () => {
+      await expect(liveBrowserPreviewAdapter.getPreview('http://example.com')).rejects.toThrow(LiveBrowserPreviewError);
     });
 
-    it('propagates API error on joining workspace when server is offline or workspace not found', async () => {
+    it('propagates API error when querying tasks or joining workspace for non-existent workspace in Live Mode', async () => {
+      await expect(liveTaskProtocolAdapter.getTasks('invalid_ws')).rejects.toThrow();
       await expect(liveWorkspaceRealtimeAdapter.joinWorkspace('ws_nonexistent', { id: 'u1', email: 'e', displayName: 'd', createdAt: '' })).rejects.toThrow();
     });
   });
