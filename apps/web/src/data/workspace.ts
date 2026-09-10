@@ -20,8 +20,9 @@ export const navItems: NavItem[] = [
   { id: 'tasks', label: 'Tasks' },
   { id: 'files', label: 'Files' },
   { id: 'activity', label: 'Activity' },
-  { id: 'terminal', label: 'Terminal', reserved: true },
-  { id: 'browser', label: 'Browser', reserved: true },
+  { id: 'terminal', label: 'Terminal' },
+  { id: 'browser', label: 'Browser' },
+  { id: 'notes', label: 'Notes' },
 ];
 
 /** Placeholder project. There is no project switching yet. */

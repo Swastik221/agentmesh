@@ -1,5 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, LocateFixed, PanelRightOpen, Sparkles, X } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from 'react';
+import {
+  Activity,
+  LocateFixed,
+  Maximize2,
+  Minimize2,
+  PanelRightOpen,
+  X,
+} from 'lucide-react';
 import {
   addEdge,
   Background,
@@ -8,99 +21,65 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
-  ViewportPortal,
   useEdgesState,
+  ConnectionMode,
   useNodesState,
   useReactFlow,
   type Connection,
   type Edge,
+  type Node,
   type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+
 import '../../features/workspace/workspace.css';
 import '../../features/workspace/workspace-spatial.css';
-import {
-  ApprovalNode,
-  ArtifactNode,
-  CoordinatorNode,
-  ProductAgentNode,
-  ProductTaskBoardNode,
-  type ProductNode,
-} from '../../features/workspace/WorkspaceNodes';
-import {
-  agents,
-  artifact,
-  createWorkspaceState,
-  owners,
-  presence,
-} from '../../features/workspace/workspace.mock';
-import type { ProtocolEvent, ProductTask } from '../../features/workspace/workspace.types';
+import '../../features/workspace/autumn-workspace.css';
+import '../../features/workspace/chrome.css';
 
-const nodeTypes = {
-  productAgent: ProductAgentNode,
-  productTasks: ProductTaskBoardNode,
-  coordinator: CoordinatorNode,
-  artifact: ArtifactNode,
-  approval: ApprovalNode,
+import { PixelSceneryBackground } from './PixelSceneryBackground';
+import { workspaceNodeTypes } from './nodes';
+import { ProtocolEdge } from './ProtocolEdge';
+import { ToolDock, type DockToolType } from './ToolDock';
+import { CommandComposer } from './CommandComposer';
+import { MultiplayerCursors } from './MultiplayerCursors';
+import { DemoReplayController, REPLAY_STEPS } from './DemoReplayController';
+
+import {
+  adapters,
+  INITIAL_DEMO_AGENTS,
+  INITIAL_DEMO_TASKS,
+  INITIAL_DEMO_APPROVAL,
+  DEMO_ARTIFACTS,
+} from '../../adapters';
+import { useDemo } from '../../demo/DemoProvider';
+import { PREPARED_PRD } from '../../demo/demo.fixtures';
+
+const edgeTypes = {
+  protocol: ProtocolEdge,
 };
+
 const initialPositions = {
-  coordinator: { x: 430, y: 20 },
-  orion: { x: 10, y: 190 },
-  tasks: { x: 395, y: 170 },
-  vega: { x: 850, y: 190 },
-  artifact: { x: 710, y: 590 },
-  approval: { x: 120, y: 590 },
+  coordinator: { x: 420, y: 30 },
+  orion: { x: 30, y: 190 },
+  tasks: { x: 370, y: 180 },
+  vega: { x: 790, y: 190 },
+  artifact: { x: 640, y: 560 },
+  approval: { x: 100, y: 560 },
 };
-const noop = () => undefined;
-const seedNodes: ProductNode[] = [
-  {
-    id: 'coordinator',
-    type: 'coordinator',
-    position: initialPositions.coordinator,
-    data: { activity: 'splitting PRD into tasks' },
-  },
-  {
-    id: 'orion',
-    type: 'productAgent',
-    position: initialPositions.orion,
-    className: 'canvas-owner-purple',
-    data: { agent: agents[0], owner: owners[0] },
-  },
-  {
-    id: 'tasks',
-    type: 'productTasks',
-    position: initialPositions.tasks,
-    data: { tasks: createWorkspaceState().tasks, onClaim: noop },
-  },
-  {
-    id: 'vega',
-    type: 'productAgent',
-    position: initialPositions.vega,
-    className: 'canvas-owner-green',
-    data: { agent: agents[1], owner: owners[1] },
-  },
-  { id: 'artifact', type: 'artifact', position: initialPositions.artifact, data: { artifact } },
-  {
-    id: 'approval',
-    type: 'approval',
-    position: initialPositions.approval,
-    data: { request: createWorkspaceState().approval, onDecision: noop },
-  },
-];
+
 const edgeBase = {
-  type: 'smoothstep' as const,
+  type: 'protocol' as const,
   animated: true,
   markerEnd: {
     type: MarkerType.ArrowClosed,
     width: 14,
     height: 14,
-    color: 'var(--am-teal)',
+    color: '#177E89',
   },
-  style: { stroke: 'var(--am-teal)', strokeWidth: 1.6 },
-  labelStyle: { fill: 'var(--am-text-primary)', fontSize: 10 },
-  labelBgStyle: { fill: 'var(--am-surface)', stroke: 'var(--am-border-light)' },
-  labelBgPadding: [5, 4] as [number, number],
+  style: { stroke: '#177E89', strokeWidth: 1.8 },
 };
+
 const initialEdges: Edge[] = [
   {
     ...edgeBase,
@@ -108,29 +87,45 @@ const initialEdges: Edge[] = [
     source: 'coordinator',
     target: 'tasks',
     label: 'TASK_PROPOSAL',
-    style: { stroke: 'var(--am-cyan)', strokeWidth: 1.6 },
+    data: { protocolType: 'TASK_PROPOSAL' },
+  },
+  {
+    ...edgeBase,
+    id: 'tasks-orion',
+    source: 'tasks',
+    target: 'orion',
+    label: 'TASK_CLAIMED: AM-114',
+    style: { stroke: '#2F7D5C', strokeWidth: 1.8 },
     markerEnd: {
       type: MarkerType.ArrowClosed,
       width: 14,
       height: 14,
-      color: 'var(--am-cyan)',
+      color: '#2F7D5C',
     },
+    data: { protocolType: 'TASK_CLAIMED' },
   },
-  { ...edgeBase, id: 'tasks-orion', source: 'tasks', target: 'orion', label: 'preference: AM-114' },
-  { ...edgeBase, id: 'tasks-vega', source: 'tasks', target: 'vega', label: 'preference: AM-115' },
+  {
+    ...edgeBase,
+    id: 'tasks-vega',
+    source: 'tasks',
+    target: 'vega',
+    label: 'TASK_CLAIMED: AM-115',
+    style: { stroke: '#2F7D5C', strokeWidth: 1.8 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 14,
+      height: 14,
+      color: '#2F7D5C',
+    },
+    data: { protocolType: 'TASK_CLAIMED' },
+  },
   {
     ...edgeBase,
     id: 'vega-artifact',
     source: 'vega',
     target: 'artifact',
-    label: 'schema published',
-    style: { stroke: 'var(--am-cyan)', strokeWidth: 1.6 },
-    markerEnd: {
-      type: MarkerType.ArrowClosed,
-      width: 14,
-      height: 14,
-      color: 'var(--am-cyan)',
-    },
+    label: 'ARTIFACT_PUBLISHED',
+    data: { protocolType: 'ARTIFACT_PUBLISHED' },
   },
   {
     ...edgeBase,
@@ -138,504 +133,1012 @@ const initialEdges: Edge[] = [
     source: 'artifact',
     target: 'orion',
     label: 'payment-api.json',
-  },
-  {
-    ...edgeBase,
-    id: 'vega-approval',
-    source: 'vega',
-    target: 'approval',
-    label: 'deploy requested',
-    style: { stroke: 'var(--am-amber)', strokeWidth: 1.4 },
+    style: { stroke: '#8B6FE8', strokeWidth: 1.8 },
     markerEnd: {
       type: MarkerType.ArrowClosed,
       width: 14,
       height: 14,
-      color: 'var(--am-amber)',
+      color: '#8B6FE8',
     },
+    data: { protocolType: 'DEPENDENCY_REQUEST' },
+  },
+  {
+    ...edgeBase,
+    id: 'orion-approval',
+    source: 'orion',
+    target: 'approval',
+    label: 'APPROVAL_REQUIRED: 0.35 ETH',
+    style: { stroke: '#D99A32', strokeWidth: 1.8 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 14,
+      height: 14,
+      color: '#D99A32',
+    },
+    data: { protocolType: 'APPROVAL_REQUIRED' },
   },
 ];
-const timestamp = () => new Date().toLocaleTimeString([], { hour12: false });
-const ownerFor = (agentId: string) => (agentId === 'orion' ? 'Anand-demo' : 'Swastik-demo');
 
-function Inspector({
-  selected,
-  tasks,
-  events,
-  onClose,
-}: {
-  selected: ProductNode | undefined;
-  tasks: ProductTask[];
-  events: ProtocolEvent[];
-  onClose: () => void;
-}) {
-  const title =
-    selected?.type === 'productAgent'
-      ? `${selected.data.agent.name} / ${selected.data.agent.provider}`
-      : selected?.type === 'productTasks'
-        ? 'Shared task board'
-        : selected?.type === 'artifact'
-          ? selected.data.artifact.name
-          : selected?.type === 'approval'
-            ? selected.data.request.action
-            : 'Mesh Coordinator';
-  const owner = selected?.type === 'productAgent' ? selected.data.owner : owners[0];
-  const current =
-    selected?.type === 'productAgent'
-      ? tasks.find((task) => task.claimedBy === selected.data.agent.id)
-      : undefined;
-  return (
-    <aside className="workspace-inspector-panel">
-      <header>
-        <div>
-          <span>INSPECTOR</span>
-          <b>Selected node</b>
-        </div>
-        <button type="button" className="workspace-panel__close" onClick={onClose}>
-          <X size={14} />
-          <span className="sr-only">Close inspector</span>
-        </button>
-      </header>
-      <section>
-        <small>{selected?.type ?? 'coordinator'}</small>
-        <h2>{title}</h2>
-        <dl>
-          <div>
-            <dt>Human owner</dt>
-            <dd>{owner.name}</dd>
-          </div>
-          <div>
-            <dt>Human identity</dt>
-            <dd className="identity-value">{owner.ens}</dd>
-          </div>
-          <div>
-            <dt>Wallet</dt>
-            <dd>{owner.address}</dd>
-          </div>
-          {selected?.type === 'productAgent' && (
-            <>
-              <div>
-                <dt>Agent identity</dt>
-                <dd className="identity-value">{selected.data.agent.ens}</dd>
-              </div>
-              <div>
-                <dt>Capabilities</dt>
-                <dd>{selected.data.agent.capabilities.join(' · ')}</dd>
-              </div>
-            </>
-          )}
-          <div>
-            <dt>Current task</dt>
-            <dd>{current ? `${current.id} · ${current.title}` : 'No active claim'}</dd>
-          </div>
-        </dl>
-      </section>
-      <section>
-        <small>PERMISSIONS</small>
-        <ul className="permission-list">
-          <li className="yes">✓ Can read scoped repository</li>
-          <li className="yes">✓ Can propose changes</li>
-          <li>○ Code/task state off-chain</li>
-          <li className="no">× Cannot deploy without approval</li>
-          <li className="no">× Cannot access wallet keys</li>
-        </ul>
-      </section>
-      <section className="inspector-events">
-        <small>LATEST PROTOCOL EVENTS</small>
-        <ol>
-          {events
-            .slice(-3)
-            .reverse()
-            .map((event) => (
-              <li key={event.id}>
-                <strong>{event.type}</strong>
-                <span>{event.payload}</span>
-              </li>
-            ))}
-        </ol>
-      </section>
-      <footer>
-        ENS identity rail · optional
-        <br />
-        Structured workspace events · auditable
-      </footer>
-    </aside>
-  );
+interface WorkspaceCanvasInnerProps {
+  focusView: boolean;
+  onFocusViewChange: (focused: boolean) => void;
 }
 
-function ActivityRail({ events, onClose }: { events: ProtocolEvent[]; onClose: () => void }) {
-  return (
-    <section className="protocol-rail">
-      <header>
-        <div>
-          <i /> LIVE PROTOCOL ACTIVITY
-        </div>
-        <div className="protocol-rail__actions">
-          <span>{events.length} events · structured messages</span>
-          <button type="button" className="workspace-panel__close" onClick={onClose}>
-            <X size={14} />
-            <span className="sr-only">Close activity</span>
-          </button>
-        </div>
-      </header>
-      <div className="protocol-events">
-        {events.slice(-9).map((event) => (
-          <article key={event.id}>
-            <time>{event.time}</time>
-            <strong>{event.type}</strong>
-            <span>
-              {event.sender} → {event.receiver}
-            </span>
-            <p>{event.payload}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
+function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasInnerProps) {
+  const {
+    state: demoState,
+    profile,
+    claimTask,
+    decideApproval,
+    submitPrd,
+    openBrowser,
+  } = useDemo();
 
-function Canvas() {
-  const [workspace, setWorkspace] = useState(createWorkspaceState);
-  const [baseNodes, setBaseNodes, onNodesChange] = useNodesState<ProductNode>(seedNodes);
+  const workspace = demoState.workspace;
+
+  // Build seed nodes using adapter models
+  const initialNodes = useMemo<Node[]>(() => {
+    return [
+      {
+        id: 'coordinator',
+        type: 'coordinator',
+        position: initialPositions.coordinator,
+        data: {
+          activity: 'splitting PRD into tasks',
+          onOpenPrd: () => setPrdOpen(true),
+        },
+      },
+      {
+        id: 'orion',
+        type: 'productAgent',
+        position: initialPositions.orion,
+        data: { agent: INITIAL_DEMO_AGENTS[0] },
+      },
+      {
+        id: 'tasks',
+        type: 'productTasks',
+        position: initialPositions.tasks,
+        data: {
+          tasks: INITIAL_DEMO_TASKS,
+          onClaimTask: (id: string) => claimTask(id),
+        },
+      },
+      {
+        id: 'vega',
+        type: 'productAgent',
+        position: initialPositions.vega,
+        data: { agent: INITIAL_DEMO_AGENTS[1] },
+      },
+      {
+        id: 'artifact',
+        type: 'artifact',
+        position: initialPositions.artifact,
+        data: { artifact: DEMO_ARTIFACTS[0] },
+      },
+      {
+        id: 'approval',
+        type: 'approval',
+        position: initialPositions.approval,
+        data: {
+          request: INITIAL_DEMO_APPROVAL,
+          onDecision: (dec: 'approved' | 'rejected') => decideApproval(dec),
+          onOpenModal: () => setApprovalModalOpen(true),
+        },
+      },
+    ];
+  }, [claimTask, decideApproval]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
+
+  const nodesRef = useRef<Node[]>(nodes);
+  nodesRef.current = nodes;
+
   const [selectedId, setSelectedId] = useState('orion');
-  const [moving, setMoving] = useState<string | null>(null);
+  const [movingNode, setMovingNode] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
-  const [navigating, setNavigating] = useState(false);
-  const { fitView } = useReactFlow<ProductNode>();
+  const [prdOpen, setPrdOpen] = useState(false);
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
 
-  const claim = useCallback(
-    (taskId: string) =>
-      setWorkspace((current) => {
-        const task = current.tasks.find((item) => item.id === taskId);
-        if (!task || task.status !== 'proposed') return current;
-        return {
-          ...current,
-          tasks: current.tasks.map((item) =>
-            item.id === taskId
-              ? { ...item, status: 'claimed', claimedBy: item.suggestedAgent, countdown: undefined }
-              : item,
-          ),
-          events: [
-            ...current.events,
-            {
-              id: `claim-${Date.now()}`,
-              time: timestamp(),
-              sender: ownerFor(task.suggestedAgent),
-              receiver: task.suggestedAgent,
-              type: 'TASK_CLAIMED',
-              payload: `${task.id} · ${task.reason}`,
-            },
-          ],
-        };
-      }),
-    [],
-  );
-  const decide = useCallback(
-    (decision: 'approved' | 'rejected') =>
-      setWorkspace((current) => ({
-        ...current,
-        approval: { ...current.approval, status: decision },
-        events: [
-          ...current.events,
-          {
-            id: `approval-${Date.now()}`,
-            time: timestamp(),
-            sender: 'dev1.eth',
-            receiver: 'Vega',
-            type: decision === 'approved' ? 'APPROVAL_APPROVED' : 'APPROVAL_REJECTED',
-            payload: `${current.approval.action} · ${decision}`,
-          },
-        ],
-      })),
-    [],
-  );
+  // Demo Replay state
+  const [replayActive, setReplayActive] = useState(false);
+  const [replayStep, setReplayStep] = useState(0);
+  const [replayPlaying, setReplayPlaying] = useState(false);
 
+  const { fitView, screenToFlowPosition } = useReactFlow();
+
+  // Keep tasks and approval synced with demo state
   useEffect(() => {
-    const timer = window.setInterval(
-      () =>
-        setWorkspace((current) => {
-          const expired = current.tasks.filter(
-            (task) => task.status === 'proposed' && task.countdown === 1,
-          );
+    setNodes((currentNodes) =>
+      currentNodes.map((n) => {
+        if (n.id === 'tasks') {
           return {
-            ...current,
-            tasks: current.tasks.map((task) =>
-              task.status !== 'proposed' || !task.countdown
-                ? task
-                : task.countdown === 1
-                  ? {
-                      ...task,
-                      status: 'auto-assigned',
-                      claimedBy: task.suggestedAgent,
-                      countdown: undefined,
-                    }
-                  : { ...task, countdown: task.countdown - 1 },
-            ),
-            events: expired.length
-              ? [
-                  ...current.events,
-                  ...expired.map((task) => ({
-                    id: `auto-${task.id}-${Date.now()}`,
-                    time: timestamp(),
-                    sender: 'coordinator',
-                    receiver: task.suggestedAgent,
-                    type: 'TASK_CLAIMED' as const,
-                    payload: `${task.id} auto-assigned · ${task.reason}`,
-                  })),
-                ]
-              : current.events,
+            ...n,
+            data: {
+              ...n.data,
+              tasks: workspace.tasks,
+              onClaimTask: (id: string) => claimTask(id),
+            },
           };
-        }),
-      1000,
-    );
-    const replay = () => {
-      setWorkspace(createWorkspaceState());
-      setBaseNodes(seedNodes);
-      setEdges(initialEdges);
-      setSelectedId('orion');
-    };
-    window.addEventListener('agentmesh:replay', replay);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('agentmesh:replay', replay);
-    };
-  }, [setBaseNodes, setEdges]);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() =>
-      fitView({ padding: 0.1, maxZoom: 0.82, duration: 280 }),
-    );
-    const settled = window.setTimeout(
-      () => fitView({ padding: 0.1, maxZoom: 0.82, duration: 420 }),
-      260,
-    );
-    return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(settled);
-    };
-  }, [activityOpen, fitView, inspectorOpen]);
-
-  const nodes = useMemo<ProductNode[]>(
-    () =>
-      baseNodes.map((node) =>
-        node.type === 'productTasks'
-          ? { ...node, data: { tasks: workspace.tasks, onClaim: claim } }
-          : node.type === 'approval'
-            ? { ...node, data: { request: workspace.approval, onDecision: decide } }
-            : node,
-      ),
-    [baseNodes, workspace.tasks, workspace.approval, claim, decide],
-  );
-  const displayEdges = useMemo(
-    () =>
-      edges.map((edge) => {
-        if (edge.id === 'tasks-orion' || edge.id === 'tasks-vega') {
-          const agentId = edge.id === 'tasks-orion' ? 'orion' : 'vega';
-          const assigned =
-            workspace.tasks.find(
-              (task) => task.claimedBy === agentId && task.status === 'claimed',
-            ) ??
-            workspace.tasks.find(
-              (task) => task.claimedBy === agentId && task.status === 'auto-assigned',
-            );
-          return assigned
-            ? {
-                ...edge,
-                label: `${assigned.status === 'claimed' ? 'claimed' : 'auto-assigned'}: ${assigned.id}`,
-              }
-            : edge;
         }
-        if (edge.id === 'vega-approval' && workspace.approval.status !== 'pending') {
-          const approved = workspace.approval.status === 'approved';
+        if (n.id === 'approval') {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              request: workspace.approval,
+              onDecision: (dec: 'approved' | 'rejected') => decideApproval(dec),
+              onOpenModal: () => setApprovalModalOpen(true),
+            },
+          };
+        }
+        return n;
+      })
+    );
+  }, [workspace.tasks, workspace.approval, claimTask, decideApproval, setNodes]);
+
+  // Sync edge labels when tasks are claimed or approval granted
+  const displayEdges = useMemo(() => {
+    return edges.map((edge) => {
+      if (edge.id === 'tasks-orion') {
+        const am114 = workspace.tasks.find((t) => t.id === 'AM-114');
+        if (am114 && am114.status === 'claimed') {
           return {
             ...edge,
-            label: `deploy ${workspace.approval.status}`,
-            style: { stroke: approved ? 'var(--am-green)' : 'var(--am-red)', strokeWidth: 1.6 },
+            label: 'TASK_CLAIMED: AM-114 (Orion)',
+            style: { stroke: 'var(--mesh-primary-green)', strokeWidth: 2 },
+          };
+        }
+      }
+      if (edge.id === 'tasks-vega') {
+        const am115 = workspace.tasks.find((t) => t.id === 'AM-115');
+        if (am115 && am115.status === 'claimed') {
+          return {
+            ...edge,
+            label: 'TASK_CLAIMED: AM-115 (Vega)',
+            style: { stroke: 'var(--mesh-primary-green)', strokeWidth: 2 },
+          };
+        }
+      }
+      if (edge.id === 'orion-approval') {
+        if (workspace.approval.status === 'approved') {
+          return {
+            ...edge,
+            label: 'APPROVAL_GRANTED: dev1.eth',
+            style: { stroke: 'var(--mesh-primary-green)', strokeWidth: 2 },
             markerEnd: {
               type: MarkerType.ArrowClosed,
               width: 14,
               height: 14,
-              color: approved ? 'var(--am-green)' : 'var(--am-red)',
+              color: 'var(--mesh-primary-green)',
+            },
+          };
+        } else if (workspace.approval.status === 'rejected') {
+          return {
+            ...edge,
+            label: 'APPROVAL_REJECTED: dev1.eth',
+            style: { stroke: 'var(--mesh-error-red)', strokeWidth: 2 },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              width: 14,
+              height: 14,
+              color: 'var(--mesh-error-red)',
             },
           };
         }
-        return edge;
-      }),
-    [edges, workspace.approval.status, workspace.tasks],
+      }
+      return edge;
+    });
+  }, [edges, workspace.approval.status, workspace.tasks]);
+
+  // Add Tool to canvas (Click or Drag-and-Drop)
+  const addTool = useCallback(
+    (tool: DockToolType, flowPosition?: { x: number; y: number }) => {
+      const position =
+        flowPosition ??
+        screenToFlowPosition({
+          x: window.innerWidth * 0.45 + (Math.random() * 80 - 40),
+          y: window.innerHeight * 0.35 + (Math.random() * 80 - 40),
+        });
+
+      const newId = `node-${tool}-${Date.now().toString(36)}`;
+      let newNode: Node;
+
+      if (tool === 'codex') {
+        newNode = {
+          id: newId,
+          type: 'productAgent',
+          position,
+          data: { agent: INITIAL_DEMO_AGENTS[0] },
+        };
+      } else if (tool === 'claude') {
+        newNode = {
+          id: newId,
+          type: 'productAgent',
+          position,
+          data: { agent: INITIAL_DEMO_AGENTS[1] },
+        };
+      } else if (tool === 'gemini') {
+        newNode = {
+          id: newId,
+          type: 'productAgent',
+          position,
+          data: { agent: INITIAL_DEMO_AGENTS[2] },
+        };
+      } else if (tool === 'coordinator') {
+        newNode = {
+          id: newId,
+          type: 'coordinator',
+          position,
+          data: {
+            activity: 'Splitting PRD into tasks',
+            onOpenPrd: () => setPrdOpen(true),
+          },
+        };
+      } else if (tool === 'taskboard') {
+        newNode = {
+          id: newId,
+          type: 'productTasks',
+          position,
+          data: {
+            tasks: workspace.tasks,
+            onClaimTask: (id: string) => claimTask(id),
+          },
+        };
+      } else if (tool === 'approval') {
+        newNode = {
+          id: newId,
+          type: 'approval',
+          position,
+          data: {
+            request: workspace.approval,
+            onDecision: (dec: 'approved' | 'rejected') => decideApproval(dec),
+            onOpenModal: () => setApprovalModalOpen(true),
+          },
+        };
+      } else if (tool === 'artifact') {
+        newNode = {
+          id: newId,
+          type: 'artifact',
+          position,
+          data: { artifact: DEMO_ARTIFACTS[0] },
+        };
+      } else if (tool === 'browser') {
+        newNode = {
+          id: newId,
+          type: 'browser',
+          position,
+          data: { initialUrl: 'agentmesh://preview/checkout' },
+        };
+      } else if (tool === 'terminal') {
+        newNode = {
+          id: newId,
+          type: 'terminal',
+          position,
+          data: {
+            agentId: 'orion',
+            onExecuteCommand: (cmd: string) => {
+              if (cmd.includes('claim')) {
+                const parts = cmd.split(' ');
+                const target = parts[parts.length - 1];
+                if (target) claimTask(target.toUpperCase());
+              }
+              if (cmd.includes('approve')) {
+                decideApproval('approved');
+              }
+            },
+          },
+        };
+      } else if (tool === 'note') {
+        newNode = {
+          id: newId,
+          type: 'note',
+          position,
+          data: { text: undefined },
+        };
+      } else {
+        // 'file'
+        newNode = {
+          id: newId,
+          type: 'file',
+          position,
+          data: {},
+        };
+      }
+
+      setNodes((current) => [...current, newNode]);
+      setSelectedId(newId);
+    },
+    [claimTask, decideApproval, screenToFlowPosition, setNodes, workspace.approval, workspace.tasks]
   );
-  const selected = nodes.find((node) => node.id === selectedId);
-  const onNodeClick = useCallback<NodeMouseHandler<ProductNode>>((_event, node) => {
+
+  // Command composer natural language processing
+  const handleRunCommand = useCallback(
+    (commandText: string): string => {
+      const lower = commandText.toLowerCase().trim();
+
+      if (lower.includes('two') && lower.includes('agent')) {
+        addTool('codex', { x: 60, y: 200 });
+        addTool('claude', { x: 780, y: 200 });
+        if (lower.includes('prd') || lower.includes('task')) {
+          submitPrd();
+        }
+        return 'Two AI coding agents deployed to canvas';
+      }
+
+      if (lower.includes('connect')) {
+        setEdges(initialEdges);
+        return 'Multi-agent protocol edges connected';
+      }
+
+      if (lower.includes('prd') || lower.includes('split')) {
+        submitPrd();
+        return 'Coordinator received PRD and split 4 tasks';
+      }
+
+      if (lower.includes('claim')) {
+        const match = commandText.match(/am-\d+/i);
+        const taskId = match ? match[0].toUpperCase() : 'AM-114';
+        claimTask(taskId);
+        return `Task ${taskId} claimed by developer`;
+      }
+
+      if (lower.includes('approve') || lower.includes('deploy')) {
+        decideApproval('approved');
+        return 'Human approval granted. Simulated signature accepted';
+      }
+
+      const matchTool: DockToolType | undefined = (
+        [
+          'codex',
+          'claude',
+          'gemini',
+          'terminal',
+          'browser',
+          'note',
+          'file',
+          'taskboard',
+          'approval',
+          'coordinator',
+          'artifact',
+        ] as DockToolType[]
+      ).find((t) => lower.includes(t));
+
+      if (matchTool) {
+        addTool(matchTool);
+        return `${matchTool} node added to workspace`;
+      }
+
+      return 'Command executed · Try "add two agents", "claim AM-114", or "split PRD"';
+    },
+    [addTool, claimTask, decideApproval, setEdges, submitPrd]
+  );
+
+  // Replay Execution Engine (19 Steps)
+  const executeReplayStep = useCallback(
+    (stepIndex: number) => {
+      const step = REPLAY_STEPS[stepIndex];
+      if (!step) return;
+
+      if (step.action === 'init') {
+        setNodes([]);
+        setEdges([]);
+      } else if (step.action === 'orion-agent') {
+        setNodes((prev) => [
+          ...prev.filter((n) => n.id !== 'orion'),
+          {
+            id: 'orion',
+            type: 'productAgent',
+            position: initialPositions.orion,
+            data: { agent: INITIAL_DEMO_AGENTS[0] },
+          },
+        ]);
+      } else if (step.action === 'vega-agent') {
+        setNodes((prev) => [
+          ...prev.filter((n) => n.id !== 'vega'),
+          {
+            id: 'vega',
+            type: 'productAgent',
+            position: initialPositions.vega,
+            data: { agent: INITIAL_DEMO_AGENTS[1] },
+          },
+        ]);
+      } else if (step.action === 'coordinator') {
+        setNodes((prev) => [
+          ...prev.filter((n) => n.id !== 'coordinator'),
+          {
+            id: 'coordinator',
+            type: 'coordinator',
+            position: initialPositions.coordinator,
+            data: {
+              activity: 'Splitting PRD into tasks',
+              onOpenPrd: () => setPrdOpen(true),
+            },
+          },
+        ]);
+      } else if (step.action === 'taskboard') {
+        setNodes((prev) => [
+          ...prev.filter((n) => n.id !== 'tasks'),
+          {
+            id: 'tasks',
+            type: 'productTasks',
+            position: initialPositions.tasks,
+            data: {
+              tasks: INITIAL_DEMO_TASKS,
+              onClaimTask: (id: string) => claimTask(id),
+            },
+          },
+        ]);
+      } else if (step.action === 'proposals') {
+        submitPrd();
+        setEdges((prev) => [
+          ...prev.filter((e) => e.id !== 'coordinator-tasks'),
+          initialEdges[0],
+        ]);
+      } else if (step.action === 'claim-frontend') {
+        claimTask('AM-114');
+        setEdges((prev) => [
+          ...prev.filter((e) => e.id !== 'tasks-orion'),
+          initialEdges[1],
+        ]);
+      } else if (step.action === 'claim-backend') {
+        claimTask('AM-115');
+        setEdges((prev) => [
+          ...prev.filter((e) => e.id !== 'tasks-vega'),
+          initialEdges[2],
+        ]);
+      } else if (step.action === 'publish-api') {
+        setNodes((prev) => [
+          ...prev.filter((n) => n.id !== 'artifact'),
+          {
+            id: 'artifact',
+            type: 'artifact',
+            position: initialPositions.artifact,
+            data: { artifact: DEMO_ARTIFACTS[0] },
+          },
+        ]);
+        setEdges((prev) => [
+          ...prev.filter((e) => e.id !== 'vega-artifact'),
+          initialEdges[3],
+        ]);
+      } else if (step.action === 'dependency') {
+        setEdges((prev) => [
+          ...prev.filter((e) => e.id !== 'artifact-orion'),
+          initialEdges[4],
+        ]);
+      } else if (step.action === 'approval-req') {
+        setNodes((prev) => [
+          ...prev.filter((n) => n.id !== 'approval'),
+          {
+            id: 'approval',
+            type: 'approval',
+            position: initialPositions.approval,
+            data: {
+              request: INITIAL_DEMO_APPROVAL,
+              onDecision: (dec: 'approved' | 'rejected') => decideApproval(dec),
+              onOpenModal: () => setApprovalModalOpen(true),
+            },
+          },
+        ]);
+        setEdges((prev) => [
+          ...prev.filter((e) => e.id !== 'orion-approval'),
+          initialEdges[5],
+        ]);
+        setApprovalModalOpen(true);
+      } else if (step.action === 'approved') {
+        decideApproval('approved');
+        setApprovalModalOpen(false);
+      } else if (step.action === 'synced') {
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+      }
+    },
+    [claimTask, decideApproval, initialNodes, setEdges, setNodes, submitPrd]
+  );
+
+  // Step advance timer
+  useEffect(() => {
+    if (!replayActive || !replayPlaying) return;
+
+    const timer = window.setTimeout(() => {
+      if (replayStep < REPLAY_STEPS.length - 1) {
+        const nextStep = replayStep + 1;
+        setReplayStep(nextStep);
+        executeReplayStep(nextStep);
+      } else {
+        setReplayPlaying(false);
+      }
+    }, 1600);
+
+    return () => clearTimeout(timer);
+  }, [executeReplayStep, replayActive, replayPlaying, replayStep]);
+
+  // Listen to TopBar "agentmesh:replay" event
+  useEffect(() => {
+    const handleReplayEvent = () => {
+      setReplayActive(true);
+      setReplayStep(0);
+      setReplayPlaying(true);
+      executeReplayStep(0);
+    };
+    window.addEventListener('agentmesh:replay', handleReplayEvent);
+    return () => window.removeEventListener('agentmesh:replay', handleReplayEvent);
+  }, [executeReplayStep]);
+
+  // Auto-fit view when canvas mounts
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      fitView({ padding: 0.12, maxZoom: 0.95, duration: 400 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [fitView]);
+
+  // Node selection handler
+  const onNodeClick = useCallback<NodeMouseHandler>((_event, node) => {
     setSelectedId(node.id);
-    setInspectorOpen(true);
-  }, []);
+    if (node.id === 'artifact') {
+      openBrowser('agentmesh://artifact/payment-api');
+    }
+    if (node.id === 'approval' && workspace.approval.status === 'pending') {
+      setApprovalModalOpen(true);
+    }
+  }, [openBrowser, workspace.approval.status]);
+
+  /* A link between two agents is a dependency; anything else is context being
+     attached to whatever it was dropped on. */
+  const linkLabel = useCallback(
+    (source: string | null, target: string | null) => {
+      const kind = (id: string | null) => nodesRef.current.find((node) => node.id === id)?.type;
+      return kind(source) === 'productAgent' && kind(target) === 'productAgent'
+        ? 'DEPENDENCY_REQUEST'
+        : 'CONTEXT_LINK';
+    },
+    []
+  );
+
   const onConnect = useCallback(
     (connection: Connection) =>
       setEdges((current) =>
         addEdge(
-          { ...connection, ...edgeBase, id: `edge-${Date.now()}`, label: 'dependency' },
-          current,
-        ),
+          {
+            ...connection,
+            ...edgeBase,
+            id: `edge-${Date.now()}`,
+            label: linkLabel(connection.source, connection.target),
+            data: { protocolType: 'DEPENDENCY_REQUEST' },
+          },
+          current
+        )
       ),
-    [setEdges],
+    [setEdges, linkLabel]
   );
-  const frameWorkspace = useCallback(
-    () => fitView({ padding: 0.1, maxZoom: 0.82, duration: 520 }),
-    [fitView],
-  );
-  const arrangeWorkspace = useCallback(() => {
-    setBaseNodes((current) =>
-      current.map((node) => ({
-        ...node,
-        position: initialPositions[node.id as keyof typeof initialPositions] ?? node.position,
-      })),
+
+  const arrangeAgents = useCallback(() => {
+    setNodes((current) =>
+      current.map((n) => ({
+        ...n,
+        position:
+          initialPositions[n.id as keyof typeof initialPositions] ?? n.position,
+      }))
     );
-    requestAnimationFrame(frameWorkspace);
-  }, [frameWorkspace, setBaseNodes]);
+    fitView({ padding: 0.12, duration: 400 });
+  }, [fitView, setNodes]);
+
+  const selectedNode = nodes.find((n) => n.id === selectedId);
+
   return (
     <div
-      className={`product-workspace${inspectorOpen ? ' is-inspector-open' : ''}${activityOpen ? ' is-activity-open' : ''}${navigating ? ' is-navigating' : ''}`}
+      className={`product-workspace ${inspectorOpen ? 'is-inspector-open' : ''} ${
+        activityOpen ? 'is-activity-open' : ''
+      }`}
     >
       <div className="product-canvas">
+        {/* Context bar inside canvas */}
         <div className="canvas-context">
           <div>
-            <span>✳ AGENTMESH / CHECKOUT PROTOCOL</span>
-            <b>Live coordination canvas</b>
-          </div>
-          <div className="canvas-context__tools">
-            <div className="canvas-legend" aria-label="Canvas legend">
-              <span>
-                <i className="is-online" /> online
-              </span>
-              <span>
-                <i className="is-owner" /> owner
-              </span>
-              <span>
-                <i className="is-dependency" /> dependency
-              </span>
-            </div>
-            <span className="canvas-sync">
-              <i /> synced · local-first
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--mesh-primary-green)' }}>
+              ✳ AGENTMESH MULTIPLAYER CANVAS
             </span>
+            <b style={{ marginLeft: 6, fontSize: 12 }}>
+              {workspace.tasks.length} tasks · {nodes.length} nodes active
+            </b>
+          </div>
+
+          <div className="canvas-context__tools">
+            <button
+              type="button"
+              aria-pressed={focusView}
+              onClick={() => onFocusViewChange(!focusView)}
+            >
+              {focusView ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              {focusView ? 'Exit focus' : 'Focus'}
+            </button>
             <button
               type="button"
               aria-pressed={inspectorOpen}
-              onClick={() => setInspectorOpen((open) => !open)}
+              onClick={() => setInspectorOpen(!inspectorOpen)}
             >
-              {inspectorOpen ? <X size={14} /> : <PanelRightOpen size={14} />}
+              {inspectorOpen ? <X size={13} /> : <PanelRightOpen size={13} />}
               Inspector
             </button>
             <button
               type="button"
               aria-pressed={activityOpen}
-              onClick={() => setActivityOpen((open) => !open)}
+              onClick={() => setActivityOpen(!activityOpen)}
             >
-              {activityOpen ? <X size={14} /> : <Activity size={14} />}
+              {activityOpen ? <X size={13} /> : <Activity size={13} />}
               Activity <b>{workspace.events.length}</b>
             </button>
           </div>
         </div>
+
+        {/* Scenic Pixel Background with Mt. Fuji & Falling Leaves */}
+        <PixelSceneryBackground />
+
+        {/* 19-Step Replay Controller Bar */}
+        {replayActive && (
+          <DemoReplayController
+            activeStep={replayStep}
+            isPlaying={replayPlaying}
+            onPlay={() => setReplayPlaying(true)}
+            onPause={() => setReplayPlaying(false)}
+            onNext={() => {
+              if (replayStep < REPLAY_STEPS.length - 1) {
+                const next = replayStep + 1;
+                setReplayStep(next);
+                executeReplayStep(next);
+              }
+            }}
+            onRestart={() => {
+              setReplayStep(0);
+              setReplayPlaying(true);
+              executeReplayStep(0);
+            }}
+            onClose={() => {
+              setReplayActive(false);
+              setReplayPlaying(false);
+              setNodes(initialNodes);
+              setEdges(initialEdges);
+            }}
+          />
+        )}
+
+        {/* ReactFlow Canvas */}
         <ReactFlow
           nodes={nodes}
           edges={displayEdges}
-          nodeTypes={nodeTypes}
+          nodeTypes={workspaceNodeTypes}
+          edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          /* Loose mode lets any handle both start and receive a link, so an
+             agent can be joined to a note, a browser or a board in either
+             direction rather than only source-to-target. The wider radius
+             means the drop does not have to land exactly on the dot. */
+          connectionMode={ConnectionMode.Loose}
+          connectionRadius={34}
           onNodeClick={onNodeClick}
-          onNodeDragStart={(_event, node) => setMoving(node.id)}
-          onNodeDragStop={() => setMoving(null)}
-          onMoveStart={() => setNavigating(true)}
-          onMoveEnd={() => setNavigating(false)}
-          minZoom={0.35}
-          maxZoom={1.4}
+          onNodeDragStart={(_e, node) => setMovingNode(node.id)}
+          onNodeDragStop={(_e, node) => {
+            setMovingNode(null);
+            adapters.workspaceRealtime.publishNodeMovement(
+              'checkout-demo',
+              node.id,
+              node.position,
+              profile.name
+            );
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const tool = e.dataTransfer.getData('application/agentmesh-tool') as DockToolType;
+            if (tool) {
+              const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+              addTool(tool, flowPos);
+            }
+          }}
+          minZoom={0.3}
+          maxZoom={1.5}
           fitView
-          fitViewOptions={{ padding: 0.08, maxZoom: 0.82 }}
+          fitViewOptions={{ padding: 0.1, maxZoom: 0.95 }}
         >
-          <Background color="#cad7d1" gap={28} size={1} />
+          <Background color="var(--mesh-border-strong)" gap={28} size={1} />
           <Controls showInteractive={false} position="bottom-right" />
           <MiniMap
             className="product-minimap"
             nodeColor={(node) =>
               node.id === 'orion'
-                ? 'var(--am-purple-soft)'
+                ? 'var(--mesh-owner-anand)'
                 : node.id === 'vega'
-                  ? 'var(--am-teal-soft)'
-                  : node.id === 'approval'
-                    ? 'var(--am-amber-soft)'
-                    : node.id === 'artifact'
-                      ? 'var(--am-purple-soft)'
-                      : node.id === 'coordinator'
-                        ? 'var(--am-cyan-soft)'
-                        : 'var(--am-surface-muted)'
+                  ? 'var(--mesh-owner-swastik)'
+                  : node.id === 'coordinator'
+                    ? 'var(--mesh-coordinator-lime)'
+                    : node.id === 'approval'
+                      ? 'var(--mesh-approval-amber)'
+                      : 'var(--mesh-border-strong)'
             }
-            maskColor="rgb(242 246 243 / 72%)"
+            maskColor="rgba(246, 244, 236, 0.7)"
             pannable
             zoomable
             position="bottom-right"
           />
-          <ViewportPortal>
-            {presence.map((session) => {
-              const node = nodes.find((item) => item.id === session.agentId);
-              const owner = owners.find((item) => item.id === session.humanOwnerId);
-              if (!node || !owner) return null;
-              const isOrion = node.id === 'orion';
-              return (
-                <div
-                  key={session.id}
-                  className={`product-presence product-presence--${owner.color}`}
-                  style={{
-                    transform: `translate(${node.position.x + (isOrion ? 265 : 40)}px, ${node.position.y - 36}px)`,
-                  }}
-                >
-                  <svg viewBox="0 0 20 24">
-                    <path d="M2 2L18 14L10 16L6 22Z" fill="currentColor" />
-                  </svg>
-                  <span>
-                    {moving === node.id
-                      ? `${owner.name} is moving ${isOrion ? 'Orion' : 'Vega'}`
-                      : owner.name}
-                  </span>
-                </div>
-              );
-            })}
-          </ViewportPortal>
+
+          {/* Multiplayer Collaborator Cursors */}
+          <MultiplayerCursors
+            currentUserId={profile.id}
+            isReplayActive={replayActive}
+          />
         </ReactFlow>
-        <div className="canvas-command-dock" aria-label="Canvas controls">
-          <span className="canvas-command-dock__status">
-            <Sparkles size={14} />
-            <i /> 2 agents coordinating in this workspace
-          </span>
-          <button type="button" onClick={arrangeWorkspace}>
+
+        {/* Moving status indicator */}
+        {movingNode && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 120,
+              left: 20,
+              zIndex: 10,
+              backgroundColor: 'var(--mesh-bg-card)',
+              border: '1px solid var(--mesh-primary-green)',
+              borderRadius: 6,
+              padding: '4px 10px',
+              fontSize: 11,
+              color: 'var(--mesh-primary-green)',
+              boxShadow: 'var(--mesh-shadow-node)',
+            }}
+          >
+            Moving {movingNode}…
+          </div>
+        )}
+
+        {/* Bottom Floating Command Composer & Tool Dock */}
+        <div className="mesh-canvas-controls">
+          <CommandComposer
+            onAddTool={(tool) => addTool(tool)}
+            onRunNaturalCommand={handleRunCommand}
+          />
+          <ToolDock onAddTool={(tool, pos) => addTool(tool, pos)} />
+        </div>
+
+        {/* Canvas floating quick-actions */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 24,
+            left: 24,
+            zIndex: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          {/* Styled in chrome.css with the rest of the bottom controls, so the
+              whole lower edge reads as one dark system. */}
+          <button type="button" className="chrome-canvas-btn" onClick={arrangeAgents}>
             Arrange agents
           </button>
-          <button type="button" onClick={frameWorkspace} aria-label="Fit workspace to view">
-            <LocateFixed size={15} />
+          <button
+            type="button"
+            className="chrome-canvas-btn"
+            onClick={() => fitView({ padding: 0.12, duration: 400 })}
+          >
+            <LocateFixed size={12} />
             Fit view
           </button>
         </div>
-        <div className="canvas-navigation-hint">DRAG TO PAN · SCROLL TO ZOOM</div>
+
+        {/* PRD Input Modal */}
+        {prdOpen && (
+          <div
+            className="workspace-modal-backdrop"
+            role="presentation"
+            onMouseDown={() => setPrdOpen(false)}
+          >
+            <section
+              className="workspace-modal"
+              role="dialog"
+              aria-modal="true"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <header>
+                <div>
+                  <span>COORDINATOR PRD INPUT</span>
+                  <h2>Submit Product Requirement</h2>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close PRD dialog"
+                  onClick={() => setPrdOpen(false)}
+                >
+                  <X size={15} />
+                </button>
+              </header>
+              <p>
+                The Mesh Coordinator will parse the PRD, identify required skills (frontend,
+                backend, security, contract), and propose structured tasks with auto-assign timers.
+              </p>
+              <textarea
+                id="demo-prd"
+                defaultValue={PREPARED_PRD}
+                style={{
+                  width: '100%',
+                  minHeight: 110,
+                  padding: 10,
+                  borderRadius: 6,
+                  border: '1px solid var(--mesh-border-strong)',
+                  fontFamily: 'var(--mesh-font-sans)',
+                  fontSize: 12,
+                }}
+              />
+              <footer>
+                <button type="button" onClick={() => setPrdOpen(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="is-primary"
+                  onClick={() => {
+                    submitPrd();
+                    setPrdOpen(false);
+                  }}
+                >
+                  Generate 4 tasks
+                </button>
+              </footer>
+            </section>
+          </div>
+        )}
+
+        {/* Human Web3 Approval Gate Modal */}
+        {approvalModalOpen && (
+          <div className="workspace-modal-backdrop" role="presentation">
+            <section
+              className="workspace-modal workspace-approval-dialog"
+              role="dialog"
+              aria-modal="true"
+            >
+              <header>
+                <div>
+                  <span>HUMAN APPROVAL REQUIRED</span>
+                  <h2>Deploy Checkout Contract</h2>
+                </div>
+              </header>
+              <dl>
+                <div>
+                  <dt>Requested by</dt>
+                  <dd>Orion / Codex (codex.dev1.eth)</dd>
+                </div>
+                <div>
+                  <dt>Human owner</dt>
+                  <dd>Anand / dev1.eth</dd>
+                </div>
+                <div>
+                  <dt>Spend threshold</dt>
+                  <dd>0.35 ETH</dd>
+                </div>
+                <div>
+                  <dt>Target</dt>
+                  <dd>contracts/CheckoutEscrow.sol</dd>
+                </div>
+              </dl>
+              <p>
+                High-risk action: Deploying modifies public on-chain escrow state. The AI agent can
+                propose changes, but only the human wallet owner holds signing authority.
+              </p>
+              <footer>
+                <button
+                  type="button"
+                  className="is-reject"
+                  onClick={() => {
+                    decideApproval('rejected');
+                    setApprovalModalOpen(false);
+                  }}
+                >
+                  Reject deployment
+                </button>
+                <button
+                  type="button"
+                  className="is-primary"
+                  onClick={() => {
+                    decideApproval('approved');
+                    setApprovalModalOpen(false);
+                  }}
+                >
+                  Sign & Approve (0.35 ETH)
+                </button>
+              </footer>
+            </section>
+          </div>
+        )}
       </div>
+
+      {/* Inspector Panel */}
       {inspectorOpen && (
-        <Inspector
-          selected={selected}
-          tasks={workspace.tasks}
-          events={workspace.events}
-          onClose={() => setInspectorOpen(false)}
-        />
+        <aside className="workspace-inspector-panel">
+          <header>
+            <div>
+              <span>INSPECTOR</span>
+              <b>Selected node</b>
+            </div>
+            <button
+              type="button"
+              className="workspace-panel__close"
+              onClick={() => setInspectorOpen(false)}
+            >
+              <X size={14} />
+            </button>
+          </header>
+          <section>
+            <small>{selectedNode?.type ?? 'node'}</small>
+            <h2>{selectedNode?.id}</h2>
+            <dl>
+              <div>
+                <dt>Workspace</dt>
+                <dd>Checkout protocol</dd>
+              </div>
+              <div>
+                <dt>Human Owner</dt>
+                <dd>{profile.name} ({profile.ens})</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd style={{ color: 'var(--mesh-primary-green)', fontWeight: 600 }}>Active</dd>
+              </div>
+            </dl>
+          </section>
+        </aside>
       )}
+
+      {/* Activity Feed Side Rail */}
       {activityOpen && (
-        <ActivityRail events={workspace.events} onClose={() => setActivityOpen(false)} />
+        <section className="protocol-rail">
+          <header>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Activity size={14} color="var(--mesh-flow-cyan)" />
+              <b>LIVE PROTOCOL ACTIVITY</b>
+            </div>
+            <button
+              type="button"
+              className="workspace-panel__close"
+              onClick={() => setActivityOpen(false)}
+            >
+              <X size={14} />
+            </button>
+          </header>
+          <div className="protocol-events nowheel">
+            {workspace.events.slice(-12).map((event) => (
+              <article key={event.id}>
+                <time>{event.time}</time>
+                <strong>{event.type}</strong>
+                <span>
+                  {event.sender} → {event.receiver}
+                </span>
+                <p>{event.payload}</p>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );
 }
 
-export function WorkspaceCanvas() {
+export function WorkspaceCanvas({
+  focusView,
+  onFocusViewChange,
+}: WorkspaceCanvasInnerProps) {
   return (
     <div className="workspace-canvas">
       <ReactFlowProvider>
-        <Canvas />
+        <WorkspaceCanvasInner
+          focusView={focusView}
+          onFocusViewChange={onFocusViewChange}
+        />
       </ReactFlowProvider>
     </div>
   );
