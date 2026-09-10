@@ -58,8 +58,8 @@
   --chrome-rail-open-w: 188px;
   --chrome-composer-w: 674px;
   --chrome-composer-h: 44px;
-  --chrome-dock-h: 42px;
-  --chrome-dock-item: 32px;
+  --chrome-dock-h: 48px;
+  --chrome-dock-item: 36px;
 }
 
 /* Assistive-only labels. Nothing else in the app defines this, so the header's
@@ -383,10 +383,13 @@ body .app-shell.is-sidebar-expanded .app-sidebar__toggle span {
 
 /* ------------------------------------------------- floating footer: shell */
 /* Composer above dock, both centred, both pills. */
+/* Sat well clear of the bottom edge, which pushed the composer up into the
+   board and put it in the way of wiring the lower nodes. The stack now hugs
+   the bottom, so the canvas keeps the height instead. */
 body .app-shell .mesh-canvas-controls {
-  bottom: 18px;
+  bottom: 4px;
   width: min(var(--chrome-composer-w), calc(100% - 96px));
-  gap: 12px;
+  gap: 8px;
   transition:
     opacity 0.14s ease,
     transform 0.14s ease;
