@@ -387,6 +387,26 @@ body .app-shell .mesh-canvas-controls {
   bottom: 18px;
   width: min(var(--chrome-composer-w), calc(100% - 96px));
   gap: 12px;
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+
+/* While a wire is being dragged the footer gets out of the way, so a card
+   parked under it can still be dropped on. It keeps a trace of itself rather
+   than vanishing, and stops taking the pointer entirely.
+
+   This frees the target end. A handle that sits under the footer still cannot
+   start a wire, because at that moment the footer is a solid visible control;
+   the card's other three handles are the way round that. */
+body .app-shell .product-canvas.is-connecting .mesh-canvas-controls {
+  opacity: 0.12;
+  transform: translate(-50%, 10px);
+  pointer-events: none;
+}
+
+body .app-shell .product-canvas.is-connecting .mesh-canvas-controls > * {
+  pointer-events: none;
 }
 
 /* --------------------------------------------------------------- composer */
