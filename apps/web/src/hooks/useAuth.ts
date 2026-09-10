@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DEFAULT_SIWE_CHAIN_ID } from '@agentmesh/shared';
 import { authSessionService } from '../services/auth-session';
 
 export interface AuthUser {
@@ -44,13 +43,18 @@ export function useAuth() {
             setConnectedAddress(session.user.walletAddress);
           }
           setStatus('authenticated');
+        } else if (session.status === 'error') {
+          setUser(null);
+          setStatus('error');
+          setError(session.error || 'Authentication service error');
         } else {
           setUser(null);
           setStatus('disconnected');
         }
-      } catch {
+      } catch (err: unknown) {
         setUser(null);
-        setStatus('disconnected');
+        setStatus('error');
+        setError(err instanceof Error ? err.message : 'Session restoration error');
       }
     }
     checkSession();
@@ -64,7 +68,7 @@ export function useAuth() {
 
     const handleAccountsChanged = (accounts: unknown) => {
       const accList = accounts as string[];
-      if (!accList || accList.length === 0) {
+      if (!accList || accList.length === 0 || !accList[0]) {
         setConnectedAddress(null);
         setUser(null);
         setStatus('disconnected');
@@ -83,8 +87,12 @@ export function useAuth() {
     const handleChainChanged = (hexChain: unknown) => {
       if (typeof hexChain === 'string') {
         const parsed = parseInt(hexChain, 16);
-        if (!isNaN(parsed)) {
+        if (!isNaN(parsed) && parsed > 0) {
           setChainId(parsed);
+        } else {
+          setChainId(null);
+          setStatus('error');
+          setError('INVALID_CHAIN: Wallet provider emitted an invalid chain ID');
         }
       }
     };
@@ -127,18 +135,20 @@ export function useAuth() {
 
       const address = accounts[0];
 
-      let chainIdNum = DEFAULT_SIWE_CHAIN_ID;
+      let chainIdNum: number;
       try {
         const hexChainId = (await ethereum.request({ method: 'eth_chainId' })) as string;
-        if (hexChainId && typeof hexChainId === 'string') {
-          const parsed = parseInt(hexChainId, 16);
-          if (!isNaN(parsed) && parsed > 0) {
-            chainIdNum = parsed;
-          }
+        if (!hexChainId || typeof hexChainId !== 'string') {
+          throw new Error('Invalid or missing chain ID returned by wallet provider.');
         }
+        const parsed = parseInt(hexChainId, 16);
+        if (isNaN(parsed) || parsed <= 0) {
+          throw new Error(`Malformed chain ID returned by wallet provider: ${hexChainId}`);
+        }
+        chainIdNum = parsed;
       } catch (err: unknown) {
         throw new Error(
-          `CHAIN_ID_READ_FAILED: Failed to query chain ID: ${err instanceof Error ? err.message : String(err)}`,
+          `CHAIN_ID_READ_FAILED: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
 
@@ -175,6 +185,11 @@ export function useAuth() {
         throw new Error('WALLET_NOT_CONNECTED: Wallet not connected');
       }
 
+      if (!chainId) {
+        throw new Error('CHAIN_ID_MISSING: Wallet chain ID is not available for SIWE.');
+      }
+      const activeChainId = chainId;
+
       let nonce: string;
       try {
         nonce = await authSessionService.fetchNonce();
@@ -184,7 +199,6 @@ export function useAuth() {
 
       const domain = (typeof window !== 'undefined' && window.location.hostname) || 'localhost';
       const origin = (typeof window !== 'undefined' && window.location.origin) || 'http://localhost:5173';
-      const activeChainId = chainId || DEFAULT_SIWE_CHAIN_ID;
       const issuedAt = new Date().toISOString();
 
       const message =
@@ -238,11 +252,17 @@ export function useAuth() {
   }, [connectedAddress, connectWallet, chainId]);
 
   const logout = useCallback(async () => {
-    await authSessionService.logout();
-    setUser(null);
-    setConnectedAddress(null);
-    setStatus('disconnected');
-    setError(null);
+    try {
+      await authSessionService.logout();
+      setUser(null);
+      setConnectedAddress(null);
+      setStatus('disconnected');
+      setError(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Logout failed';
+      setError(`LOGOUT_FAILED: ${msg}`);
+      setStatus('error');
+    }
   }, []);
 
   return {
