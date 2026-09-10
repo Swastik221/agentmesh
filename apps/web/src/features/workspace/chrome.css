@@ -1,29 +1,53 @@
 /* ==========================================================================
-   Workspace chrome — header, left rail, and the floating footer.
+   Workspace chrome: header, left rail, and the floating footer.
 
-   Dimensions and colours are matched to the supplied reference capture: a
-   46px header, a 46px icon rail that opens to 188px, and a floating footer of
-   a pill composer above a pill dock of circular tools. The canvas itself is
-   deliberately untouched by this file — it keeps its own design.
+   Proportions come from the reference capture (46px header, 46px icon rail
+   opening to 188px, a pill composer above a pill dock of circular tools).
+   The colours come from the canvas itself, so the frame and the board read as
+   one product.
 
-   This is the last stylesheet imported by WorkspaceCanvas, so it settles the
-   chrome after workspace.css / workspace-spatial.css / autumn-workspace.css
-   have had their say.
+   Two materials, on purpose, so the chrome is clearly not the canvas but
+   still belongs to it:
+
+     1. Fixed chrome (header, left rail) is flat matte sage paper. No blur, no
+        shadow. It is the frame around the work.
+     2. Floating chrome (composer, dock, bottom controls, minimap) is the same
+        cream card stock as the canvas nodes, with the same blur and soft
+        shadow, because it hovers over the board on the node layer.
+
+   The canvas and the workspace nodes are deliberately untouched here; this
+   file only dresses the surrounding shell.
+
+   Last stylesheet imported by WorkspaceCanvas, so it settles the chrome after
+   workspace.css / workspace-spatial.css / autumn-workspace.css.
    ========================================================================== */
 
 .app-shell {
-  /* Surfaces: one near-black for the fixed chrome, one step up for the
-     floating pieces that sit over the canvas. */
-  --chrome-surface: #0f0f11;
-  --chrome-raised: rgb(23 23 26 / 92%);
-  --chrome-hover: #1e1e23;
-  --chrome-active: #26262d;
-  --chrome-line: #26262b;
-  --chrome-line-soft: rgb(255 255 255 / 7%);
-  --chrome-text: #e8e8ec;
-  --chrome-muted: #8b8b94;
-  --chrome-dim: #6a6a73;
-  --chrome-accent: var(--canvas-cyan, #38c7e5);
+  /* The frame: matte sage paper, one step deeper than the cards so it sits
+     behind them rather than competing. */
+  --chrome-surface: #eef1e8;
+  --chrome-hover: #e3e8db;
+  --chrome-active: #dcead9;
+  --chrome-line: #d6d8c9;
+  --chrome-line-soft: #e2e5d8;
+
+  /* The floating layer: the canvas node's own card stock. */
+  --chrome-raised: rgb(255 253 247 / 92%);
+
+  /* Ink, taken from the canvas nodes so labels match the board's text. */
+  --chrome-text: #1e2b26;
+  /* A shade deeper than the canvas node's muted ink: on the frame's sage
+     paper the node value only reached about 4:1, which is short for the
+     13px labels in the header. */
+  --chrome-muted: #5e6b63;
+  --chrome-dim: #7c8981;
+
+  /* The canvas already speaks green for anything live or connected. */
+  --chrome-accent: #2f7d5c;
+  --chrome-accent-soft: #ddf4e8;
+  /* The canvas green sits at 4.4:1 as text on its own soft mint, just under
+     AA. Fills keep the canvas value; accent text uses this deeper one. */
+  --chrome-accent-ink: #2a6f52;
 
   /* Dimensions */
   --chrome-header-h: 46px;
@@ -56,6 +80,7 @@
 body .app-shell {
   grid-template-rows: var(--chrome-header-h) minmax(0, 1fr);
   background: var(--chrome-surface);
+  color: var(--chrome-text);
 }
 
 /* Both states are written at the same specificity as the older skin's
@@ -260,13 +285,13 @@ body .app-shell .app-nav:hover:not(:disabled) {
 
 body .app-shell .app-nav--active,
 body .app-shell .app-nav--active:hover:not(:disabled) {
-  background: var(--chrome-active);
-  color: var(--chrome-text);
+  background: var(--chrome-accent-soft);
+  color: var(--chrome-accent-ink);
   border-left-color: transparent;
 }
 
 body .app-shell .app-nav--active svg {
-  color: var(--chrome-text);
+  color: var(--chrome-accent-ink);
 }
 
 /* Opened, the rail becomes a labelled list. */
@@ -295,8 +320,8 @@ body .app-shell:not(.is-sidebar-expanded) .app-nav::after {
   transform: translateY(-50%);
   padding: 5px 9px;
   border-radius: 6px;
-  background: var(--chrome-active);
-  color: var(--chrome-text);
+  background: #1e2b26;
+  color: #f4f6ef;
   font-size: 12px;
   white-space: nowrap;
   opacity: 0;
@@ -370,14 +395,17 @@ body .app-shell .mesh-command-composer {
   background: var(--chrome-raised);
   border: 1px solid var(--chrome-line);
   backdrop-filter: blur(18px) saturate(140%);
-  box-shadow: 0 12px 34px rgb(0 0 0 / 42%);
+  box-shadow:
+    0 8px 30px rgb(30 43 38 / 12%),
+    0 2px 6px rgb(30 43 38 / 6%);
 }
 
 body .app-shell .mesh-command-composer:focus-within {
   border-color: var(--chrome-line-soft);
   box-shadow:
-    0 0 0 3px rgb(56 199 229 / 14%),
-    0 12px 34px rgb(0 0 0 / 42%);
+    0 0 0 3px rgb(47 125 92 / 16%),
+    0 8px 30px rgb(30 43 38 / 12%),
+    0 2px 6px rgb(30 43 38 / 6%);
 }
 
 body .app-shell .mesh-command-composer input {
@@ -404,12 +432,12 @@ body .app-shell .mesh-composer-btn:hover {
 
 body .app-shell .mesh-composer-btn--send {
   background: var(--chrome-accent);
-  color: #06222b;
+  color: #fff;
 }
 
 body .app-shell .mesh-composer-btn--send:hover {
-  background: #55d4ee;
-  color: #06222b;
+  background: #266549;
+  color: #fff;
 }
 
 /* ------------------------------------------------------------------- dock */
@@ -421,7 +449,9 @@ body .app-shell .mesh-tool-dock {
   background: var(--chrome-raised);
   border: 1px solid var(--chrome-line);
   backdrop-filter: blur(18px) saturate(140%);
-  box-shadow: 0 12px 34px rgb(0 0 0 / 42%);
+  box-shadow:
+    0 8px 30px rgb(30 43 38 / 12%),
+    0 2px 6px rgb(30 43 38 / 6%);
   overflow: visible;
 }
 
@@ -468,8 +498,8 @@ body .app-shell .mesh-dock-item::after {
   transform: translateX(-50%);
   padding: 5px 9px;
   border-radius: 6px;
-  background: var(--chrome-active);
-  color: var(--chrome-text);
+  background: #1e2b26;
+  color: #f4f6ef;
   font-size: 12px;
   white-space: nowrap;
   opacity: 0;
@@ -480,6 +510,37 @@ body .app-shell .mesh-dock-item::after {
 body .app-shell .mesh-dock-item:hover::after,
 body .app-shell .mesh-dock-item:focus-visible::after {
   opacity: 1;
+}
+
+/* --------------------------------------------------- canvas context bar */
+/* The bar above the board is a toolbar, not board content, so it joins the
+   floating layer: same card stock, same blur, same soft shadow as the dock
+   and the composer. Only its surface changes; the buttons inside it keep
+   their own shapes. */
+body .app-shell .canvas-context {
+  border-color: var(--chrome-line);
+  background: var(--chrome-raised);
+  color: var(--chrome-text);
+  box-shadow:
+    0 4px 20px rgb(30 43 38 / 10%),
+    0 1px 3px rgb(30 43 38 / 5%);
+}
+
+body .app-shell .canvas-context > div:first-child b {
+  color: var(--chrome-text);
+}
+
+body .app-shell .canvas-context__tools button {
+  border-color: var(--chrome-line);
+  background: rgb(246 244 236 / 76%);
+  color: var(--chrome-muted);
+}
+
+body .app-shell .canvas-context__tools button:hover,
+body .app-shell .canvas-context__tools button:focus-visible {
+  border-color: var(--chrome-accent);
+  background: var(--chrome-accent-soft);
+  color: var(--chrome-accent-ink);
 }
 
 /* ------------------------------------------------- bottom canvas controls */
@@ -498,7 +559,9 @@ body .app-shell .chrome-canvas-btn {
   color: var(--chrome-muted);
   font: 12px var(--mesh-font-sans, inherit);
   cursor: pointer;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 34%);
+  box-shadow:
+    0 4px 20px rgb(30 43 38 / 10%),
+    0 1px 3px rgb(30 43 38 / 5%);
   transition:
     background-color 0.12s ease,
     color 0.12s ease;
@@ -510,13 +573,50 @@ body .app-shell .chrome-canvas-btn:focus-visible {
   color: var(--chrome-text);
 }
 
+/* The minimap and the zoom stack set their surfaces with !important in the
+   older skin, so these have to say it too. */
+body .app-shell .product-minimap,
+body .app-shell .product-canvas .react-flow__controls {
+  background: var(--chrome-raised) !important;
+  border-color: var(--chrome-line) !important;
+  box-shadow:
+    0 4px 20px rgb(30 43 38 / 10%),
+    0 1px 3px rgb(30 43 38 / 5%) !important;
+}
+
+/* The mask is the part of the board you are not looking at, so it is the
+   frame's own paper rather than ink. */
+body .app-shell .product-minimap .react-flow__minimap-mask {
+  fill: rgb(238 241 232 / 72%);
+}
+
+body .app-shell .product-canvas .react-flow__attribution {
+  color: var(--chrome-dim);
+  background: rgb(255 253 247 / 76%);
+}
+
+body .app-shell .product-canvas .react-flow__controls-button {
+  border-bottom-color: var(--chrome-line);
+  background: transparent;
+  fill: var(--chrome-muted);
+  color: var(--chrome-muted);
+}
+
+body .app-shell .product-canvas .react-flow__controls-button:hover {
+  background: var(--chrome-hover);
+  fill: var(--chrome-text);
+  color: var(--chrome-text);
+}
+
 body .app-shell .react-flow__minimap,
 body .app-shell .react-flow__controls {
   border: 1px solid var(--chrome-line);
   border-radius: 10px;
   background: var(--chrome-raised);
   backdrop-filter: blur(18px) saturate(140%);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 34%);
+  box-shadow:
+    0 4px 20px rgb(30 43 38 / 10%),
+    0 1px 3px rgb(30 43 38 / 5%);
 }
 
 body .app-shell .react-flow__controls-button {
