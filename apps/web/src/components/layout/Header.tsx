@@ -16,6 +16,8 @@ import {
 import { useDemo } from '../../demo/DemoProvider';
 import { PRIMARY_WORKSPACE } from '../../demo/demo.fixtures';
 import { navigate } from '../../demo/navigation';
+import { WalletAuthButton } from '../auth/WalletAuthButton';
+import { DemoModal } from '../demo/DemoModal';
 
 /**
  * The workspace's top bar: 46px, near-black, and quiet — no filled or
@@ -80,6 +82,7 @@ export function Header() {
       {/* Right: collaboration, then the view controls, then identity. */}
       <div className="app-header__identity">
         <div className="app-header__actions">
+          <DemoModal />
           <button type="button" title="Join workspace with invite code" onClick={() => setJoinModalOpen(true)}>
             <UserPlus size={15} strokeWidth={1.75} />
             Join
@@ -95,12 +98,13 @@ export function Header() {
           <button
             type="button"
             className="chrome-hbtn chrome-hbtn--icon"
-            title="More workspace actions"
+            title="Replay canvas demo"
             onClick={() => window.dispatchEvent(new Event('agentmesh:replay'))}
           >
             <MoreHorizontal size={16} strokeWidth={1.75} />
-            <span className="sr-only">More</span>
+            <span className="sr-only">Replay demo</span>
           </button>
+          <WalletAuthButton />
         </div>
 
         <span className="app-header__divider" aria-hidden="true" />

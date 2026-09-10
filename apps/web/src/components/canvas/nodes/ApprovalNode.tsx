@@ -34,7 +34,7 @@ export function ApprovalNode({ data, selected }: NodeProps) {
         <div className="product-approval__risk-badge">HIGH-RISK WEB3 ACTION</div>
         <div className="product-approval__action">{request.action}</div>
         <div className="product-approval__detail">
-          Spend threshold: <strong style={{ color: 'var(--mesh-approval-amber)' }}>{request.spendThreshold || '0.35 ETH'}</strong>
+          Spend threshold: <strong style={{ color: 'var(--mesh-approval-amber)' }}>{request.spendThreshold || '$0.001 USDC (Hedera Testnet)'}</strong>
         </div>
         <div className="product-approval__authority">
           Agent can propose. Wallet owner holds final authority.

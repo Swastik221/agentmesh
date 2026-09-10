@@ -33,6 +33,7 @@ export type DemoStage =
 
 export interface DemoOptions {
   mockHederaSettlement?: boolean;
+  userId?: string;
   walletAddress?: string;
   ensName?: string;
 }
@@ -131,12 +132,23 @@ Network: hedera:testnet
     // -------------------------------------------------------------------------
     // Phase A — Identity & Session
     // -------------------------------------------------------------------------
-    const user = await prisma.user.create({
-      data: {
-        walletAddress: ensService.normalizeAddress(walletAddress),
-        displayName: 'Demo Researcher',
-      },
-    });
+    let user;
+    if (options?.userId) {
+      user = await prisma.user.findUnique({ where: { id: options.userId } });
+      if (!user) {
+        throw new Error(`Authenticated user '${options.userId}' not found`);
+      }
+    } else {
+      const normalizedWallet = ensService.normalizeAddress(walletAddress);
+      user = await prisma.user.upsert({
+        where: { walletAddress: normalizedWallet },
+        update: {},
+        create: {
+          walletAddress: normalizedWallet,
+          displayName: 'Demo Researcher',
+        },
+      });
+    }
 
     const session = await sessionService.createSession(user.id);
     const validatedSession = await sessionService.validateSession(session.id);
@@ -146,12 +158,17 @@ Network: hedera:testnet
     }
 
     // Verify ENS identity ownership
+    const effectiveWallet = user.walletAddress || walletAddress;
     const ensIdentity = {
       name: ensService.normalizeName(ensName),
-      address: ensService.normalizeAddress(walletAddress),
+      address: ensService.normalizeAddress(effectiveWallet),
     };
 
-    this.logStage('IDENTITY_VERIFIED', `User ${user.id} authenticated with ENS ${ensIdentity.name}`);
+    const identityLog = options?.userId
+      ? `Authenticated user ${user.id} (${user.displayName || effectiveWallet}) · Demo ENS ${ensIdentity.name}`
+      : `User ${user.id} authenticated with ENS ${ensIdentity.name}`;
+
+    this.logStage('IDENTITY_VERIFIED', identityLog);
 
     // -------------------------------------------------------------------------
     // Phase B — Agent Registration (Agent A & Agent B)

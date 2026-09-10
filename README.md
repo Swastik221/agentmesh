@@ -2,6 +2,32 @@
 
 Multiplayer workspace for humans + AI agents.
 
+## ETHGlobal Judge Guide
+
+AgentMesh provides two distinct, truthful demonstration modes for judges:
+
+### 1. Browser Demo (Deterministic Visual Mode)
+
+- **UI Access**: Open `http://localhost:5173/canvas` and click **Run AgentMesh Demo** in the top navigation bar.
+- **API Endpoint**: `POST /demo/run` (requires SIWE session authentication).
+- **Disclosure**: Visualizes the complete 15-stage multi-agent workflow (Wallet Auth → ENS Identity → Agent A → Task → Policy Evaluation → Human Approval → Hedera USDC Payment → Paid Capability Execution → Artifact Exchange → Agent B Processing → Final Result).
+- **Hedera Settlement Boundary**: **MOCKED** in browser mode. Browser code never handles private keys or signs live transactions.
+
+### 2. Real Blockchain Proof (Hedera Testnet USDC x402 Execution)
+
+- **Execution Command**:
+  ```bash
+  pnpm demo:e2e:live
+  ```
+- **Proof Details**: Executes a real on-chain transaction on **Hedera Testnet** paying **$0.001 USDC** (Token ID: `0.0.429274`, Receiver: `0.0.9185802`) via **x402 protocol v2**.
+- **Verification**: Outputs real Hedera transaction hash and explorer link.
+- **Automated Mocked E2E**:
+  ```bash
+  pnpm demo:e2e
+  ```
+
+---
+
 ## Repository Structure
 
 ```text

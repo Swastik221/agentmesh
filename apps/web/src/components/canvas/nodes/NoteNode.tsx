@@ -14,7 +14,7 @@ const DEFAULT_NOTE_TEXT = `PRD NOTES & DEMO SCRIPT:
 4. Coordinator splits tasks on task board
 5. Claim AM-114 & AM-115
 6. Vega publishes payment-api.json
-7. Sign Web3 approval gate for deploy (0.35 ETH)`;
+7. Sign Web3 approval gate for deploy ($0.001 USDC)`;
 
 export function NoteNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as NoteNodeData;
