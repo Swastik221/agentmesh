@@ -146,6 +146,7 @@ export const workspaceDeltaChangeSchema = z.object({
     'taskResponsibility',
     'execution',
     'artifact',
+    'activity',
     'dependency',
   ]),
   entityId: z.string().trim().min(1),
@@ -192,7 +193,9 @@ export const artifactCreatedPayloadSchema = z.object({
   type: z.string().trim().min(1, 'Artifact type is required'),
   name: z.string().trim().min(1, 'Artifact name is required'),
   version: z.number().int().positive('Version must be a positive integer'),
+  payload: z.unknown().optional(),
 });
+
 
 export const artifactAvailablePayloadSchema = z.object({
   artifactId: z.string().trim().min(1, 'Artifact ID is required'),
@@ -337,6 +340,24 @@ export const artifactAvailableMessageSchema = baseEnvelopeSchema.extend({
   payload: artifactAvailablePayloadSchema,
 });
 
+export const activityCreatedPayloadSchema = z.object({
+  activityId: z.string().trim().min(1, 'Activity ID is required'),
+  projectId: z.string().trim().min(1, 'Project ID is required'),
+  type: z.string().trim().min(1, 'Activity type is required'),
+  actorType: z.enum(['human', 'agent', 'system', 'coordinator']),
+  actorId: z.string().trim().min(1, 'Actor ID is required'),
+  actorName: z.string().optional(),
+  taskId: z.string().optional(),
+  artifactId: z.string().optional(),
+  message: z.string().optional(),
+  createdAt: z.string().optional(),
+});
+
+export const activityCreatedMessageSchema = baseEnvelopeSchema.extend({
+  type: z.literal(AgentMeshMessageType.ACTIVITY_CREATED),
+  payload: activityCreatedPayloadSchema,
+});
+
 export const dependencyDeclaredMessageSchema = baseEnvelopeSchema.extend({
   type: z.literal(AgentMeshMessageType.DEPENDENCY_DECLARED),
   payload: dependencyDeclaredPayloadSchema,
@@ -383,6 +404,7 @@ export const agentMeshMessageSchema = z.discriminatedUnion('type', [
   taskAssignedMessageSchema,
   artifactCreatedMessageSchema,
   artifactAvailableMessageSchema,
+  activityCreatedMessageSchema,
   dependencyDeclaredMessageSchema,
   dependencyAvailableMessageSchema,
   workspaceDeltaMessageSchema,

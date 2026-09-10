@@ -89,6 +89,44 @@ export class AgentMeshWebSocketServer {
         return;
       }
 
+      // Pre-Upgrade Session Authentication & Project Authorization (PRD-37 FIX 1)
+      const httpSessionId = extractSessionIdFromReq(req);
+      if (!httpSessionId) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
+      let session;
+      try {
+        session = await sessionService.validateSession(httpSessionId);
+      } catch {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
+      // Check project authorization (owner or member) based strictly on authenticated session user id
+      const isOwner = project.ownerId === session.user.id;
+      let isMember = isOwner;
+      if (!isMember) {
+        const membership = await prisma.projectMember.findUnique({
+          where: {
+            projectId_userId: {
+              projectId,
+              userId: session.user.id,
+            },
+          },
+        });
+        isMember = Boolean(membership);
+      }
+
+      if (!isMember) {
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
       this.wss.handleUpgrade(req, socket, head, (ws) => {
         this.wss.emit('connection', ws, req, projectId);
       });
@@ -127,76 +165,91 @@ export class AgentMeshWebSocketServer {
 
     ws.on('close', async () => {
       try {
-      logger.info(
-        `[WebSocket] Connection ${metadata.connectionId} closed for project ${projectId}`,
-      );
-      const isUser = Boolean(metadata.userId);
-      const userId = metadata.userId;
-      const isAgent = Boolean(metadata.agentId);
-      const agentId = metadata.agentId;
+        logger.info(
+          `[WebSocket] Connection ${metadata.connectionId} closed for project ${projectId}`,
+        );
+        const isUser = Boolean(metadata.userId);
+        const userId = metadata.userId;
+        const isAgent = Boolean(metadata.agentId);
+        const agentId = metadata.agentId;
 
-      if (isAgent) {
-        await handshakeService.handleDisconnection(metadata);
-        connectionManager.removeConnection(metadata.connectionId);
-        if (agentId && connectionManager.getActiveAgentConnectionsCount(agentId) === 0) {
-          const presenceMsg = createWorkspacePresenceChangedMessage(
-            {
+        if (isAgent) {
+          await handshakeService.handleDisconnection(metadata);
+          connectionManager.removeConnection(metadata.connectionId);
+          if (agentId && connectionManager.getActiveAgentConnectionsCount(agentId) === 0) {
+            const presenceMsg = createWorkspacePresenceChangedMessage(
+              {
+                projectId,
+                senderId: 'server',
+              },
+              {
+                entityType: 'agent',
+                entityId: agentId,
+                status: 'OFFLINE',
+              },
+            );
+            connectionManager.broadcastToProjectUsers(
               projectId,
-              senderId: 'server',
-            },
-            {
-              entityType: 'agent',
-              entityId: agentId,
-              status: 'OFFLINE',
-            },
-          );
-          connectionManager.broadcastToProjectUsers(
-            projectId,
-            presenceMsg as unknown as WebSocketMessage,
-          );
-          await deltaSequencerService.recordAndBroadcastDelta(projectId, [
-            {
-              entity: 'presence',
-              entityId: agentId,
-              operation: 'updated',
-              fields: { entityType: 'agent', status: 'OFFLINE' },
-            },
-          ]);
+              presenceMsg as unknown as WebSocketMessage,
+            );
+            await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+              {
+                entity: 'presence',
+                entityId: agentId,
+                operation: 'updated',
+                fields: { entityType: 'agent', status: 'OFFLINE' },
+              },
+            ]);
+          }
+        } else {
+          connectionManager.removeConnection(metadata.connectionId);
         }
-      } else {
-        connectionManager.removeConnection(metadata.connectionId);
-      }
 
-      if (isUser && userId) {
-        if (connectionManager.getActiveUserConnectionsCount(projectId, userId) === 0) {
-          const presenceMsg = createWorkspacePresenceChangedMessage(
-            {
+        if (isUser && userId) {
+          if (connectionManager.getActiveUserConnectionsCount(projectId, userId) === 0) {
+            const presenceMsg = createWorkspacePresenceChangedMessage(
+              {
+                projectId,
+                senderId: 'server',
+              },
+              {
+                entityType: 'user',
+                entityId: userId,
+                status: 'OFFLINE',
+              },
+            );
+            connectionManager.broadcastToProjectUsers(
               projectId,
-              senderId: 'server',
-            },
-            {
-              entityType: 'user',
-              entityId: userId,
-              status: 'OFFLINE',
-            },
-          );
-          connectionManager.broadcastToProjectUsers(
-            projectId,
-            presenceMsg as unknown as WebSocketMessage,
-          );
-          // Best-effort presence delta during close cleanup: the workspace may
-          // already be torn down (e.g. test teardown), so a failure here must not
-          // become an unhandled rejection that fails unrelated work.
-          await deltaSequencerService.recordAndBroadcastDelta(projectId, [
-            {
-              entity: 'presence',
-              entityId: userId,
-              operation: 'updated',
-              fields: { entityType: 'user', status: 'OFFLINE' },
-            },
-          ]);
+              presenceMsg as unknown as WebSocketMessage,
+            );
+            // Best-effort presence delta during close cleanup: the workspace may
+            // already be torn down (e.g. test teardown), so a failure here must not
+            // become an unhandled rejection that fails unrelated work.
+            await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+              {
+                entity: 'presence',
+                entityId: userId,
+                operation: 'updated',
+                fields: { entityType: 'user', status: 'OFFLINE' },
+              },
+            ]);
+          }
         }
-      }
+
+        try {
+          if (agentId) {
+            const { activityService } = await import('../services/activity.service.js');
+            await activityService.recordActivity(projectId, {
+              type: 'agent.disconnected',
+              actorType: 'agent',
+              actorId: agentId,
+              message: 'Agent disconnected',
+              payload: { connectionId: metadata.connectionId },
+            });
+          }
+        } catch {
+          // Best-effort activity during teardown.
+        }
       } catch (err) {
         logger.error(
           `[WebSocket] Error during close cleanup for connection ${metadata.connectionId}:`,
@@ -219,75 +272,96 @@ export class AgentMeshWebSocketServer {
     const clientTypeParam = parsedUrl.searchParams.get('clientType');
     const isUserClient = Boolean((tokenParam && tokenParam.trim() !== '') || clientTypeParam === 'user');
 
-    if (isUserClient && httpSessionId) {
+    if (isUserClient) {
+      if (!httpSessionId) {
+        logger.warn(
+          `[WebSocket] Unauthenticated user connection attempt to project ${projectId}`,
+        );
+        this.sendError(ws, 'UNAUTHORIZED', 'Authentication required. No session provided.');
+        ws.close(4001, 'Unauthorized');
+        connectionManager.removeConnection(metadata.connectionId);
+        return;
+      }
+
+      let session;
       try {
-        const session = await sessionService.validateSession(httpSessionId);
-        if (session && session.userId) {
-          const project = await prisma.project.findUnique({
-            where: { id: projectId },
-            include: { members: true },
-          });
-
-          const isOwner = project?.ownerId === session.userId;
-          const isMember = project?.members.some((m) => m.userId === session.userId);
-
-          if (!isOwner && !isMember) {
-            logger.warn(
-              `[WebSocket] Access denied for user ${session.userId} to project ${projectId}`,
-            );
-            this.sendError(ws, 'FORBIDDEN', 'User is not a member of this workspace');
-            ws.close(4003, 'Forbidden');
-            connectionManager.removeConnection(metadata.connectionId);
-            return;
-          }
-
-          metadata.userId = session.userId;
-          metadata.authenticated = true;
-
-          // Send bounded workspace snapshot
-          if (project) {
-            await this.sendWorkspaceSnapshot(metadata, project);
-          }
-
-          // Broadcast user ONLINE presence if this is user's first connection
-          if (
-            connectionManager.getActiveUserConnectionsCount(projectId, session.userId) === 1
-          ) {
-            const presenceMsg = createWorkspacePresenceChangedMessage(
-              {
-                projectId,
-                senderId: 'server',
-              },
-              {
-                entityType: 'user',
-                entityId: session.userId,
-                status: 'ONLINE',
-                metadata: {
-                  displayName: session.user.displayName,
-                  walletAddress: session.user.walletAddress,
-                },
-              },
-            );
-            connectionManager.broadcastToProjectUsers(
-              projectId,
-              presenceMsg as unknown as WebSocketMessage,
-              metadata.connectionId,
-            );
-            await deltaSequencerService.recordAndBroadcastDelta(projectId, [
-              {
-                entity: 'presence',
-                entityId: session.userId,
-                operation: 'updated',
-                fields: { entityType: 'user', status: 'ONLINE' },
-              },
-            ]);
-          }
-        }
+        session = await sessionService.validateSession(httpSessionId);
       } catch (err) {
-        logger.info(
-          `[WebSocket] Session validation for connection ${metadata.connectionId}:`,
+        logger.warn(
+          `[WebSocket] Invalid or expired session for connection ${metadata.connectionId}:`,
           err,
         );
+        this.sendError(ws, 'UNAUTHORIZED', 'Invalid or expired authentication session');
+        ws.close(4001, 'Unauthorized');
+        connectionManager.removeConnection(metadata.connectionId);
+        return;
+      }
+
+      if (!session || !session.userId) {
+        this.sendError(ws, 'UNAUTHORIZED', 'Invalid or expired authentication session');
+        ws.close(4001, 'Unauthorized');
+        connectionManager.removeConnection(metadata.connectionId);
+        return;
+      }
+
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        include: { members: true },
+      });
+
+      const isOwner = project?.ownerId === session.userId;
+      const isMember = project?.members.some((m) => m.userId === session.userId);
+
+      if (!isOwner && !isMember) {
+        logger.warn(
+          `[WebSocket] Access denied for user ${session.userId} to project ${projectId}`,
+        );
+        this.sendError(ws, 'FORBIDDEN', 'User is not a member of this workspace');
+        ws.close(4003, 'Forbidden');
+        connectionManager.removeConnection(metadata.connectionId);
+        return;
+      }
+
+      metadata.userId = session.userId;
+      metadata.authenticated = true;
+
+      // Send bounded workspace snapshot
+      if (project) {
+        await this.sendWorkspaceSnapshot(metadata, project);
+      }
+
+      // Broadcast user ONLINE presence if this is user's first connection
+      if (
+        connectionManager.getActiveUserConnectionsCount(projectId, session.userId) === 1
+      ) {
+        const presenceMsg = createWorkspacePresenceChangedMessage(
+          {
+            projectId,
+            senderId: 'server',
+          },
+          {
+            entityType: 'user',
+            entityId: session.userId,
+            status: 'ONLINE',
+            metadata: {
+              displayName: session.user.displayName,
+              walletAddress: session.user.walletAddress,
+            },
+          },
+        );
+        connectionManager.broadcastToProjectUsers(
+          projectId,
+          presenceMsg as unknown as WebSocketMessage,
+          metadata.connectionId,
+        );
+        await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+          {
+            entity: 'presence',
+            entityId: session.userId,
+            operation: 'updated',
+            fields: { entityType: 'user', status: 'ONLINE' },
+          },
+        ]);
       }
     }
   }
@@ -438,6 +512,13 @@ export class AgentMeshWebSocketServer {
             fields: { entityType: 'agent', status: 'ONLINE' },
           },
         ]);
+        const { activityService } = await import('../services/activity.service.js');
+        await activityService.recordActivity(metadata.projectId, {
+          type: 'agent.connected',
+          actorType: 'agent',
+          actorId: metadata.agentId,
+          message: 'Agent connected',
+        });
       }
       return;
     }
@@ -515,8 +596,13 @@ export class AgentMeshWebSocketServer {
             payload: artifactPayload,
             executionId,
             agentId: metadata.agentId,
+            requiresReview: true,
           },
         );
+
+        // Agent-published artifacts enter the human review gate.
+        const { taskService } = await import('../tasks/task.service.js');
+        await taskService.markPendingApproval(metadata.projectId, taskId, metadata.agentId);
 
         this.sendJson(metadata.socket, {
           type: AgentMeshMessageType.ARTIFACT_CREATED,

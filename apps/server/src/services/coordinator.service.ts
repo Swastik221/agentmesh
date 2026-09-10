@@ -4,6 +4,7 @@ import { ForbiddenError, NotFoundError } from '../errors/app-error.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import { WebSocketMessage } from '../websocket/websocket.types.js';
 import { createTaskAssignedMessage } from '@agentmesh/agent-protocol';
+import { activityService } from './activity.service.js';
 
 export type AssignmentSource = 'HUMAN_PREFERENCE' | 'CAPABILITY_MATCH';
 
@@ -38,7 +39,8 @@ export interface AssignmentResultFailure {
     | 'PREFERRED_AGENT_UNAVAILABLE'
     | 'PREFERRED_AGENT_UNAUTHORIZED'
     | 'TASK_ALREADY_ASSIGNED'
-    | 'TASK_CANCELLED_OR_COMPLETED';
+    | 'TASK_CANCELLED_OR_COMPLETED'
+    | 'DEPENDENCIES_NOT_SATISFIED';
 }
 
 export type AssignmentResult = AssignmentResultSuccess | AssignmentResultFailure;
@@ -242,6 +244,20 @@ export class CoordinatorService {
         assigned: false,
         taskId,
         reason: 'TASK_CANCELLED_OR_COMPLETED',
+      };
+    }
+
+    const { dependencyService } = await import('./dependency.service.js');
+    const depResolution = await dependencyService.resolveTaskDependencies(
+      projectId,
+      taskId,
+      actorUserId,
+    );
+    if (!depResolution.ready) {
+      return {
+        assigned: false,
+        taskId,
+        reason: 'DEPENDENCIES_NOT_SATISFIED',
       };
     }
 
@@ -467,6 +483,16 @@ export class CoordinatorService {
           projectId,
           assignedMsg as unknown as WebSocketMessage,
         );
+
+        await activityService.recordActivity(projectId, {
+          type: 'task.assigned',
+          actorType: 'coordinator',
+          actorId: 'coordinator',
+          actorName: 'Task Coordinator',
+          taskId,
+          message: `Task assigned to agent via ${source.toLowerCase().replace(/_/g, ' ')}`,
+          payload: { agentId, source, score },
+        });
       }
 
       return result;

@@ -173,42 +173,52 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
       payload: { agentId },
     });
 
-    const responsePromise = receiveMessage(ws);
+    const responsePromise = receiveMessage(ws, 'agent.handshake.accepted');
     ws.send(JSON.stringify(handshakeMsg));
     return responsePromise;
   };
 
-  const receiveMessage = (ws: WebSocket): Promise<Record<string, unknown>> => {
+  /**
+   * Waits for the next message on `ws`, skipping unrelated live events
+   * (e.g. project-level activity.created broadcasts) when `expectedType` is
+   * provided. Keeps assertions on the awaited message intact.
+   */
+  const receiveMessage = (
+    ws: WebSocket,
+    expectedType?: string,
+  ): Promise<Record<string, unknown>> => {
     return new Promise((resolve, reject) => {
-      ws.once('message', (data) => {
+      let skipGuard = 0;
+      const onMessage = (data: WebSocket.RawData): void => {
         try {
-          resolve(JSON.parse(data.toString()));
+          const msg = JSON.parse(data.toString()) as Record<string, unknown>;
+          if (expectedType && msg.type !== expectedType) {
+            skipGuard += 1;
+            if (skipGuard > 100) {
+              reject(new Error(`Gave up waiting for message type '${expectedType}'`));
+              return;
+            }
+            ws.once('message', onMessage);
+            return;
+          }
+          resolve(msg);
         } catch (err) {
           reject(err);
         }
-      });
+      };
+      ws.once('message', onMessage);
     });
   };
 
   describe('1. Authentication & Pre-Handshake Checks', () => {
-    it('1. should reject agent.message on unauthenticated connection with HANDSHAKE_REQUIRED', async () => {
-      const ws = await connectWs(projectA.id); // No session cookie
-
-      const msg = createAgentMeshMessage({
-        type: AgentMeshMessageType.AGENT_MESSAGE,
-        projectId: projectA.id,
-        senderId: agentA1.id,
-        recipientId: agentA2.id,
-        payload: { body: 'Unauthenticated message' },
-      });
-
-      const responsePromise = receiveMessage(ws);
-      ws.send(JSON.stringify(msg));
-      const res = await responsePromise;
-
-      expect(res.type).toBe('error');
-      expect((res.payload as Record<string, unknown>).code).toBe('HANDSHAKE_REQUIRED');
-      ws.close();
+    it('1. should reject unauthenticated connection before HTTP 101 upgrade', async () => {
+      let error: unknown;
+      try {
+        await connectWs(projectA.id); // No session cookie
+      } catch (err) {
+        error = err;
+      }
+      expect(error).toBeDefined();
     });
 
     it('2. should reject message when senderId does NOT match connection agentId (SENDER_ID_MISMATCH)', async () => {
@@ -224,7 +234,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
         payload: { body: 'Spoofed sender attempt' },
       });
 
-      const responsePromise = receiveMessage(wsSender);
+      const responsePromise = receiveMessage(wsSender, 'error');
       wsSender.send(JSON.stringify(spoofedMsg));
       const res = await responsePromise;
 
@@ -252,7 +262,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
         payload: { body: 'Hello Agent A2!', metadata: { topic: 'greeting' } },
       });
 
-      const recipientPromise = receiveMessage(wsRecipient);
+      const recipientPromise = receiveMessage(wsRecipient, 'agent.message');
       wsSender.send(JSON.stringify(msg));
       const routedMsg = await recipientPromise;
 
@@ -282,7 +292,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
         payload: { body: 'Hello nobody' },
       });
 
-      const responsePromise = receiveMessage(wsSender);
+      const responsePromise = receiveMessage(wsSender, 'error');
       wsSender.send(JSON.stringify(msg));
       const res = await responsePromise;
 
@@ -305,7 +315,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
         payload: { body: 'Cross-project attempt' },
       });
 
-      const responsePromise = receiveMessage(wsSender);
+      const responsePromise = receiveMessage(wsSender, 'error');
       wsSender.send(JSON.stringify(msg));
       const res = await responsePromise;
 
@@ -328,7 +338,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
         payload: { body: 'Project manipulation attempt' },
       });
 
-      const responsePromise = receiveMessage(wsSender);
+      const responsePromise = receiveMessage(wsSender, 'error');
       wsSender.send(JSON.stringify(msg));
       const res = await responsePromise;
 
@@ -353,7 +363,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
         payload: { body: 'Message to offline recipient' },
       });
 
-      const responsePromise = receiveMessage(wsSender);
+      const responsePromise = receiveMessage(wsSender, 'error');
       wsSender.send(JSON.stringify(msg));
       const res = await responsePromise;
 
@@ -378,7 +388,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
       });
 
       // 1. Initial attempt fails because recipient is offline
-      const p1 = receiveMessage(wsSender);
+      const p1 = receiveMessage(wsSender, 'error');
       wsSender.send(JSON.stringify(msg));
       const res1 = await p1;
       expect((res1.payload as Record<string, unknown>).code).toBe('RECIPIENT_OFFLINE');
@@ -388,7 +398,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
       await performHandshake(wsRecipient, projectA.id, agentA2.id);
 
       // 3. Retry message succeeds
-      const recipientPromise = receiveMessage(wsRecipient);
+      const recipientPromise = receiveMessage(wsRecipient, 'agent.message');
       wsSender.send(JSON.stringify(msg));
       const routedMsg = await recipientPromise;
 
@@ -420,8 +430,8 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
         payload: { body: 'Fan-out broadcast message' },
       });
 
-      const promiseConn1 = receiveMessage(wsRecipientConn1);
-      const promiseConn2 = receiveMessage(wsRecipientConn2);
+      const promiseConn1 = receiveMessage(wsRecipientConn1, 'agent.message');
+      const promiseConn2 = receiveMessage(wsRecipientConn2, 'agent.message');
 
       wsSender.send(JSON.stringify(msg));
 
@@ -460,7 +470,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
         payload: { body: 'Message after single session disconnect' },
       });
 
-      const promiseConn2 = receiveMessage(wsRecipientConn2);
+      const promiseConn2 = receiveMessage(wsRecipientConn2, 'agent.message');
       wsSender.send(JSON.stringify(msg));
       const res2 = await promiseConn2;
 
@@ -493,7 +503,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
         payload: { body: 'Protocol integrity test' },
       });
 
-      const recipientPromise = receiveMessage(wsRecipient);
+      const recipientPromise = receiveMessage(wsRecipient, 'agent.message');
       wsSender.send(JSON.stringify(msg));
       const routedMsg = await recipientPromise;
 
@@ -522,7 +532,7 @@ describe('PRD #10 Agent-to-Agent Messaging Integration Tests', () => {
         payload: { body: '   ' }, // Empty whitespace body
       };
 
-      const responsePromise = receiveMessage(wsSender);
+      const responsePromise = receiveMessage(wsSender, 'error');
       wsSender.send(JSON.stringify(invalidPayloadMsg));
       const res = await responsePromise;
 

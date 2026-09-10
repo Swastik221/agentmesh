@@ -133,6 +133,105 @@ export class ExecutionService {
       throw new ForbiddenError('Agent is not assigned responsibility for this task');
     }
 
+    const { dependencyService } = await import('../services/dependency.service.js');
+    const depResolution = await dependencyService.resolveTaskDependencies(
+      projectId,
+      taskId,
+      userId,
+    );
+    if (!depResolution.ready) {
+      const { BadRequestError } = await import('../errors/app-error.js');
+      throw new BadRequestError('Task dependencies are not satisfied');
+    }
+
+    // Policy Evaluation Gate
+    const { policyService } = await import('../services/policy.service.js');
+    const evaluation = await policyService.evaluateAction(projectId, 'task.execute');
+
+    if (evaluation.decision === 'DENY') {
+      throw new ForbiddenError('Action rejected by project policy');
+    }
+
+    if (evaluation.decision === 'APPROVAL_REQUIRED') {
+      const { approvalService } = await import('../services/approval.service.js');
+      const matchedPolicy = evaluation.matchedPolicies[0];
+      const approvalRequest = await approvalService.createApprovalRequest(projectId, userId, {
+        projectId,
+        action: 'task.execute',
+        policyId: matchedPolicy?.id || null,
+        agentId: data.agentId,
+        idempotencyKey: `task.execute:${taskId}`,
+        reason: `Action task.execute requires human approval per policy '${matchedPolicy?.name || 'default'}'`,
+        metadata: {
+          taskId,
+          agentId: data.agentId,
+          input: data.input || null,
+        },
+      });
+
+      const { ApprovalRequiredError } = await import('../errors/app-error.js');
+      throw new ApprovalRequiredError(
+        approvalRequest.id,
+        approvalRequest,
+        'Execution blocked pending human approval',
+      );
+    }
+
+    return await this.createExecutionBypassingPolicy(projectId, taskId, userId, data);
+  }
+
+  async createExecutionBypassingPolicy(
+    projectId: string,
+    taskId: string,
+    userId: string,
+    data: CreateTaskExecutionInput,
+  ) {
+    await this.verifyProjectMembership(projectId, userId);
+
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+    });
+
+    if (!task || task.projectId !== projectId) {
+      throw new NotFoundError('Task not found');
+    }
+
+    const agent = await prisma.agent.findUnique({
+      where: { id: data.agentId },
+    });
+
+    if (!agent) {
+      throw new NotFoundError('Agent not found');
+    }
+
+    if (agent.projectId !== projectId) {
+      throw new ForbiddenError('Agent does not belong to this project');
+    }
+
+    const responsibility = await prisma.taskResponsibility.findUnique({
+      where: {
+        taskId_agentId: {
+          taskId,
+          agentId: data.agentId,
+        },
+      },
+    });
+
+    if (!responsibility) {
+      throw new ForbiddenError('Agent is not assigned responsibility for this task');
+    }
+
+    const { dependencyService } = await import('../services/dependency.service.js');
+    const depResolution = await dependencyService.resolveTaskDependencies(
+      projectId,
+      taskId,
+      userId,
+    );
+    if (!depResolution.ready) {
+      const { BadRequestError } = await import('../errors/app-error.js');
+      throw new BadRequestError('Task dependencies are not satisfied');
+    }
+
     const execution = await prisma.taskExecution.create({
       data: {
         taskId,
@@ -238,6 +337,24 @@ export class ExecutionService {
           select: { projectId: true },
         });
         if (taskObj) {
+          const workspace = await prisma.projectWorkspace.findUnique({
+            where: { projectId: taskObj.projectId },
+          });
+          if (workspace?.gitRepoPath && execution.id) {
+            const activeWt = await prisma.gitWorktree.findFirst({
+              where: { executionId: execution.id, status: 'ACTIVE' },
+            });
+            if (!activeWt) {
+              const project = await prisma.project.findUnique({
+                where: { id: taskObj.projectId },
+                select: { ownerId: true },
+              });
+              if (project?.ownerId) {
+                const { worktreeService } = await import('../git/worktree.service.js');
+                await worktreeService.createWorktree(taskObj.projectId, execution.id, project.ownerId).catch(() => null);
+              }
+            }
+          }
           const { workspaceService } = await import('../workspace/workspace.service.js');
           context = await workspaceService.getExecutionContext(
             taskObj.projectId,
@@ -488,6 +605,7 @@ export class ExecutionService {
     executionId: string,
     userId: string,
     targetStatus: ExecutionStatus,
+    error?: string,
   ) {
     await this.verifyProjectMembership(projectId, userId);
 
@@ -514,6 +632,7 @@ export class ExecutionService {
         where: { id: executionId },
         data: {
           status: targetStatus,
+          ...(error !== undefined && { error }),
           ...(targetStatus === ExecutionStatus.RUNNING && { startedAt: new Date() }),
           ...((targetStatus === ExecutionStatus.COMPLETED ||
             targetStatus === ExecutionStatus.FAILED ||

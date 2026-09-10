@@ -10,6 +10,7 @@ import { ConnectionMetadata } from '../websocket/websocket.types.js';
 import { executionService } from '../execution/execution.service.js';
 import { ExecutionStatus } from '@prisma/client';
 import { logger } from '../lib/logger.js';
+import { validateAndSerializeJsonPayload } from '../services/artifact.service.js';
 
 export interface ProcessConnectorMessageResult {
   success: boolean;
@@ -45,6 +46,59 @@ export class ConnectorService {
       return false;
     }
 
+    const workspace = await prisma.projectWorkspace.findUnique({
+      where: { projectId },
+    });
+
+    if (workspace?.gitRepoPath && executionId) {
+      const activeWt = await prisma.gitWorktree.findFirst({
+        where: { executionId, status: 'ACTIVE' },
+      });
+      if (!activeWt) {
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { ownerId: true },
+        });
+        if (project?.ownerId) {
+          const { worktreeService } = await import('../git/worktree.service.js');
+          await worktreeService.createWorktree(projectId, executionId, project.ownerId).catch(() => null);
+        }
+      }
+    }
+
+    const { workspaceService } = await import('../workspace/workspace.service.js');
+    const execContext = await workspaceService
+      .getExecutionContext(projectId, taskId, executionId)
+      .catch(() => null);
+
+    const taskDeps = await prisma.taskDependency.findMany({
+      where: { taskId },
+      include: {
+        artifact: true,
+      },
+    });
+
+    const dependencyArtifacts = taskDeps
+      .filter((dep) => dep.artifact !== null)
+      .map((dep) => {
+        const { contentHash } = validateAndSerializeJsonPayload(dep.artifact!.payload);
+        return {
+          dependencyId: dep.id,
+          artifactId: dep.artifact!.id,
+          contentHash,
+          type: dep.artifact!.type,
+          name: dep.artifact!.name,
+          version: dep.artifact!.version,
+          payload: dep.artifact!.payload,
+          producerAgentId: dep.artifact!.agentId,
+          producerTaskId: dep.artifact!.taskId,
+        };
+      });
+
+    const execRecord = executionId
+      ? await prisma.taskExecution.findUnique({ where: { id: executionId } })
+      : null;
+
     const taskRequestMsg = createAgentMeshMessage({
       type: AgentMeshMessageType.TASK_REQUEST,
       projectId,
@@ -59,9 +113,14 @@ export class ConnectorService {
         metadata: {
           priority: task.priority,
           filePaths: task.filePaths || [],
+          worktreePath: execContext?.workingDirectory,
+          rootPath: execContext?.rootPath,
+          dependencies: dependencyArtifacts,
+          input: execRecord?.input || undefined,
         },
       },
     });
+
 
     const dataString = JSON.stringify(taskRequestMsg);
     let sentCount = 0;
@@ -275,12 +334,8 @@ export class ConnectorService {
             targetExecId,
             metadata.userId,
             ExecutionStatus.FAILED,
+            error,
           );
-
-          await prisma.taskExecution.update({
-            where: { id: targetExecId },
-            data: { error },
-          }).catch(() => {});
         } catch (err: unknown) {
           logger.info(`Connector TASK_FAILED handled idempotently for ${targetExecId}: ${String(err)}`);
         }
@@ -290,6 +345,26 @@ export class ConnectorService {
       case AgentMeshMessageType.TASK_REJECTED: {
         return { success: true };
       }
+
+      case AgentMeshMessageType.TASK_PROGRESS: {
+        const { taskId, executionId, progress, message: progressMsgText } = message.payload;
+        connectionManager.broadcastToProject(metadata.projectId, message);
+
+        const { deltaSequencerService } = await import('../services/delta-sequencer.service.js');
+        await deltaSequencerService
+          .recordAndBroadcastDelta(metadata.projectId, [
+            {
+              entity: 'execution',
+              entityId: executionId || taskId,
+              operation: 'updated',
+              fields: { progress, message: progressMsgText },
+            },
+          ])
+          .catch(() => {});
+
+        return { success: true };
+      }
+
 
       default:
         return {

@@ -9,6 +9,7 @@ import {
   AgentMeshMessage,
 } from '@agentmesh/agent-protocol';
 import { prisma } from '../lib/prisma.js';
+
 import { sessionService } from '../auth/session.service.js';
 import { ConnectionMetadata } from '../websocket/websocket.types.js';
 import { connectionManager } from '../websocket/connection.manager.js';
@@ -257,6 +258,7 @@ export class HandshakeService {
         })
         .catch(() => {});
     }
+
   }
 
   createRejection(

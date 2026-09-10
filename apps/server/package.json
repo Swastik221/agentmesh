@@ -9,6 +9,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "demo:e2e": "vitest run src/__tests__/e2e-killer-demo.test.ts",
+    "demo:e2e:live": "tsx src/demo/run-live-demo.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "db:generate": "prisma generate",
@@ -22,6 +24,9 @@
     "@agentmesh/agent-protocol": "workspace:*",
     "@agentmesh/shared": "workspace:*",
     "@prisma/client": "^6.4.0",
+    "@x402/core": "^2.25.0",
+    "@x402/express": "^2.25.0",
+    "@x402/hedera": "^2.25.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -32,6 +37,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@agentmesh/cli": "workspace:*",
     "@agentmesh/config": "workspace:*",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",

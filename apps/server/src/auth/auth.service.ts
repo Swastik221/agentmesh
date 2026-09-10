@@ -20,12 +20,28 @@ export class AuthService {
     });
 
     if (!user) {
-      user = await prisma.user.create({
-        data: {
-          walletAddress: normalizedWalletAddress,
-          displayName: null,
-        },
-      });
+      try {
+        user = await prisma.user.create({
+          data: {
+            walletAddress: normalizedWalletAddress,
+            displayName: null,
+          },
+        });
+      } catch (err: unknown) {
+        if (
+          typeof err === 'object' &&
+          err !== null &&
+          'code' in err &&
+          err.code === 'P2002'
+        ) {
+          user = await prisma.user.findUnique({
+            where: { walletAddress: normalizedWalletAddress },
+          });
+        }
+        if (!user) {
+          throw err;
+        }
+      }
     }
 
     const session = await sessionService.createSession(user.id);

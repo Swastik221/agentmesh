@@ -151,8 +151,10 @@ describe('PRD-16 Delta-State Broadcast & Resynchronization Tests', () => {
       });
 
     expect(res.status).toBe(201);
+    // Task creation emits two deltas: the task-change delta plus the
+    // activity-event delta recorded for the task.created feed entry.
     const currentSeq = await deltaSequencerService.getCurrentSequence(projectId);
-    expect(currentSeq).toBe(1);
+    expect(currentSeq).toBe(2);
   });
 
   it('6. Failed sequence allocation propagates error and returns no null message', async () => {

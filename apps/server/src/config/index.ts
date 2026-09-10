@@ -14,4 +14,7 @@ export const config = {
   maxArtifactsPerPage: parseInt(process.env.MAX_ARTIFACTS_PER_PAGE || '50', 10),
   maxDependencyTraversalDepth: parseInt(process.env.MAX_DEPENDENCY_TRAVERSAL_DEPTH || '10', 10),
   maxWorkspaceDeltaBytes: parseInt(process.env.MAX_WORKSPACE_DELTA_BYTES || '65536', 10), // 64KB
+  ensRpcUrl: process.env.ENS_RPC_URL || 'https://eth.llamarpc.com',
+  ensTimeoutMs: parseInt(process.env.ENS_TIMEOUT_MS || '8000', 10),
 };
+

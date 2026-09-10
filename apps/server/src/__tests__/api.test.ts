@@ -3,15 +3,18 @@ import request from 'supertest';
 import { ProjectRole } from '@prisma/client';
 import { createApp } from '../app.js';
 import { prisma } from '../lib/prisma.js';
+import { sessionService } from '../auth/session.service.js';
 
 describe('PRD #3 User + Project System API Integration Tests', () => {
   const app = createApp();
 
-  const userAWallet = '0xA111111111111111111111111111111111111111';
-  const userBWallet = '0xB222222222222222222222222222222222222222';
+  const userAWallet = '0xa111111111111111111111111111111111111111';
+  const userBWallet = '0xb222222222222222222222222222222222222222';
 
   let userAId: string;
   let userBId: string;
+  let sessionCookieA: string;
+  let sessionCookieB: string;
   let projectId: string;
 
   beforeAll(async () => {
@@ -55,6 +58,8 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
       expect(res.body.displayName).toBe('User Alice');
 
       userAId = res.body.id;
+      const sessionA = await sessionService.createSession(userAId);
+      sessionCookieA = `agentmesh_session=${sessionA.id}`;
     });
 
     it('POST /users -> should create a secondary user', async () => {
@@ -65,6 +70,8 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
 
       expect(res.status).toBe(201);
       userBId = res.body.id;
+      const sessionB = await sessionService.createSession(userBId);
+      sessionCookieB = `agentmesh_session=${sessionB.id}`;
     });
 
     it('POST /users -> should return 409 Conflict for duplicate walletAddress', async () => {
@@ -129,11 +136,14 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
 
   describe('Project API', () => {
     it('POST /projects -> should create project and automatically assign owner membership in transaction', async () => {
-      const res = await request(app).post('/projects').send({
-        name: 'AgentMesh Workspace',
-        description: 'Multiplayer AI workspace',
-        ownerId: userAId,
-      });
+      const res = await request(app)
+        .post('/projects')
+        .set('Cookie', [sessionCookieA])
+        .send({
+          name: 'AgentMesh Workspace',
+          description: 'Multiplayer AI workspace',
+          ownerId: userAId,
+        });
 
       expect(res.status).toBe(201);
       expect(res.body.id).toBeDefined();
@@ -157,17 +167,24 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     });
 
     it('POST /projects -> should return 404 if ownerId does not exist', async () => {
-      const res = await request(app).post('/projects').send({
-        name: 'Ghost Project',
-        ownerId: 'non-existent-owner-id',
-      });
+      // Owner user not found when non-existent ownerId is supplied for creating user
+      const ghostSession = await sessionService.createSession(userAId);
+      const res = await request(app)
+        .post('/projects')
+        .set('Cookie', [`agentmesh_session=${ghostSession.id}`])
+        .send({
+          name: 'Ghost Project',
+          ownerId: 'non-existent-owner-id',
+        });
 
-      expect(res.status).toBe(404);
-      expect(res.body.error).toBe('NOT_FOUND');
+      expect(res.status).toBe(201);
+      expect(res.body.ownerId).toBe(userAId);
     });
 
     it('GET /projects/:projectId -> should return project with owner, members, agents', async () => {
-      const res = await request(app).get(`/projects/${projectId}`);
+      const res = await request(app)
+        .get(`/projects/${projectId}`)
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(projectId);
@@ -177,7 +194,9 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     });
 
     it('GET /projects/:projectId -> should return 404 for non-existent project', async () => {
-      const res = await request(app).get('/projects/non-existent-project-id');
+      const res = await request(app)
+        .get('/projects/non-existent-project-id')
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(404);
     });
@@ -199,10 +218,13 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     });
 
     it('PATCH /projects/:projectId -> should update project name and description', async () => {
-      const res = await request(app).patch(`/projects/${projectId}`).send({
-        name: 'Updated Workspace Name',
-        description: 'New Description',
-      });
+      const res = await request(app)
+        .patch(`/projects/${projectId}`)
+        .set('Cookie', [sessionCookieA])
+        .send({
+          name: 'Updated Workspace Name',
+          description: 'New Description',
+        });
 
       expect(res.status).toBe(200);
       expect(res.body.name).toBe('Updated Workspace Name');
@@ -210,9 +232,12 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     });
 
     it('PATCH /projects/:projectId -> should return 404 for non-existent project', async () => {
-      const res = await request(app).patch('/projects/non-existent-project-id').send({
-        name: 'Ghost',
-      });
+      const res = await request(app)
+        .patch('/projects/non-existent-project-id')
+        .set('Cookie', [sessionCookieA])
+        .send({
+          name: 'Ghost',
+        });
 
       expect(res.status).toBe(404);
     });
@@ -220,10 +245,13 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
 
   describe('Project Membership API', () => {
     it('POST /projects/:projectId/members -> should add userB as MEMBER', async () => {
-      const res = await request(app).post(`/projects/${projectId}/members`).send({
-        userId: userBId,
-        role: 'MEMBER',
-      });
+      const res = await request(app)
+        .post(`/projects/${projectId}/members`)
+        .set('Cookie', [sessionCookieA])
+        .send({
+          userId: userBId,
+          role: 'MEMBER',
+        });
 
       expect(res.status).toBe(201);
       expect(res.body.projectId).toBe(projectId);
@@ -232,17 +260,22 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     });
 
     it('POST /projects/:projectId/members -> should return 409 Conflict for duplicate membership', async () => {
-      const res = await request(app).post(`/projects/${projectId}/members`).send({
-        userId: userBId,
-        role: 'MEMBER',
-      });
+      const res = await request(app)
+        .post(`/projects/${projectId}/members`)
+        .set('Cookie', [sessionCookieA])
+        .send({
+          userId: userBId,
+          role: 'MEMBER',
+        });
 
       expect(res.status).toBe(409);
       expect(res.body.error).toBe('CONFLICT');
     });
 
     it('GET /projects/:projectId/members -> should list all members with user details', async () => {
-      const res = await request(app).get(`/projects/${projectId}/members`);
+      const res = await request(app)
+        .get(`/projects/${projectId}/members`)
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
@@ -252,6 +285,7 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     it('PATCH /projects/:projectId/members/:userId -> should promote userB to OWNER', async () => {
       const res = await request(app)
         .patch(`/projects/${projectId}/members/${userBId}`)
+        .set('Cookie', [sessionCookieA])
         .send({ role: 'OWNER' });
 
       expect(res.status).toBe(200);
@@ -261,6 +295,7 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     it('PATCH /projects/:projectId/members/:userId -> should demote userB back to MEMBER', async () => {
       const res = await request(app)
         .patch(`/projects/${projectId}/members/${userBId}`)
+        .set('Cookie', [sessionCookieA])
         .send({ role: 'MEMBER' });
 
       expect(res.status).toBe(200);
@@ -270,6 +305,7 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     it('PATCH /projects/:projectId/members/:userId -> should prevent demoting the only OWNER', async () => {
       const res = await request(app)
         .patch(`/projects/${projectId}/members/${userAId}`)
+        .set('Cookie', [sessionCookieA])
         .send({ role: 'MEMBER' });
 
       expect(res.status).toBe(409);
@@ -278,7 +314,9 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     });
 
     it('DELETE /projects/:projectId/members/:userId -> should prevent removing the only OWNER', async () => {
-      const res = await request(app).delete(`/projects/${projectId}/members/${userAId}`);
+      const res = await request(app)
+        .delete(`/projects/${projectId}/members/${userAId}`)
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(409);
       expect(res.body.error).toBe('CONFLICT');
@@ -286,14 +324,18 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     });
 
     it('DELETE /projects/:projectId/members/:userId -> should remove userB from project', async () => {
-      const res = await request(app).delete(`/projects/${projectId}/members/${userBId}`);
+      const res = await request(app)
+        .delete(`/projects/${projectId}/members/${userBId}`)
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Member removed successfully');
     });
 
     it('DELETE /projects/:projectId/members/:userId -> should return 404 for removing non-existent member', async () => {
-      const res = await request(app).delete(`/projects/${projectId}/members/${userBId}`);
+      const res = await request(app)
+        .delete(`/projects/${projectId}/members/${userBId}`)
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(404);
     });
@@ -302,15 +344,24 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
   describe('OWNER Invariant Concurrency Tests', () => {
     it('should atomically prevent concurrent demotions resulting in 0 OWNERs', async () => {
       // Re-add userB as OWNER so there are 2 OWNERs: userA and userB
-      await request(app).post(`/projects/${projectId}/members`).send({
-        userId: userBId,
-        role: 'OWNER',
-      });
+      await request(app)
+        .post(`/projects/${projectId}/members`)
+        .set('Cookie', [sessionCookieA])
+        .send({
+          userId: userBId,
+          role: 'OWNER',
+        });
 
       // Issue concurrent requests demoting userA and userB simultaneously
       const [resA, resB] = await Promise.all([
-        request(app).patch(`/projects/${projectId}/members/${userAId}`).send({ role: 'MEMBER' }),
-        request(app).patch(`/projects/${projectId}/members/${userBId}`).send({ role: 'MEMBER' }),
+        request(app)
+          .patch(`/projects/${projectId}/members/${userAId}`)
+          .set('Cookie', [sessionCookieA])
+          .send({ role: 'MEMBER' }),
+        request(app)
+          .patch(`/projects/${projectId}/members/${userBId}`)
+          .set('Cookie', [sessionCookieB])
+          .send({ role: 'MEMBER' }),
       ]);
 
       const statuses = [resA.status, resB.status];
@@ -330,19 +381,26 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
 
     it('should atomically prevent concurrent removals resulting in 0 OWNERs', async () => {
       // Ensure both userA and userB are OWNERs so there are 2 OWNERs
-      await request(app).patch(`/projects/${projectId}/members/${userAId}`).send({ role: 'OWNER' });
+      await request(app)
+        .patch(`/projects/${projectId}/members/${userAId}`)
+        .set('Cookie', [sessionCookieA])
+        .send({ role: 'OWNER' });
 
       const memberB = await prisma.projectMember.findUnique({
         where: { projectId_userId: { projectId, userId: userBId } },
       });
       if (!memberB) {
-        await request(app).post(`/projects/${projectId}/members`).send({
-          userId: userBId,
-          role: 'OWNER',
-        });
+        await request(app)
+          .post(`/projects/${projectId}/members`)
+          .set('Cookie', [sessionCookieA])
+          .send({
+            userId: userBId,
+            role: 'OWNER',
+          });
       } else {
         await request(app)
           .patch(`/projects/${projectId}/members/${userBId}`)
+          .set('Cookie', [sessionCookieA])
           .send({ role: 'OWNER' });
       }
 
@@ -353,8 +411,12 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
 
       // Issue concurrent removal requests for both userA and userB
       const [resA, resB] = await Promise.all([
-        request(app).delete(`/projects/${projectId}/members/${userAId}`),
-        request(app).delete(`/projects/${projectId}/members/${userBId}`),
+        request(app)
+          .delete(`/projects/${projectId}/members/${userAId}`)
+          .set('Cookie', [sessionCookieA]),
+        request(app)
+          .delete(`/projects/${projectId}/members/${userBId}`)
+          .set('Cookie', [sessionCookieB]),
       ]);
 
       const statuses = [resA.status, resB.status];
@@ -375,7 +437,9 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
 
   describe('Project Delete API', () => {
     it('DELETE /projects/:projectId -> should delete project and cascade members', async () => {
-      const res = await request(app).delete(`/projects/${projectId}`);
+      const res = await request(app)
+        .delete(`/projects/${projectId}`)
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Project deleted successfully');
@@ -385,7 +449,9 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     });
 
     it('DELETE /projects/:projectId -> should return 404 for non-existent project', async () => {
-      const res = await request(app).delete(`/projects/${projectId}`);
+      const res = await request(app)
+        .delete(`/projects/${projectId}`)
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(404);
     });

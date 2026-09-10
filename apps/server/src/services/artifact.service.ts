@@ -9,6 +9,7 @@ import {
 import { connectionManager } from '../websocket/connection.manager.js';
 import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
 import { deltaSequencerService } from './delta-sequencer.service.js';
+import { activityService } from './activity.service.js';
 
 import crypto from 'node:crypto';
 
@@ -18,6 +19,7 @@ export interface CreateArtifactInput {
   payload: unknown;
   executionId?: string;
   agentId?: string;
+  requiresReview?: boolean;
 }
 
 export interface ListArtifactsQuery {
@@ -127,6 +129,94 @@ export class ArtifactService {
       throw new BadRequestError('Artifact name is required');
     }
 
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: {
+        responsibilities: true,
+      },
+    });
+
+    if (!task || task.projectId !== projectId) {
+      throw new NotFoundError('Task not found');
+    }
+
+    // Determine producer agent
+    let producerAgentId = data.agentId;
+
+    if (producerAgentId) {
+      const agent = await prisma.agent.findUnique({
+        where: { id: producerAgentId },
+      });
+      if (!agent || agent.projectId !== projectId) {
+        throw new ForbiddenError('Agent does not belong to this project');
+      }
+    } else if (data.executionId) {
+      const execution = await prisma.taskExecution.findUnique({
+        where: { id: data.executionId },
+      });
+      if (execution && execution.taskId === taskId) {
+        producerAgentId = execution.agentId;
+      }
+    } else if (task.responsibilities.length > 0) {
+      producerAgentId = task.responsibilities[0].agentId;
+    }
+
+    if (!producerAgentId) {
+      throw new BadRequestError('Producer agent ID is required for artifact creation');
+    }
+
+    // Policy Evaluation Gate
+    const { policyService } = await import('./policy.service.js');
+    const evaluation = await policyService.evaluateAction(projectId, 'artifact.write');
+
+    if (evaluation.decision === 'DENY') {
+      throw new ForbiddenError('Action rejected by project policy');
+    }
+
+    if (evaluation.decision === 'APPROVAL_REQUIRED') {
+      const { approvalService } = await import('./approval.service.js');
+      const matchedPolicy = evaluation.matchedPolicies[0];
+      const approvalRequest = await approvalService.createApprovalRequest(projectId, userId, {
+        projectId,
+        action: 'artifact.write',
+        policyId: matchedPolicy?.id || null,
+        agentId: producerAgentId,
+        idempotencyKey: `artifact.write:${taskId}:${data.name.trim()}`,
+        reason: `Action artifact.write requires human approval per policy '${matchedPolicy?.name || 'default'}'`,
+        metadata: {
+          taskId,
+          agentId: producerAgentId,
+          artifactData: data,
+        },
+      });
+
+      const { ApprovalRequiredError } = await import('../errors/app-error.js');
+      throw new ApprovalRequiredError(
+        approvalRequest.id,
+        approvalRequest,
+        'Artifact creation blocked pending human approval',
+      );
+    }
+
+    return await this.createArtifactBypassingPolicy(projectId, taskId, userId, data);
+  }
+
+  async createArtifactBypassingPolicy(
+    projectId: string,
+    taskId: string,
+    userId: string,
+    data: CreateArtifactInput,
+  ) {
+    await this.verifyProjectMembership(projectId, userId);
+
+    if (!data.type || !data.type.trim()) {
+      throw new BadRequestError('Artifact type is required');
+    }
+
+    if (!data.name || !data.name.trim()) {
+      throw new BadRequestError('Artifact name is required');
+    }
+
     // Payload validation, UTF-8 size check, SHA-256 contentHash calculation
     const { contentHash, normalizedPayload } = validateAndSerializeJsonPayload(data.payload);
 
@@ -198,6 +288,7 @@ export class ArtifactService {
               name: data.name.trim(),
               version,
               payload: normalizedPayload as Prisma.InputJsonValue,
+              requiresReview: data.requiresReview ?? false,
             },
           });
         });
@@ -254,6 +345,52 @@ export class ArtifactService {
       },
     ]);
 
+    // Link any task dependencies waiting for an artifact from this producer task
+    const pendingDeps = await prisma.taskDependency.findMany({
+      where: {
+        dependsOnTaskId: artifact.taskId,
+        dependencyType: {
+          startsWith: 'ARTIFACT_REQUIRED',
+        },
+        artifactId: null,
+      },
+    });
+
+    const totalProducerArtifacts = await prisma.artifact.count({
+      where: { taskId: artifact.taskId },
+    });
+
+    for (const dep of pendingDeps) {
+      let isMatch = false;
+
+      if (dep.dependencyType === 'ARTIFACT_REQUIRED') {
+        if (totalProducerArtifacts === 1) {
+          isMatch = true;
+        }
+      } else if (dep.dependencyType.startsWith('ARTIFACT_REQUIRED:')) {
+        const spec = dep.dependencyType.slice('ARTIFACT_REQUIRED:'.length).trim();
+        if (spec.startsWith('name:')) {
+          const targetName = spec.slice('name:'.length).trim();
+          isMatch = artifact.name === targetName;
+        } else if (spec.startsWith('type:')) {
+          const targetType = spec.slice('type:'.length).trim();
+          isMatch = artifact.type === targetType;
+        } else if (spec.includes(':')) {
+          const [targetType, targetName] = spec.split(':').map((s) => s.trim());
+          isMatch = artifact.type === targetType && artifact.name === targetName;
+        } else {
+          isMatch = artifact.name === spec || artifact.type === spec;
+        }
+      }
+
+      if (isMatch) {
+        await prisma.taskDependency.update({
+          where: { id: dep.id },
+          data: { artifactId: artifact.id },
+        });
+      }
+    }
+
     // Notify dependent tasks waiting on artifact
     const dependentDeps = await prisma.taskDependency.findMany({
       where: {
@@ -283,6 +420,15 @@ export class ArtifactService {
         },
       });
     }
+
+    await activityService.recordActivity(projectId, {
+      type: 'artifact.created',
+      actorType: 'agent',
+      actorId: artifact.agentId,
+      taskId,
+      artifactId: artifact.id,
+      message: `${artifact.type} artifact '${artifact.name}' v${artifact.version} created`,
+    });
 
     return artifactWithHash;
   }
@@ -330,6 +476,101 @@ export class ArtifactService {
     return {
       ...artifact,
       contentHash,
+    };
+  }
+
+  async reviewArtifact(
+    projectId: string,
+    artifactId: string,
+    reviewerUserId: string,
+    decision: { approved: boolean; note?: string },
+  ) {
+    await this.verifyProjectMembership(projectId, reviewerUserId);
+
+    const artifact = await prisma.artifact.findUnique({
+      where: { id: artifactId },
+      include: { task: true },
+    });
+
+    if (!artifact || artifact.projectId !== projectId) {
+      throw new NotFoundError('Artifact not found');
+    }
+
+    if (!artifact.requiresReview) {
+      throw new BadRequestError('Artifact does not require review');
+    }
+
+    if (artifact.status !== 'PENDING') {
+      throw new BadRequestError('Artifact has already been reviewed');
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT * FROM artifacts WHERE id = ${artifactId} AND "projectId" = ${projectId} FOR UPDATE`;
+
+      const fresh = await tx.artifact.findUnique({ where: { id: artifactId } });
+      if (!fresh || fresh.projectId !== projectId) {
+        throw new NotFoundError('Artifact not found');
+      }
+      if (fresh.status !== 'PENDING') {
+        throw new BadRequestError('Artifact has already been reviewed');
+      }
+
+      const updatedArtifact = await tx.artifact.update({
+        where: { id: artifactId },
+        data: {
+          status: decision.approved ? 'APPROVED' : 'REJECTED',
+          reviewedById: reviewerUserId,
+          reviewedAt: new Date(),
+          reviewNote: decision.note ?? null,
+        },
+      });
+
+      const targetStatus = decision.approved ? 'COMPLETED' : 'IN_PROGRESS';
+      const updatedTask = await tx.task.update({
+        where: { id: artifact.taskId },
+        data: { status: targetStatus },
+      });
+
+      return { updatedArtifact, updatedTask };
+    });
+
+    connectionManager.broadcastToProject(projectId, {
+      type: AgentMeshMessageType.TASK_STATUS,
+      payload: {
+        taskId: artifact.taskId,
+        status: updated.updatedTask.status,
+      },
+    });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'artifact',
+        entityId: artifactId,
+        operation: 'updated',
+        fields: { status: updated.updatedArtifact.status },
+      },
+      {
+        entity: 'task',
+        entityId: artifact.taskId,
+        operation: 'updated',
+        fields: { status: updated.updatedTask.status },
+      },
+    ]);
+
+    await activityService.recordActivity(projectId, {
+      type: decision.approved ? 'artifact.approved' : 'artifact.rejected',
+      actorType: 'human',
+      actorId: reviewerUserId,
+      taskId: artifact.taskId,
+      artifactId: artifact.id,
+      message: decision.approved
+        ? `Artifact '${artifact.name}' approved — task completed`
+        : `Artifact '${artifact.name}' rejected — task reopened`,
+    });
+
+    return {
+      artifact: updated.updatedArtifact,
+      task: updated.updatedTask,
     };
   }
 

@@ -321,7 +321,12 @@ export class DependencyService {
 
     return dependencies.map((dep) => {
       let available = false;
-      if (dep.dependsOnTaskId && dep.dependsOnTask) {
+      if (
+        dep.dependencyType === 'ARTIFACT_REQUIRED' ||
+        dep.dependencyType.startsWith('ARTIFACT_REQUIRED:')
+      ) {
+        available = Boolean(dep.artifactId && dep.artifact);
+      } else if (dep.dependsOnTaskId && dep.dependsOnTask) {
         available = dep.dependsOnTask.status === 'COMPLETED';
       } else if (dep.artifactId && dep.artifact) {
         available = true;

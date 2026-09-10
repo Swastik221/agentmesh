@@ -3,10 +3,10 @@ import { prisma } from '../lib/prisma.js';
 import { CreateAgentInput, UpdateAgentInput } from '../schemas/agent.schema.js';
 import { NotFoundError, ForbiddenError } from '../errors/app-error.js';
 import { Agent, AgentStatus } from '@prisma/client';
+import { ensService } from './ens.service.js';
 
 export class AgentService {
-  async createAgent(projectId: string, input: CreateAgentInput): Promise<Agent> {
-    // Rule 1: Project must exist
+  private async verifyProjectMembership(projectId: string, userId: string): Promise<void> {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
     });
@@ -14,47 +14,77 @@ export class AgentService {
       throw new NotFoundError(`Project with ID ${projectId} not found`);
     }
 
-    // Rule 2: Owner must exist
-    const owner = await prisma.user.findUnique({
-      where: { id: input.ownerId },
-    });
-    if (!owner) {
-      throw new NotFoundError(`User with ID ${input.ownerId} not found`);
-    }
-
-    // Rule 3: Owner must belong to project
     const membership = await prisma.projectMember.findUnique({
       where: {
         projectId_userId: {
           projectId,
-          userId: input.ownerId,
+          userId,
         },
       },
     });
     if (!membership) {
-      throw new ForbiddenError(`User ${input.ownerId} is not a member of project ${projectId}`);
+      throw new ForbiddenError(`User ${userId} is not a member of project ${projectId}`);
+    }
+  }
+
+  /**
+   * Create an agent. If ensName is supplied, the server resolves it and verifies the
+   * resolved address matches authenticatedWallet before persisting. The client-supplied
+   * ensAddress is never trusted.
+   */
+  async createAgent(
+    projectId: string,
+    actorUserId: string,
+    input: CreateAgentInput,
+    authenticatedWallet?: string | null,
+  ): Promise<Agent> {
+    // Rule 1: Project & membership check
+    await this.verifyProjectMembership(projectId, actorUserId);
+
+    // Rule 2: Optional ENS verification — happens before DB write (atomicity)
+    let ensFields: {
+      ensName?: string | null;
+      ensAddress?: string | null;
+      ensVerifiedAt?: Date | null;
+    } = {};
+
+    if (input.ensName) {
+      if (!authenticatedWallet) {
+        throw new ForbiddenError('Cannot attach ENS identity: authenticated wallet is not set');
+      }
+      const identity = await ensService.verifyNameOwnership(input.ensName, authenticatedWallet);
+      ensFields = {
+        ensName: identity.name,
+        ensAddress: identity.address,
+        ensVerifiedAt: new Date(),
+      };
     }
 
-    // Rule 4: Agent starts OFFLINE by default
+    // Rule 3: Persist — only after successful verification
     const agent = await prisma.agent.create({
       data: {
         projectId,
-        ownerId: input.ownerId,
+        ownerId: actorUserId,
         name: input.name,
         provider: input.provider,
         status: AgentStatus.OFFLINE,
+        ...ensFields,
       },
     });
 
     return agent;
   }
 
-  async listProjectAgents(projectId: string, capabilityQuery?: string) {
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-    });
-    if (!project) {
-      throw new NotFoundError(`Project with ID ${projectId} not found`);
+  async listProjectAgents(projectId: string, actorUserId?: string, capabilityQuery?: string) {
+    if (actorUserId) {
+      await this.verifyProjectMembership(projectId, actorUserId);
+    } else {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+      });
+      if (!project) {
+        throw new NotFoundError(`Project with ID ${projectId} not found`);
+      }
     }
 
     const normalizedCap =
@@ -80,7 +110,7 @@ export class AgentService {
     });
   }
 
-  async getAgent(agentId: string) {
+  async getAgent(agentId: string, actorUserId?: string) {
     const agent = await prisma.agent.findUnique({
       where: { id: agentId },
       include: {
@@ -90,15 +120,55 @@ export class AgentService {
     if (!agent) {
       throw new NotFoundError(`Agent with ID ${agentId} not found`);
     }
+    if (actorUserId) {
+      await this.verifyProjectMembership(agent.projectId, actorUserId);
+    }
     return agent;
   }
 
-  async updateAgent(agentId: string, input: UpdateAgentInput): Promise<Agent> {
+  /**
+   * Update an agent. ENS handling:
+   *   - ensName = string  → resolve + verify → replace existing identity atomically
+   *   - ensName = null    → explicitly remove all ENS fields
+   *   - ensName absent    → no ENS change
+   */
+  async updateAgent(
+    agentId: string,
+    actorUserId: string,
+    input: UpdateAgentInput,
+    authenticatedWallet?: string | null,
+  ): Promise<Agent> {
     const existingAgent = await prisma.agent.findUnique({
       where: { id: agentId },
     });
     if (!existingAgent) {
       throw new NotFoundError(`Agent with ID ${agentId} not found`);
+    }
+    await this.verifyProjectMembership(existingAgent.projectId, actorUserId);
+
+    // Build ENS update fields before touching the DB
+    let ensUpdate: {
+      ensName?: string | null;
+      ensAddress?: string | null;
+      ensVerifiedAt?: Date | null;
+    } = {};
+
+    if ('ensName' in input) {
+      if (input.ensName === null) {
+        // Explicit removal — no ENS lookup needed
+        ensUpdate = { ensName: null, ensAddress: null, ensVerifiedAt: null };
+      } else if (input.ensName) {
+        if (!authenticatedWallet) {
+          throw new ForbiddenError('Cannot attach ENS identity: authenticated wallet is not set');
+        }
+        // Resolve + verify before DB write
+        const identity = await ensService.verifyNameOwnership(input.ensName, authenticatedWallet);
+        ensUpdate = {
+          ensName: identity.name,
+          ensAddress: identity.address,
+          ensVerifiedAt: new Date(),
+        };
+      }
     }
 
     return prisma.agent.update({
@@ -107,17 +177,19 @@ export class AgentService {
         ...(input.name !== undefined && { name: input.name }),
         ...(input.provider !== undefined && { provider: input.provider }),
         ...(input.status !== undefined && { status: input.status }),
+        ...ensUpdate,
       },
     });
   }
 
-  async deleteAgent(agentId: string): Promise<void> {
+  async deleteAgent(agentId: string, actorUserId: string): Promise<void> {
     const existingAgent = await prisma.agent.findUnique({
       where: { id: agentId },
     });
     if (!existingAgent) {
       throw new NotFoundError(`Agent with ID ${agentId} not found`);
     }
+    await this.verifyProjectMembership(existingAgent.projectId, actorUserId);
 
     await prisma.agent.delete({
       where: { id: agentId },

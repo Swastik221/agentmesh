@@ -32,6 +32,10 @@ model User {
   brainEntries  ProjectBrainEntry[]
   createdTasks  Task[]
   artifacts     Artifact[]
+  artifactsReviewed Artifact[] @relation("ArtifactReviewer")
+  approvalRequestsRequested ApprovalRequest[] @relation("ApprovalRequester")
+  approvalRequestsResolved  ApprovalRequest[] @relation("ApprovalResolver")
+  payments                  Payment[]         @relation("PaymentRequester")
 
   @@map("users")
 }
@@ -54,6 +58,10 @@ model Project {
   workspace    ProjectWorkspace?
   artifacts    Artifact[]
   taskDependencies TaskDependency[]
+  activityEvents   ActivityEvent[]
+  policies         Policy[]
+  approvalRequests ApprovalRequest[]
+  payments         Payment[]
 
   @@index([ownerId])
   @@map("projects")
@@ -82,8 +90,13 @@ model Agent {
   name      String
   provider  String
   status    AgentStatus @default(OFFLINE)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+
+  ensName       String?
+  ensAddress    String?
+  ensVerifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   owner                User                 @relation("UserOwnedAgents", fields: [ownerId], references: [id], onDelete: Restrict)
@@ -93,6 +106,8 @@ model Agent {
   worktrees            GitWorktree[]
   preferredTasks       Task[]               @relation("PreferredAgentTasks")
   artifacts            Artifact[]
+  approvalRequests     ApprovalRequest[]
+  payments             Payment[]
 
   @@index([projectId])
   @@index([ownerId])
@@ -167,6 +182,7 @@ model ProjectBrainEntry {
 enum TaskStatus {
   TODO
   IN_PROGRESS
+  PENDING_APPROVAL
   BLOCKED
   COMPLETED
   FAILED
@@ -253,6 +269,12 @@ model TaskDependency {
   @@map("task_dependencies")
 }
 
+enum ArtifactStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Artifact {
   id          String   @id @default(cuid())
   projectId   String
@@ -265,6 +287,11 @@ model Artifact {
   name        String
   version     Int      @default(1)
   payload     Json
+  status      ArtifactStatus @default(PENDING)
+  requiresReview Boolean     @default(false)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewNote     String?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -274,6 +301,7 @@ model Artifact {
   execution    TaskExecution?   @relation(fields: [executionId], references: [id], onDelete: SetNull)
   agent        Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
   ownerUser    User             @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  reviewedBy   User?            @relation("ArtifactReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   dependencies TaskDependency[]
 
   @@unique([taskId, name, version])
@@ -331,6 +359,24 @@ model ProjectWorkspace {
   @@map("project_workspaces")
 }
 
+model ActivityEvent {
+  id         String   @id @default(cuid())
+  projectId  String
+  type       String
+  actorType  String
+  actorId    String
+  actorName  String?
+  taskId     String?
+  artifactId String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("activity_events")
+}
+
 enum GitWorktreeStatus {
   ACTIVE
   REMOVED
@@ -359,3 +405,106 @@ model GitWorktree {
   @@index([status])
   @@map("git_worktrees")
 }
+
+enum PolicyDecision {
+  ALLOW
+  APPROVAL_REQUIRED
+  DENY
+}
+
+model Policy {
+  id          String         @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  enabled     Boolean        @default(true)
+  action      String
+  decision    PolicyDecision
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  approvalRequests ApprovalRequest[]
+
+  @@index([projectId])
+  @@index([projectId, action])
+  @@index([projectId, enabled])
+  @@map("policies")
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model ApprovalRequest {
+  id                String         @id @default(cuid())
+  projectId         String
+  policyId          String?
+  requestedByUserId String
+  agentId           String?
+  action            String
+  idempotencyKey    String?
+  status            ApprovalStatus @default(PENDING)
+  reason            String?
+  metadata          Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  resolvedAt        DateTime?
+  resolvedByUserId  String?
+
+  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  policy          Policy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  requestedByUser User    @relation("ApprovalRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  resolvedByUser  User?   @relation("ApprovalResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  agent           Agent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, idempotencyKey])
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([requestedByUserId])
+  @@index([agentId])
+  @@index([createdAt])
+  @@map("approval_requests")
+}
+
+enum PaymentStatus {
+  REQUIRED
+  SUBMITTED
+  VERIFIED
+  SETTLED
+  FAILED
+}
+
+model Payment {
+  id                   String        @id @default(cuid())
+  projectId            String
+  requesterUserId      String
+  agentId              String?
+  action               String
+  amount               String
+  asset                String
+  network              String
+  payerAddress         String?
+  receiverAddress      String
+  status               PaymentStatus @default(REQUIRED)
+  x402PaymentReference String?       @unique
+  transactionReference String?
+  metadata             Json?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  settledAt            DateTime?
+
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requesterUser User    @relation("PaymentRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  agent         Agent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([requesterUserId])
+  @@index([agentId])
+  @@index([status])
+  @@map("payments")
+}
+
