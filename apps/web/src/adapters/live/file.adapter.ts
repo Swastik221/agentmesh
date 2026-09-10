@@ -21,7 +21,10 @@ export const liveFileAdapter: FileAdapter = {
     if (!taskId) {
       throw new LiveFileAdapterError('Fetching artifacts requires a taskId in Live Mode in INT-1.');
     }
-    return await apiClient.get<Artifact[]>(`/projects/${encodeURIComponent(_workspaceId)}/tasks/${encodeURIComponent(taskId)}/artifacts`);
+    const res = await apiClient.get<{ items: Artifact[]; page: number; limit: number; total: number }>(
+      `/projects/${encodeURIComponent(_workspaceId)}/tasks/${encodeURIComponent(taskId)}/artifacts`,
+    );
+    return res.items || [];
   },
 
   async publishArtifact(workspaceId: string, artifact: Artifact & { taskId?: string }): Promise<Artifact> {

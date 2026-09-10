@@ -451,7 +451,7 @@ describe('PRD-31 Real Agent Vertical Slice Integration Tests', () => {
 
     // Verify execution status remains safely handled (not corrupted)
     const postDisconnectExec = await prisma.taskExecution.findUnique({ where: { id: execution.id } });
-    expect(['RUNNING', 'FAILED', 'COMPLETED']).toContain(postDisconnectExec?.status);
+    expect(['RUNNING', 'FAILED']).toContain(postDisconnectExec?.status);
   }, 20000);
 
 });

@@ -7,11 +7,12 @@ import { liveFileAdapter, LiveFileAdapterError } from '../file.adapter';
 import { liveTerminalAdapter, LiveTerminalError } from '../terminal.adapter';
 import { liveBrowserPreviewAdapter, LiveBrowserPreviewError } from '../browser-preview.adapter';
 import { liveWorkspaceRealtimeAdapter } from '../workspace-realtime.adapter';
+import { apiClient } from '../../../services/api-client';
 import { demoAdapters } from '../../demo/index';
 import { getAdapters, adapters } from '../../index';
 import { setAppMode, getAppMode } from '../../../config/env';
 
-describe('INT-1-C2 Live Adapters Contract Alignment & Mode Isolation Tests', () => {
+describe('INT-1-C3 Live Adapters Contract Alignment & Mode Isolation Tests', () => {
   describe('1. Wallet Adapter Correctness', () => {
     it('throws LiveWalletError when window.ethereum is missing', async () => {
       const originalWindow = global.window;
@@ -162,7 +163,63 @@ describe('INT-1-C2 Live Adapters Contract Alignment & Mode Isolation Tests', () 
     });
   });
 
-  describe('4. Mode Isolation & Demo Non-Regression', () => {
+  describe('4. Successful Supported Live Adapter Backend Contracts', () => {
+    it('liveWorkspaceRealtimeAdapter.joinWorkspace calls GET /projects/:projectId', async () => {
+      const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({ id: 'proj_1', name: 'P1' });
+
+      const res = await liveWorkspaceRealtimeAdapter.joinWorkspace('proj_1', { id: 'u1', email: 'e', displayName: 'd', createdAt: '' });
+      expect(getSpy).toHaveBeenCalledWith('/projects/proj_1');
+      expect(res.id).toBe('proj_1');
+      getSpy.mockRestore();
+    });
+
+    it('liveAgentConnectionAdapter.getAvailableAgents calls GET /projects/:projectId/agents', async () => {
+      const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce([{ id: 'ag_1', name: 'Agent 1' }]);
+
+      const res = await liveAgentConnectionAdapter.getAvailableAgents('proj_1');
+      expect(getSpy).toHaveBeenCalledWith('/projects/proj_1/agents');
+      expect(res).toHaveLength(1);
+      getSpy.mockRestore();
+    });
+
+    it('liveTaskProtocolAdapter.getTasks calls GET /projects/:projectId/tasks', async () => {
+      const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce([{ id: 'task_1', title: 'Task 1' }]);
+
+      const res = await liveTaskProtocolAdapter.getTasks('proj_1');
+      expect(getSpy).toHaveBeenCalledWith('/projects/proj_1/tasks');
+      expect(res).toHaveLength(1);
+      getSpy.mockRestore();
+    });
+
+    it('liveTaskProtocolAdapter.decideApproval calls approve and reject endpoints correctly', async () => {
+      const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue({ id: 'app_1', status: 'approved' });
+
+      await liveTaskProtocolAdapter.decideApproval('proj_1', 'app_1', 'approved');
+      expect(postSpy).toHaveBeenCalledWith('/approvals/app_1/approve', {});
+
+      await liveTaskProtocolAdapter.decideApproval('proj_1', 'app_1', 'rejected');
+      expect(postSpy).toHaveBeenCalledWith('/approvals/app_1/reject', {});
+
+      postSpy.mockRestore();
+    });
+
+    it('liveFileAdapter.getArtifacts calls GET /projects/:projectId/tasks/:taskId/artifacts and unwraps items', async () => {
+      const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+        items: [{ id: 'art_1', name: 'Artifact 1' }],
+        page: 1,
+        limit: 20,
+        total: 1,
+      });
+
+      const res = await liveFileAdapter.getArtifacts('proj_1', 'task_1');
+      expect(getSpy).toHaveBeenCalledWith('/projects/proj_1/tasks/task_1/artifacts');
+      expect(res).toHaveLength(1);
+      expect(res[0].id).toBe('art_1');
+      getSpy.mockRestore();
+    });
+  });
+
+  describe('5. Mode Isolation & Demo Non-Regression', () => {
     it('Demo Mode returns deterministic demo adapters and never calls live adapters', () => {
       setAppMode('demo');
       expect(getAppMode()).toBe('demo');
