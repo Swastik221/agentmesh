@@ -147,7 +147,7 @@ const initialEdges: Edge[] = [
     id: 'orion-approval',
     source: 'orion',
     target: 'approval',
-    label: 'APPROVAL_REQUIRED: 0.35 ETH',
+    label: 'APPROVAL_REQUIRED: $0.001 USDC',
     style: { stroke: '#D99A32', strokeWidth: 1.8 },
     markerEnd: {
       type: MarkerType.ArrowClosed,
@@ -1019,7 +1019,7 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
                 </div>
                 <div>
                   <dt>Spend threshold</dt>
-                  <dd>0.35 ETH</dd>
+                  <dd>$0.001 USDC (Hedera Testnet)</dd>
                 </div>
                 <div>
                   <dt>Target</dt>
@@ -1049,7 +1049,7 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
                     setApprovalModalOpen(false);
                   }}
                 >
-                  Sign & Approve (0.35 ETH)
+                  Sign & Approve ($0.001 USDC)
                 </button>
               </footer>
             </section>

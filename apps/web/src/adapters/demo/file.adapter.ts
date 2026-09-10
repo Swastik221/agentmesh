@@ -85,7 +85,7 @@ pragma solidity ^0.8.20;
  */
 contract CheckoutEscrow {
     address public immutable owner;
-    uint256 public constant MAX_SPEND_THRESHOLD = 0.35 ether;
+    uint256 public constant MAX_SPEND_THRESHOLD = 1000; // 0.001 USDC (1000 atomic units)
 
     event PaymentIntentCreated(bytes32 indexed intentId, address indexed payer, uint256 amount);
     event ApprovalRequired(bytes32 indexed actionId, uint256 amount);

@@ -120,10 +120,10 @@ export function BrowserNode({ data, selected }: NodeProps) {
                   color: 'var(--mesh-text-main)',
                 }}
               >
-                0.35 ETH
+                $0.001 USDC
               </div>
               <div style={{ fontSize: 11, color: 'var(--mesh-text-muted)', marginTop: 4 }}>
-                Owner: <code>dev1.eth (Anand)</code>
+                Network: <code>Hedera Testnet</code> · Owner: <code>dev1.eth (Anand)</code>
               </div>
             </div>
 
@@ -166,7 +166,8 @@ export function BrowserNode({ data, selected }: NodeProps) {
     "/payment/intent": {
       "post": {
         "summary": "Create checkout intent",
-        "spendThreshold": "0.35 ETH",
+        "spendThreshold": "$0.001 USDC",
+        "network": "Hedera Testnet",
         "schemaHash": "sha256:7fb2…91cd"
       }
     }

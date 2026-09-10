@@ -26,7 +26,7 @@ export const REPLAY_STEPS: ReplayStep[] = [
   { id: 14, title: 'Backend Task Claimed', detail: 'Swastik (Vega) claims AM-115 payment API', eventType: 'TASK_CLAIMED', action: 'claim-backend', cursor: { id: 'swastik', x: 520, y: 260 } },
   { id: 15, title: 'Schema Published', detail: 'Vega publishes payment-api.json artifact', eventType: 'ARTIFACT_PUBLISHED', action: 'publish-api', cursor: { id: 'swastik', x: 740, y: 560 } },
   { id: 16, title: 'Dependency Received', detail: 'Orion consumes payment-api.json artifact', eventType: 'DEPENDENCY_REQUEST', action: 'dependency', cursor: { id: 'anand', x: 280, y: 320 } },
-  { id: 17, title: 'Human Approval Gate', detail: 'Deploy checkout contract requires human authority (0.35 ETH)', eventType: 'APPROVAL_REQUESTED', action: 'approval-req', cursor: { id: 'anand', x: 180, y: 560 } },
+  { id: 17, title: 'Human Approval Gate', detail: 'Deploy checkout contract requires human authority ($0.001 USDC)', eventType: 'APPROVAL_REQUESTED', action: 'approval-req', cursor: { id: 'anand', x: 180, y: 560 } },
   { id: 18, title: 'Human Owner Approved', detail: 'APPROVAL_GRANTED: dev1.eth signs simulated deployment', eventType: 'APPROVAL_GRANTED', action: 'approved', cursor: { id: 'anand', x: 220, y: 620 } },
   { id: 19, title: 'Workspace Synced', detail: 'Both agents and human developers fully coordinated', action: 'synced' },
 ];

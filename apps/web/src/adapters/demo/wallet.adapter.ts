@@ -48,7 +48,7 @@ export class DemoWalletAdapter implements WalletAdapter {
   async signApproval(
     approvalId: string,
     _action: string,
-    _spendThreshold = '0.35 ETH'
+    _spendThreshold = '$0.001 USDC'
   ): Promise<{ signature: string; txHash: string }> {
     await new Promise((resolve) => setTimeout(resolve, 400));
     const randomHex = Math.random().toString(16).substring(2, 10);

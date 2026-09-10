@@ -44,8 +44,8 @@ export const INITIAL_DEMO_TASKS: Task[] = [
 export const INITIAL_DEMO_APPROVAL: ApprovalRequest = {
   id: 'APR-08',
   action: 'Deploy checkout contract',
-  detail: 'Requested spend threshold: 0.35 ETH',
-  spendThreshold: '0.35 ETH',
+  detail: 'Requested spend threshold: $0.001 USDC',
+  spendThreshold: '$0.001 USDC',
   requestedBy: 'Orion / Codex',
   ownerEns: 'dev1.eth',
   status: 'pending',

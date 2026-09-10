@@ -19,9 +19,10 @@ export class DemoBrowserPreviewAdapter implements BrowserPreviewAdapter {
             endpoints: {
               'POST /api/v1/checkout/intent': {
                 request: {
-                  amount: '0.35 ETH',
-                  recipient: '0x1a2b…9f3c (dev1.eth)',
-                  escrowContract: '0x8b6f…36b3',
+                  amount: '$0.001 USDC',
+                  network: 'Hedera Testnet',
+                  token: '0.0.429274',
+                  recipient: '0.0.9185802 (dev1.eth)',
                 },
                 response: {
                   status: 'INTENT_CREATED',
@@ -52,7 +53,7 @@ export class DemoBrowserPreviewAdapter implements BrowserPreviewAdapter {
 
           <div style="background: #FFFDF7; border: 1px solid #D6D8C9; border-radius: 12px; padding: 18px; margin-bottom: 16px;">
             <div style="font-size: 12px; color: #68746D; margin-bottom: 6px;">Total Checkout Spend</div>
-            <div style="font-size: 26px; font-weight: 700; color: #1E2B26; font-family: var(--am-font-mono, monospace);">0.35 ETH <span style="font-size: 14px; font-weight: 400; color: #68746D;">≈ $1,180.00</span></div>
+            <div style="font-size: 26px; font-weight: 700; color: #1E2B26; font-family: var(--am-font-mono, monospace);">$0.001 USDC <span style="font-size: 14px; font-weight: 400; color: #68746D;">(Hedera Testnet)</span></div>
             <div style="margin-top: 12px; font-size: 12px; display: flex; align-items: center; gap: 6px; color: #177E89;">
               <span>• Connected Identity:</span>
               <code style="background: #EEF1E8; padding: 2px 6px; border-radius: 4px; font-family: var(--am-font-mono, monospace);">dev1.eth (0x1a2b…9f3c)</code>

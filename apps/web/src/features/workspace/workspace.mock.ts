@@ -94,7 +94,7 @@ export function createWorkspaceState(): ProductWorkspaceState {
     approval: {
       id: 'APR-08',
       action: 'Deploy checkout contract',
-      detail: 'Requested spend threshold: 0.35 ETH',
+      detail: 'Requested spend threshold: $0.001 USDC',
       status: 'pending',
     },
     events: [
@@ -152,7 +152,7 @@ export function createWorkspaceState(): ProductWorkspaceState {
         sender: 'Vega',
         receiver: 'Anand-demo',
         type: 'APPROVAL_REQUESTED',
-        payload: 'deploy · 0.35 ETH',
+        payload: 'deploy · $0.001 USDC',
       },
     ],
   };
