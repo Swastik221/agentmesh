@@ -10,6 +10,10 @@ import { apiClient } from '../../services/api-client';
  * ENS address/verification: the server derives the owner from the session and
  * independently resolves/verifies any ENS name.
  *
+ * On failure `ApiError.message` is the server's human sentence (for a Zod
+ * failure, the per-field text out of `details`); the machine code stays on
+ * `ApiError.data.error` for callers that need to branch on it.
+ *
  * Note: unlike `/projects` (which wraps the list in `{ projects }`),
  * `GET /projects/:id/agents` returns a bare array.
  */

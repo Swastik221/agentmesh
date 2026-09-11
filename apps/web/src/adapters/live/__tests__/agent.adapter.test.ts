@@ -20,6 +20,7 @@ const sampleAgent = (over: Partial<LiveAgent> = {}): LiveAgent => ({
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -118,9 +119,52 @@ describe('liveAgentAdapter', () => {
   });
 
   it('createAgent surfaces the real server validation message', async () => {
-    vi.spyOn(apiClient, 'post').mockRejectedValue(new ApiError(400, 'Bad Request', 'Provider is required'));
+    // Stub the transport, not apiClient: a hand-written ApiError message would
+    // only assert its own fixture. This is the exact envelope the server's error
+    // middleware sends for a failed createAgentSchema.parse, run through the real
+    // apiClient, so the assertion is what a user would actually see on screen.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              error: 'VALIDATION_ERROR',
+              message: 'Invalid request data',
+              details: [{ field: 'provider', message: 'Provider is required' }],
+            }),
+          ),
+      }),
+    );
     await expect(
       liveAgentAdapter.createAgent('proj_1', { name: 'X', provider: '' }),
     ).rejects.toThrow('Provider is required');
+  });
+
+  it('createAgent keeps the machine code on ApiError.data', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              error: 'FORBIDDEN',
+              message: 'User user_1 is not a member of project proj_1',
+            }),
+          ),
+      }),
+    );
+    const err = await liveAgentAdapter
+      .createAgent('proj_1', { name: 'X', provider: 'Codex' })
+      .catch((e: unknown) => e as ApiError);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).message).toBe('User user_1 is not a member of project proj_1');
+    expect(((err as ApiError).data as { error: string }).error).toBe('FORBIDDEN');
   });
 });
