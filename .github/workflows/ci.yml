@@ -27,6 +27,7 @@ jobs:
 
     env:
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/agentmesh_test?schema=public"
+      HEDERA_PAYMENT_RECEIVER: "0.0.500123"
 
     steps:
       - uses: actions/checkout@v4
