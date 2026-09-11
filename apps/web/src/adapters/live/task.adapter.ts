@@ -22,6 +22,15 @@ import type { LiveAgent } from './agent.adapter';
  * Response envelopes differ across the API: the task list is paginated
  * (`{ items, page, limit, total }`), unlike `/projects` (`{ projects }`) or
  * `/projects/:id/agents` (a bare array).
+ *
+ * `listTasks` is an honest single-request wrapper: it returns exactly one
+ * page, whatever `page`/`limit` resolve to server-side (default page 1,
+ * limit 20; confirmed in `listTasksQuerySchema` the server also enforces a
+ * hard max limit of 100, so no single request can be relied on to return an
+ * arbitrarily large project's full task list). `listAllTasks` is the one
+ * that guarantees completeness: it keeps requesting subsequent pages at the
+ * server's max page size until it has collected every task the server
+ * reports via `total`, then returns the combined list with no envelope.
  */
 
 /** Prisma `TaskStatus`. */
@@ -161,6 +170,10 @@ export type AssignmentResult =
 
 export interface TaskAdapter {
   listTasks(projectId: string, query?: ListTasksQuery): Promise<TaskListResult>;
+  listAllTasks(
+    projectId: string,
+    filters?: { status?: LiveTaskStatus; priority?: LiveTaskPriority },
+  ): Promise<LiveTask[]>;
   getTask(projectId: string, taskId: string): Promise<LiveTask>;
   createTask(projectId: string, input: CreateTaskInput): Promise<LiveTask>;
   updateTaskStatus(projectId: string, taskId: string, status: LiveTaskStatus): Promise<LiveTask>;
@@ -176,6 +189,9 @@ function base(projectId: string): string {
   return `/projects/${encodeURIComponent(projectId)}/tasks`;
 }
 
+/** The server's hard cap on `limit`, per `listTasksQuerySchema`. */
+const MAX_PAGE_LIMIT = 100;
+
 export const liveTaskAdapter: TaskAdapter = {
   async listTasks(projectId: string, query: ListTasksQuery = {}): Promise<TaskListResult> {
     const params: Record<string, string | number> = {};
@@ -184,6 +200,21 @@ export const liveTaskAdapter: TaskAdapter = {
     if (query.page !== undefined) params.page = query.page;
     if (query.limit !== undefined) params.limit = query.limit;
     return apiClient.get<TaskListResult>(base(projectId), { params });
+  },
+
+  async listAllTasks(
+    projectId: string,
+    filters: { status?: LiveTaskStatus; priority?: LiveTaskPriority } = {},
+  ): Promise<LiveTask[]> {
+    const all: LiveTask[] = [];
+    let page = 1;
+    for (;;) {
+      const result = await liveTaskAdapter.listTasks(projectId, { ...filters, page, limit: MAX_PAGE_LIMIT });
+      all.push(...result.items);
+      if (all.length >= result.total || result.items.length === 0) break;
+      page += 1;
+    }
+    return all;
   },
 
   async getTask(projectId: string, taskId: string): Promise<LiveTask> {

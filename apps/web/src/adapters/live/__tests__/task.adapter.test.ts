@@ -57,6 +57,70 @@ describe('liveTaskAdapter', () => {
     expect(spy).toHaveBeenCalledWith('/projects/proj%2F1%20x/tasks', { params: {} });
   });
 
+  // ---- listAllTasks: walks every page, past the server's single-page cap --
+  it('listAllTasks makes one request when everything fits on the first page', async () => {
+    const items = [sampleTask({ id: 'task_1' }), sampleTask({ id: 'task_2' })];
+    const spy = vi.spyOn(apiClient, 'get').mockResolvedValue({ items, page: 1, limit: 100, total: 2 });
+
+    const out = await liveTaskAdapter.listAllTasks('proj_1');
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith('/projects/proj_1/tasks', { params: { page: 1, limit: 100 } });
+    expect(out).toEqual(items);
+  });
+
+  it('listAllTasks keeps requesting subsequent pages until every task is collected', async () => {
+    // Simulates a project with 25 tasks: the mock returns them 10 at a time
+    // regardless of the limit the adapter actually requests, so this proves
+    // the loop's termination condition (keep going until `total` is reached)
+    // rather than assuming one large-limit request is always enough.
+    const page1 = Array.from({ length: 10 }, (_, i) => sampleTask({ id: `task_${i}` }));
+    const page2 = Array.from({ length: 10 }, (_, i) => sampleTask({ id: `task_${i + 10}` }));
+    const page3 = Array.from({ length: 5 }, (_, i) => sampleTask({ id: `task_${i + 20}` }));
+    const spy = vi
+      .spyOn(apiClient, 'get')
+      .mockResolvedValueOnce({ items: page1, page: 1, limit: 100, total: 25 })
+      .mockResolvedValueOnce({ items: page2, page: 2, limit: 100, total: 25 })
+      .mockResolvedValueOnce({ items: page3, page: 3, limit: 100, total: 25 });
+
+    const out = await liveTaskAdapter.listAllTasks('proj_1');
+
+    expect(spy).toHaveBeenCalledTimes(3);
+    expect(spy).toHaveBeenNthCalledWith(1, '/projects/proj_1/tasks', { params: { page: 1, limit: 100 } });
+    expect(spy).toHaveBeenNthCalledWith(2, '/projects/proj_1/tasks', { params: { page: 2, limit: 100 } });
+    expect(spy).toHaveBeenNthCalledWith(3, '/projects/proj_1/tasks', { params: { page: 3, limit: 100 } });
+    expect(out).toHaveLength(25);
+    expect(out).toEqual([...page1, ...page2, ...page3]);
+  });
+
+  it('listAllTasks returns an empty array for an empty project without looping', async () => {
+    const spy = vi.spyOn(apiClient, 'get').mockResolvedValue({ items: [], page: 1, limit: 100, total: 0 });
+    const out = await liveTaskAdapter.listAllTasks('proj_1');
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(out).toEqual([]);
+  });
+
+  it('listAllTasks forwards status/priority filters on every page it requests', async () => {
+    const spy = vi
+      .spyOn(apiClient, 'get')
+      .mockResolvedValueOnce({ items: [sampleTask()], page: 1, limit: 100, total: 2 })
+      .mockResolvedValueOnce({ items: [sampleTask({ id: 'task_2' })], page: 2, limit: 100, total: 2 });
+
+    await liveTaskAdapter.listAllTasks('proj_1', { status: 'IN_PROGRESS', priority: 'HIGH' });
+
+    expect(spy).toHaveBeenNthCalledWith(1, '/projects/proj_1/tasks', {
+      params: { status: 'IN_PROGRESS', priority: 'HIGH', page: 1, limit: 100 },
+    });
+    expect(spy).toHaveBeenNthCalledWith(2, '/projects/proj_1/tasks', {
+      params: { status: 'IN_PROGRESS', priority: 'HIGH', page: 2, limit: 100 },
+    });
+  });
+
+  it('listAllTasks propagates a real ApiError from any page', async () => {
+    vi.spyOn(apiClient, 'get').mockRejectedValue(new ApiError(500, 'Internal Server Error', 'boom'));
+    await expect(liveTaskAdapter.listAllTasks('proj_1')).rejects.toBeInstanceOf(ApiError);
+  });
+
   // ---- get ---------------------------------------------------------------
   it('getTask GETs /projects/:id/tasks/:taskId encoded', async () => {
     const spy = vi.spyOn(apiClient, 'get').mockResolvedValue(sampleTask());
