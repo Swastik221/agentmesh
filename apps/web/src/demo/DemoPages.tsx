@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowRight, Check, ChevronRight, Copy, Eye, EyeOff, Hexagon, LockKeyhole, LogOut, Mail, Plus, RotateCcw, ShieldCheck, UserRound, Users, WalletCards, X } from 'lucide-react';
 import { demoGateways } from './demo.gateways';
 import { DEMO_PROFILES, PRIMARY_WORKSPACE } from './demo.fixtures';
@@ -7,6 +7,7 @@ import { useDemo } from './DemoProvider';
 import type { DemoProfileId } from './demo.types';
 import { getAppMode } from '../config/env';
 import { useProjects } from '../hooks/useProjects';
+import { authSessionService } from '../services/auth-session';
 import './demo.css';
 import './auth.css';
 
@@ -84,4 +85,45 @@ function DemoWorkspacesPage() {
   return <div className="demo-page"><DemoHeader/><main className="workspaces"><header><div><span>YOUR WORKSPACES</span><h1>Choose where your agents coordinate.</h1></div><div><button className="demo-secondary" onClick={() => setJoinOpen(!joinOpen)}>Join with code</button><button className="demo-primary" onClick={() => setCreateOpen(!createOpen)}><Plus/> Create workspace</button></div></header>{(createOpen || joinOpen) && <div className="workspace-inline-form">{createOpen ? <form onSubmit={create}><label>Workspace name<input name="name" required defaultValue="Checkout Protocol Workspace"/></label><button className="demo-primary" disabled={busy}>Create and open</button></form> : <form onSubmit={join}><label>Invite code<input name="code" required defaultValue="MESH-2026"/></label><button className="demo-primary" disabled={busy}>Join workspace</button></form>}{error && <p role="alert">{error}</p>}</div>}<section className="workspace-list"><div className="workspace-list__label">RECENT</div>{state.workspaces.map((workspace) => <article key={workspace.id}><div className="workspace-symbol"><Hexagon/></div><div><span>{workspace.online ? 'ONLINE NOW' : 'OFFLINE'}</span><h2>{workspace.name}</h2><p>{workspace.id}</p></div><dl><div><dt>Developers</dt><dd><Users/> {workspace.memberCount}</dd></div><div><dt>Agents</dt><dd>{workspace.agentCount}</dd></div><div><dt>Invite</dt><dd><button onClick={() => void navigator.clipboard?.writeText(workspace.inviteCode)}>{workspace.inviteCode} <Copy/></button></dd></div></dl><button className="workspace-open" onClick={() => navigate(`/workspace/${workspace.id}`)}>Open workspace <ArrowRight/></button></article>)}</section><footer><button onClick={reset}><RotateCcw/> Reset demo data</button><span>Prepared workspace: {PRIMARY_WORKSPACE.inviteCode}</span></footer></main></div>;
 }
 
-export function RouteGuard({ children }: { children: ReactNode }) { const { state } = useDemo(); useEffect(() => { if (!state.session) navigate('/login'); }, [state.session]); return state.session ? children : <div className="demo-route-loading" role="status">Restoring demo session…</div>; }
+export function RouteGuard({ children }: { children: ReactNode }) {
+  // Live Mode gates on the real SIWE session; Demo Mode keeps the demo session.
+  return getAppMode() === 'live' ? <LiveRouteGuard>{children}</LiveRouteGuard> : <DemoRouteGuard>{children}</DemoRouteGuard>;
+}
+
+function DemoRouteGuard({ children }: { children: ReactNode }) { const { state } = useDemo(); useEffect(() => { if (!state.session) navigate('/login'); }, [state.session]); return state.session ? children : <div className="demo-route-loading" role="status">Restoring demo session…</div>; }
+
+type LiveGuardState = 'checking' | 'authenticated' | 'unauthenticated' | 'error';
+
+/**
+ * Gates a route on the real backend session (`GET /auth/me`), never on the demo
+ * session in localStorage. The three outcomes stay distinct: while the check is
+ * in flight nothing redirects, a 401 redirects to sign in, and a backend failure
+ * shows a real error with retry rather than claiming the user is signed out.
+ */
+function LiveRouteGuard({ children }: { children: ReactNode }) {
+  const [guard, setGuard] = useState<LiveGuardState>('checking');
+  const [error, setError] = useState('');
+
+  const check = useCallback(async () => {
+    setGuard('checking');
+    setError('');
+    const session = await authSessionService.fetchSession();
+    if (session.authenticated) {
+      setGuard('authenticated');
+    } else if (session.status === 'error') {
+      setError(session.error || 'Could not reach the authentication service.');
+      setGuard('error');
+    } else {
+      setGuard('unauthenticated');
+    }
+  }, []);
+
+  useEffect(() => { void check(); }, [check]);
+  useEffect(() => { if (guard === 'unauthenticated') navigate('/login'); }, [guard]);
+
+  if (guard === 'authenticated') return children;
+  if (guard === 'error') {
+    return <div className="demo-route-loading" role="alert"><p>{error}</p><button className="demo-secondary" onClick={() => void check()}><RotateCcw size={14}/> Retry</button></div>;
+  }
+  return <div className="demo-route-loading" role="status">{guard === 'checking' ? 'Checking your session…' : 'Redirecting to sign in…'}</div>;
+}
