@@ -9,12 +9,18 @@ export const PAYMENT_CONFIG = {
   },
   USDC_DECIMALS: HEDERA_USDC_DECIMALS || 6,
   get RECEIVER_ADDRESS() {
-    return process.env.HEDERA_PAYMENT_RECEIVER || '0.0.9185802';
+    const receiver = process.env.HEDERA_PAYMENT_RECEIVER;
+    if (!receiver) {
+      throw new Error(
+        'HEDERA_PAYMENT_RECEIVER is not configured; refusing to fall back to a baked-in account id.',
+      );
+    }
+    return receiver;
   },
   DEFAULT_PRICE_USDC: '0.001',
   DEFAULT_ATOMIC_AMOUNT: '1000', // 0.001 USDC * 10^6
   get FACILITATOR_URL() {
-    return process.env.X402_FACILITATOR_URL || 'https://x402.org/facilitator';
+    return process.env.X402_FACILITATOR_URL || 'https://testnet.facilitator.x402.org';
   },
   SCHEME: 'exact',
 };

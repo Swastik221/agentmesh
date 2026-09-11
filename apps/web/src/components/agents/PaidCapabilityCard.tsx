@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Bot, CheckCircle2, AlertCircle, CreditCard, ExternalLink, Key } from 'lucide-react';
+import { envConfig } from '../../config/env';
 
 export interface PaidCapabilityCardProps {
   agentId: string;
@@ -40,14 +41,22 @@ export function PaidCapabilityCard({
       setPaymentState('REQUIREMENT_RECEIVED');
       setErrorMsg(null);
 
-      // Step 1: Initial request without payment header to trigger HTTP 402
-      const initialRes = await fetch(`/api/agents/${agentId}/capabilities/${encodeURIComponent(capability)}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // Step 1: Initial request without payment header to trigger HTTP 402.
+      // Real path, confirmed directly against app.ts: agentCapabilityRouter
+      // is mounted at root, not under /api or /projects/:id, and requires
+      // the real SIWE session cookie (requireAuth), not just the right URL.
+      const base = envConfig.apiUrl.replace(/\/$/, '');
+      const initialRes = await fetch(
+        `${base}/agents/${encodeURIComponent(agentId)}/capabilities/${encodeURIComponent(capability)}/execute`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ action: 'capability.execute' }),
         },
-        body: JSON.stringify({ action: 'capability.execute' }),
-      });
+      );
 
       if (initialRes.status === 402) {
         const reqHeader = initialRes.headers.get('X-Payment-Requirement');

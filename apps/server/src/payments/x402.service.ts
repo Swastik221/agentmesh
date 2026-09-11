@@ -162,7 +162,22 @@ export class X402Service {
       };
     }
 
-    // 5. Official Facilitator Verification & Settlement
+    // 5. Real network safety guard: refuse to ever execute a real facilitator
+    // settlement unless the resolved network is exactly the enforced safe
+    // testnet identifier. This is a hard code-level guard, not reliant on
+    // HEDERA_NETWORK's default: PAYMENT_CONFIG.NETWORK would otherwise let
+    // an operator point this at hedera:mainnet with a real key and this
+    // function would proceed regardless. Checked before entering the try
+    // block below so a refusal here is never confused with a real
+    // "Facilitator settlement failed" error; no facilitator call happens.
+    if (requirement.network !== HEDERA_TESTNET_CAIP2) {
+      return {
+        valid: false,
+        error: `Refusing to execute real settlement: network '${requirement.network}' is not the enforced safe network '${HEDERA_TESTNET_CAIP2}'`,
+      };
+    }
+
+    // 6. Official Facilitator Verification & Settlement
     try {
       const client = this.getFacilitatorClient();
 
@@ -175,7 +190,7 @@ export class X402Service {
         payee: requirement.receiver,
         receiverAddress: requirement.receiver,
         extra: {
-          feePayer: '0.0.9185802',
+          feePayer: requirement.receiver,
           paymentReference: requirement.paymentReference,
         },
       };

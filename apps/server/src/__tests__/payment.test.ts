@@ -276,6 +276,67 @@ describe('PRD-36-C1 — Hedera x402 Agent Payment Corrective Tests', () => {
       expect(res.body.message).toContain('Invalid payment receiver');
     });
 
+    it('should refuse real settlement when the resolved network is not hedera:testnet, before any facilitator call', async () => {
+      const originalNetwork = process.env.HEDERA_NETWORK;
+      process.env.HEDERA_NETWORK = 'hedera:mainnet';
+      try {
+        const reqRes = await request
+          .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
+          .set('Cookie', [`agentmesh_session=${user1Token}`])
+          .send({});
+
+        const reqData = reqRes.body.paymentRequirement;
+        expect(reqData.network).toBe('hedera:mainnet');
+
+        // A payload that matches the (misconfigured) requirement's own
+        // network, so the earlier payload-vs-requirement consistency check
+        // passes and the new network safety guard is the one that fires.
+        const matchingButUnsafePayment = {
+          scheme: 'exact',
+          network: 'hedera:mainnet',
+          asset: '0.0.429274',
+          amount: '1000',
+          paymentReference: reqData.paymentReference,
+        };
+
+        const res = await request
+          .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
+          .set('Cookie', [`agentmesh_session=${user1Token}`])
+          .set('X-Payment', JSON.stringify(matchingButUnsafePayment))
+          .set('X-Payment-Reference', reqData.paymentReference)
+          .send({});
+
+        expect(res.status).toBe(400);
+        expect(res.body.message).toContain('Refusing to execute real settlement');
+        expect(res.body.message).toContain('hedera:testnet');
+
+        const dbRecord = await prisma.payment.findUnique({
+          where: { x402PaymentReference: reqData.paymentReference },
+        });
+        expect(dbRecord?.status).not.toBe('SETTLED');
+      } finally {
+        if (originalNetwork === undefined) {
+          delete process.env.HEDERA_NETWORK;
+        } else {
+          process.env.HEDERA_NETWORK = originalNetwork;
+        }
+      }
+    });
+
+    it('should throw rather than fall back to a baked-in receiver address when HEDERA_PAYMENT_RECEIVER is unset', () => {
+      const originalReceiver = process.env.HEDERA_PAYMENT_RECEIVER;
+      delete process.env.HEDERA_PAYMENT_RECEIVER;
+      try {
+        expect(() => PAYMENT_CONFIG.RECEIVER_ADDRESS).toThrow(
+          'HEDERA_PAYMENT_RECEIVER is not configured',
+        );
+      } finally {
+        if (originalReceiver !== undefined) {
+          process.env.HEDERA_PAYMENT_RECEIVER = originalReceiver;
+        }
+      }
+    });
+
     it('should reject unverified payment payloads without setting SETTLED status', async () => {
       const reqRes = await request
         .post(`/agents/${agent1Id}/capabilities/artifact-analysis/execute`)
