@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowRight,
   Bot,
@@ -22,6 +22,7 @@ import { getAppMode } from '../../config/env';
 import { useAgents } from '../../hooks/useAgents';
 import { useTasks } from '../../hooks/useTasks';
 import { useExecutions } from '../../hooks/useExecutions';
+import { useWorkspaceRealtime, type RealtimeDeltaEvent } from '../../hooks/useWorkspaceRealtime';
 import type { LiveAgentStatus } from '../../adapters/live/agent.adapter';
 import {
   taskErrorMessage,
@@ -112,6 +113,32 @@ function LiveAgentsView({ onOpenCanvas }: WorkspaceViewProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // No agent-row delta is ever actually broadcast server-side today (confirmed
+  // by reading every emission site), only presence for a connected/disconnected
+  // agent. Refetch on either, so a teammate connecting or disconnecting an
+  // agent shows up here without a manual refresh.
+  const refetchRef = useRef(refetch);
+  refetchRef.current = refetch;
+  useWorkspaceRealtime(
+    projectId,
+    useMemo(
+      () => ({
+        onDelta: (event: RealtimeDeltaEvent) => {
+          if (event.entity === 'agent') {
+            void refetchRef.current();
+          } else if (event.entity === 'presence' && event.fields?.entityType === 'agent') {
+            void refetchRef.current();
+          }
+        },
+        // A resync's fallback snapshot cannot carry an agent list update on
+        // its own (it only ever reports live connection state, not the row
+        // itself), so refetch the real list every time one lands.
+        onResync: () => void refetchRef.current(),
+      }),
+      [],
+    ),
+  );
 
   const register = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -532,6 +559,40 @@ function LiveTasksView({ onOpenCanvas }: WorkspaceViewProps) {
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // task and taskResponsibility (manual claim) are the two entities a real
+  // change to this board actually broadcasts as; dependency and artifact
+  // changes also affect a task's own displayed state (blocked/ready,
+  // pending-approval), so they refetch the board too. Coordinator auto
+  // assign broadcasts no taskResponsibility delta at all today (it only
+  // emits a raw, unsequenced task.assigned message plus an indirect activity
+  // delta), so an auto assignment made in another tab will not appear here
+  // live; that gap is server-side, out of scope for this PRD.
+  const refetchRef = useRef(refetch);
+  refetchRef.current = refetch;
+  useWorkspaceRealtime(
+    projectId,
+    useMemo(
+      () => ({
+        onDelta: (event: RealtimeDeltaEvent) => {
+          if (
+            event.entity === 'task' ||
+            event.entity === 'taskResponsibility' ||
+            event.entity === 'dependency' ||
+            event.entity === 'artifact'
+          ) {
+            void refetchRef.current();
+          }
+        },
+        // The fallback snapshot after a gap the buffer couldn't replay is
+        // capped at 20 tasks (confirmed against the server), so on a big
+        // enough gap it cannot carry the whole board back on its own.
+        // Refetch the real list every time a snapshot lands to be sure.
+        onResync: () => void refetchRef.current(),
+      }),
+      [],
+    ),
+  );
 
   const agentOptions = liveAgents.map((a) => ({ id: a.id, name: a.name, status: a.status }));
 
