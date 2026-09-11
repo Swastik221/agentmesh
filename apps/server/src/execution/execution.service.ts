@@ -4,12 +4,46 @@ import { ConflictError, ForbiddenError, NotFoundError } from '../errors/app-erro
 import { CreateTaskExecutionInput, ListExecutionsQuery } from './execution.schemas.js';
 import { mockAgentExecutor } from './executors/mock-agent-executor.js';
 import { AgentExecutor } from './executors/agent-executor.js';
+import { deltaSequencerService } from '../services/delta-sequencer.service.js';
+import { taskService } from '../tasks/task.service.js';
 
 export class ExecutionService {
   private executor: AgentExecutor = mockAgentExecutor;
 
   public setExecutor(executor: AgentExecutor): void {
     this.executor = executor;
+  }
+
+  /**
+   * Broadcasts a real execution status transition as a sequenced
+   * `workspace.delta` (`entity: 'execution'`), the same mechanism
+   * `task.service.ts` already uses for `task`/`taskResponsibility`.
+   * `execution` is already a valid entity in the protocol's delta schema
+   * (`workspaceDeltaChangeSchema`), so no new protocol surface is needed.
+   * No raw immediate broadcast alongside it: unlike `task.service.ts`'s
+   * `TASK_STATUS`, there is no existing raw message type for execution
+   * status that any consumer (agent or frontend) reads today, so this
+   * would be new protocol surface, which is out of scope here. Called only
+   * after the owning transaction has committed, matching every other
+   * broadcast call site in this codebase, so a rolled-back transition is
+   * never announced.
+   */
+  private async broadcastExecutionStatus(
+    projectId: string,
+    executionId: string,
+    taskId: string,
+    agentId: string,
+    status: ExecutionStatus,
+    operation: 'created' | 'updated',
+  ): Promise<void> {
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'execution',
+        entityId: executionId,
+        operation,
+        fields: { taskId, agentId, status },
+      },
+    ]);
   }
 
   private async verifyProjectMembership(projectId: string, userId: string): Promise<void> {
@@ -63,11 +97,14 @@ export class ExecutionService {
       },
     });
 
+    let finalStatus: 'ONLINE' | 'BUSY';
+
     if (activeExecutionsCount === 0) {
       await prisma.agent.update({
         where: { id: agentId },
         data: { status: 'ONLINE' },
       });
+      finalStatus = 'ONLINE';
 
       // Post-update re-check to guarantee zero race condition where an execution
       // became active (QUEUED or RUNNING) concurrently during the ONLINE update window.
@@ -83,12 +120,35 @@ export class ExecutionService {
           where: { id: agentId },
           data: { status: 'BUSY' },
         });
+        finalStatus = 'BUSY';
       }
     } else {
       await prisma.agent.update({
         where: { id: agentId },
         data: { status: 'BUSY' },
       });
+      finalStatus = 'BUSY';
+    }
+
+    // This ONLINE/BUSY flip (driven by execution activity, not a direct
+    // human edit) previously broadcast nothing at all, confirmed by grep
+    // showing zero broadcast/delta calls anywhere in agent.service.ts and
+    // this file alike: a project member watching a real-time agent roster
+    // never saw an agent go BUSY when it picked up work, or back ONLINE
+    // when it finished, without an unrelated refetch.
+    const agentForBroadcast = await prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { projectId: true },
+    });
+    if (agentForBroadcast) {
+      await deltaSequencerService.recordAndBroadcastDelta(agentForBroadcast.projectId, [
+        {
+          entity: 'agent',
+          entityId: agentId,
+          operation: 'updated',
+          fields: { status: finalStatus },
+        },
+      ]);
     }
   }
 
@@ -253,6 +313,18 @@ export class ExecutionService {
       where: { id: data.agentId },
       data: { status: 'BUSY' },
     });
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      { entity: 'agent', entityId: data.agentId, operation: 'updated', fields: { status: 'BUSY' } },
+    ]);
+
+    await this.broadcastExecutionStatus(
+      projectId,
+      execution.id,
+      taskId,
+      data.agentId,
+      ExecutionStatus.QUEUED,
+      'created',
+    );
 
     // Asynchronously trigger execution pipeline (fire-and-forget, zero unhandled rejections)
     void this.runExecutionPipeline(execution.id, data.input || null).catch((err) => {
@@ -281,8 +353,15 @@ export class ExecutionService {
         return;
       }
 
+      const owningTask = await prisma.task.findUnique({
+        where: { id: execution.taskId },
+        select: { projectId: true },
+      });
+      const projectId = owningTask?.projectId;
+
       // 1. Atomic/conditional transition QUEUED -> RUNNING (and Task -> IN_PROGRESS if latest)
       let queuedToRunningCount = 0;
+      let taskSyncedToInProgress = false;
       await prisma.$transaction(async (tx) => {
         const updateResult = await tx.taskExecution.updateMany({
           where: {
@@ -307,6 +386,7 @@ export class ExecutionService {
               where: { id: execution.taskId },
               data: { status: 'IN_PROGRESS' },
             });
+            taskSyncedToInProgress = true;
           }
         }
       });
@@ -323,11 +403,30 @@ export class ExecutionService {
         return;
       }
 
+      if (projectId) {
+        await this.broadcastExecutionStatus(
+          projectId,
+          executionId,
+          execution.taskId,
+          execution.agentId,
+          ExecutionStatus.RUNNING,
+          'updated',
+        );
+        if (taskSyncedToInProgress) {
+          await taskService.broadcastTaskStatusEvent(projectId, execution.taskId, 'IN_PROGRESS');
+        }
+      }
+
       // Update Agent status -> BUSY
       await prisma.agent.update({
         where: { id: execution.agentId },
         data: { status: 'BUSY' },
       });
+      if (projectId) {
+        await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+          { entity: 'agent', entityId: execution.agentId, operation: 'updated', fields: { status: 'BUSY' } },
+        ]);
+      }
 
       // 2. Resolve Workspace Execution Context
       let context;
@@ -412,6 +511,7 @@ export class ExecutionService {
         result.status === 'COMPLETED' ? ExecutionStatus.COMPLETED : ExecutionStatus.FAILED;
 
       let finishCount = 0;
+      let finishTaskStatus: 'COMPLETED' | 'FAILED' | null = null;
       await prisma.$transaction(async (tx) => {
         const finishUpdateResult = await tx.taskExecution.updateMany({
           where: {
@@ -439,10 +539,11 @@ export class ExecutionService {
           });
 
           if (latestExecution && latestExecution.id === executionId) {
+            finishTaskStatus = targetStatus === ExecutionStatus.COMPLETED ? 'COMPLETED' : 'FAILED';
             await tx.task.update({
               where: { id: execution.taskId },
               data: {
-                status: targetStatus === ExecutionStatus.COMPLETED ? 'COMPLETED' : 'FAILED',
+                status: finishTaskStatus,
               },
             });
           }
@@ -453,6 +554,20 @@ export class ExecutionService {
         // Conditional update affected 0 rows (execution was cancelled concurrently)
         await this.syncAgentStatus(execution.agentId);
         return;
+      }
+
+      if (projectId) {
+        await this.broadcastExecutionStatus(
+          projectId,
+          executionId,
+          execution.taskId,
+          execution.agentId,
+          targetStatus,
+          'updated',
+        );
+        if (finishTaskStatus) {
+          await taskService.broadcastTaskStatusEvent(projectId, execution.taskId, finishTaskStatus);
+        }
       }
 
       // Agent Status Integration: check if agent has remaining active executions
@@ -472,6 +587,8 @@ export class ExecutionService {
           const errorMessage =
             err instanceof Error ? err.message : 'Execution failed unexpectedly';
 
+          let cleanupFinishCount = 0;
+          let cleanupTaskSynced = false;
           await prisma.$transaction(async (tx) => {
             const finishUpdateResult = await tx.taskExecution.updateMany({
               where: {
@@ -485,6 +602,8 @@ export class ExecutionService {
               },
             });
 
+            cleanupFinishCount = finishUpdateResult.count;
+
             if (finishUpdateResult.count > 0) {
               const latestExecution = await tx.taskExecution.findFirst({
                 where: { taskId: currentExec.taskId },
@@ -496,9 +615,34 @@ export class ExecutionService {
                   where: { id: currentExec.taskId },
                   data: { status: 'FAILED' },
                 });
+                cleanupTaskSynced = true;
               }
             }
           });
+
+          if (cleanupFinishCount > 0) {
+            const owningTaskForCleanup = await prisma.task.findUnique({
+              where: { id: currentExec.taskId },
+              select: { projectId: true },
+            });
+            if (owningTaskForCleanup) {
+              await this.broadcastExecutionStatus(
+                owningTaskForCleanup.projectId,
+                executionId,
+                currentExec.taskId,
+                currentExec.agentId,
+                ExecutionStatus.FAILED,
+                'updated',
+              );
+              if (cleanupTaskSynced) {
+                await taskService.broadcastTaskStatusEvent(
+                  owningTaskForCleanup.projectId,
+                  currentExec.taskId,
+                  'FAILED',
+                );
+              }
+            }
+          }
 
           // Sync agent
           await this.syncAgentStatus(currentExec.agentId);
@@ -535,6 +679,7 @@ export class ExecutionService {
 
     this.validateStateTransition(execution.status, ExecutionStatus.CANCELLED);
 
+    let taskSyncedToCancelled = false;
     await prisma.$transaction(async (tx) => {
       const cancelUpdateResult = await tx.taskExecution.updateMany({
         where: {
@@ -569,6 +714,7 @@ export class ExecutionService {
           where: { id: taskId },
           data: { status: 'CANCELLED' },
         });
+        taskSyncedToCancelled = true;
       }
     });
 
@@ -579,6 +725,20 @@ export class ExecutionService {
         task: true,
       },
     });
+
+    // Reaching here means the transaction committed (a 0-row update throws
+    // ConflictError above and rolls back), so the cancellation is real.
+    await this.broadcastExecutionStatus(
+      projectId,
+      executionId,
+      taskId,
+      execution.agentId,
+      ExecutionStatus.CANCELLED,
+      'updated',
+    );
+    if (taskSyncedToCancelled) {
+      await taskService.broadcastTaskStatusEvent(projectId, taskId, 'CANCELLED');
+    }
 
     // Sync agent status
     await this.syncAgentStatus(execution.agentId);
@@ -627,6 +787,7 @@ export class ExecutionService {
 
     this.validateStateTransition(execution.status, targetStatus);
 
+    let syncedTaskStatus: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | null = null;
     const updated = await prisma.$transaction(async (tx) => {
       const updatedExec = await tx.taskExecution.update({
         where: { id: executionId },
@@ -654,18 +815,37 @@ export class ExecutionService {
 
       if (latestExecution && latestExecution.id === executionId) {
         if (targetStatus === ExecutionStatus.RUNNING) {
-          await tx.task.update({ where: { id: taskId }, data: { status: 'IN_PROGRESS' } });
+          syncedTaskStatus = 'IN_PROGRESS';
         } else if (targetStatus === ExecutionStatus.COMPLETED) {
-          await tx.task.update({ where: { id: taskId }, data: { status: 'COMPLETED' } });
+          syncedTaskStatus = 'COMPLETED';
         } else if (targetStatus === ExecutionStatus.FAILED) {
-          await tx.task.update({ where: { id: taskId }, data: { status: 'FAILED' } });
+          syncedTaskStatus = 'FAILED';
         } else if (targetStatus === ExecutionStatus.CANCELLED) {
-          await tx.task.update({ where: { id: taskId }, data: { status: 'CANCELLED' } });
+          syncedTaskStatus = 'CANCELLED';
+        }
+        if (syncedTaskStatus) {
+          await tx.task.update({ where: { id: taskId }, data: { status: syncedTaskStatus } });
         }
       }
 
       return updatedExec;
     });
+
+    // This is the connector's own status-report path (agent-reported
+    // TASK_ACCEPTED/TASK_COMPLETED/TASK_FAILED/TASK_REJECTED), the one path
+    // besides the executor pipeline that changes a real execution's status;
+    // confirmed by grep it previously broadcast nothing at all.
+    await this.broadcastExecutionStatus(
+      projectId,
+      executionId,
+      taskId,
+      execution.agentId,
+      targetStatus,
+      'updated',
+    );
+    if (syncedTaskStatus) {
+      await taskService.broadcastTaskStatusEvent(projectId, taskId, syncedTaskStatus);
+    }
 
     // Apply Agent status sync
     await this.syncAgentStatus(execution.agentId);

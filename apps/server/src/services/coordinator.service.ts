@@ -5,6 +5,7 @@ import { connectionManager } from '../websocket/connection.manager.js';
 import { WebSocketMessage } from '../websocket/websocket.types.js';
 import { createTaskAssignedMessage } from '@agentmesh/agent-protocol';
 import { activityService } from './activity.service.js';
+import { deltaSequencerService } from './delta-sequencer.service.js';
 
 export type AssignmentSource = 'HUMAN_PREFERENCE' | 'CAPABILITY_MATCH';
 
@@ -483,6 +484,29 @@ export class CoordinatorService {
           projectId,
           assignedMsg as unknown as WebSocketMessage,
         );
+
+        // Manual claim (task.service.ts's assignResponsibility) already emits
+        // a real, sequenced `taskResponsibility` delta on assignment; auto-
+        // assign only sent the raw task.assigned message above (broadcast,
+        // unsequenced, invisible to the resync buffer and to any frontend
+        // listening for `taskResponsibility` deltas specifically, confirmed
+        // by grep showing zero other emission sites for this entity in
+        // coordinator.service.ts) plus an indirect `activity` entry below.
+        // Emit the same shape manual claim does so both assignment paths are
+        // symmetric to a delta consumer.
+        await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+          {
+            entity: 'taskResponsibility',
+            entityId: `${taskId}_${agentId}`,
+            operation: 'created',
+            fields: {
+              taskId,
+              agentId,
+              role: null,
+              assignmentSource: source,
+            },
+          },
+        ]);
 
         await activityService.recordActivity(projectId, {
           type: 'task.assigned',
