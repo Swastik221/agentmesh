@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import {
   ArrowRight,
   Bot,
@@ -18,10 +18,25 @@ import {
 import { agents, artifact, owners } from '../../features/workspace/workspace.mock';
 import type { ProductTaskStatus, ProtocolEventType } from '../../features/workspace/workspace.types';
 import { useDemo } from '../../demo/DemoProvider';
+import { getAppMode } from '../../config/env';
+import { useAgents } from '../../hooks/useAgents';
+import type { LiveAgentStatus } from '../../adapters/live/agent.adapter';
 
 interface WorkspaceViewProps {
   onOpenCanvas(): void;
 }
+
+/** Current project id from the /workspace/:id route, or null on /canvas. */
+function currentProjectId(): string | null {
+  const match = /\/workspace\/([^/]+)/.exec(location.pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+const AGENT_STATUS_META: Record<LiveAgentStatus, { label: string; className: string }> = {
+  ONLINE: { label: 'online', className: 'is-online' },
+  BUSY: { label: 'busy', className: 'is-busy' },
+  OFFLINE: { label: 'offline', className: 'is-offline' },
+};
 
 const labelForStatus: Record<ProductTaskStatus, string> = {
   proposed: 'Open',
@@ -42,7 +57,109 @@ function ViewHeader({ eyebrow, title, description, onOpenCanvas }: { eyebrow: st
   );
 }
 
-export function AgentsView({ onOpenCanvas }: WorkspaceViewProps) {
+export function AgentsView(props: WorkspaceViewProps) {
+  // Live Mode shows the project's real registered agents; Demo Mode is unchanged.
+  return getAppMode() === 'live' ? <LiveAgentsView {...props} /> : <DemoAgentsView {...props} />;
+}
+
+function LiveAgentsView({ onOpenCanvas }: WorkspaceViewProps) {
+  const projectId = currentProjectId();
+  const { agents: liveAgents, loading, error, refetch, createAgent } = useAgents(projectId);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const register = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setBusy(true);
+    setFormError('');
+    try {
+      const data = new FormData(e.currentTarget);
+      const name = String(data.get('name') ?? '').trim();
+      const provider = String(data.get('provider') ?? '').trim();
+      const ensRaw = String(data.get('ens') ?? '').trim();
+      await createAgent({ name, provider, ...(ensRaw ? { ensName: ensRaw } : {}) });
+      setFormOpen(false);
+      e.currentTarget.reset();
+    } catch (reason) {
+      // Real server message, never an invented one.
+      setFormError(reason instanceof Error ? reason.message : 'Unable to register agent.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ownerCount = new Set(liveAgents.map((a) => a.ownerId)).size;
+  const onlineCount = liveAgents.filter((a) => a.status !== 'OFFLINE').length;
+
+  return (
+    <section className="workspace-view">
+      <ViewHeader eyebrow="WORKSPACE / AGENTS" title="Connected agents" description="Inspect ownership, identity and the capabilities used for task assignment." onOpenCanvas={onOpenCanvas} />
+      <div className="workspace-metric-row">
+        <article><Bot /><div><strong>{liveAgents.length}</strong><span>agents registered</span></div></article>
+        <article><Users /><div><strong>{ownerCount}</strong><span>human owners</span></div></article>
+        <article><Radio /><div><strong>{onlineCount}</strong><span>online now</span></div></article>
+      </div>
+
+      {projectId && (
+        <div className="workspace-list-tools" style={{ gridTemplateColumns: '1fr auto' }}>
+          <div />
+          <button type="button" className="workspace-list-tools__primary" onClick={() => { setFormOpen(!formOpen); setFormError(''); }}>
+            {formOpen ? 'Cancel' : 'Register agent'}
+          </button>
+        </div>
+      )}
+      {formOpen && (
+        <form className="workspace-inline-form" onSubmit={register} style={{ marginBottom: 16 }}>
+          <label>Name<input name="name" required placeholder="Orion" /></label>
+          <label>Provider<input name="provider" required placeholder="Codex" /></label>
+          <label>ENS name <span style={{ opacity: 0.6 }}>(optional)</span><input name="ens" placeholder="orion.eth" /></label>
+          <button type="submit" className="workspace-list-tools__primary" disabled={busy}>{busy ? 'Registering…' : 'Register'}</button>
+          {formError && <p role="alert">{formError}</p>}
+        </form>
+      )}
+
+      {!projectId ? (
+        <p className="workspace-view__note"><Sparkles /> Open a project to see its registered agents.</p>
+      ) : loading ? (
+        <p role="status" className="workspace-view__note">Loading agents…</p>
+      ) : error ? (
+        <div role="alert" className="workspace-view__note"><span>{error}</span> <button type="button" onClick={() => void refetch()}>Retry</button></div>
+      ) : liveAgents.length === 0 ? (
+        <p className="workspace-view__note"><Sparkles /> No agents registered in this project yet.</p>
+      ) : (
+        <div className="agent-directory">
+          {liveAgents.map((agent, index) => {
+            const meta = AGENT_STATUS_META[agent.status];
+            return (
+              <article key={agent.id} className={`agent-directory__card agent-directory__card--${index % 2 ? 'teal' : 'purple'}`}>
+                <header>
+                  <div className="agent-directory__mark"><TerminalSquare /></div>
+                  <div><span>{agent.ensName ?? 'no ENS'}</span><h2>{agent.name} <small>{agent.provider}</small></h2></div>
+                  <b className={`agent-status ${meta.className}`}><i /> {meta.label}</b>
+                </header>
+                <dl>
+                  <div><dt>Owner</dt><dd>{agent.ownerId.slice(0, 10)}…</dd></div>
+                  <div><dt>Agent identity</dt><dd>{agent.ensName ? `${agent.ensName}${agent.ensVerifiedAt ? ' ✓' : ''}` : 'Not linked'}</dd></div>
+                  <div><dt>Status</dt><dd>{agent.status}</dd></div>
+                  <div><dt>Registered</dt><dd>{new Date(agent.createdAt).toLocaleDateString()}</dd></div>
+                </dl>
+                <div className="agent-directory__capabilities">
+                  {(agent.capabilities ?? []).length === 0
+                    ? <span style={{ opacity: 0.6 }}>no declared capabilities</span>
+                    : agent.capabilities!.map((cap) => <span key={cap.id}>{cap.capability}</span>)}
+                </div>
+                <footer><span><ShieldCheck /> Owned by {agent.ownerId.slice(0, 10)}…</span></footer>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DemoAgentsView({ onOpenCanvas }: WorkspaceViewProps) {
   const { profile, state } = useDemo();
   return (
     <section className="workspace-view">
