@@ -1,43 +1,81 @@
-import { User } from 'lucide-react';
-import { StatusBadge, Pill } from '@agentmesh/ui';
+import { useMemo, useRef } from 'react';
+import { Pill } from '@agentmesh/ui';
 import { AgentCard } from './AgentCard';
-import { currentProject, placeholderAgents } from '../../data/workspace';
-import { useMultiplayerPresence } from '../../hooks/useMultiplayerPresence';
+import { currentProjectId } from '../../utils/currentProjectId';
+import { useAgents } from '../../hooks/useAgents';
+import { useWorkspaceRealtime, type RealtimeDeltaEvent } from '../../hooks/useWorkspaceRealtime';
 
-/** The connectable-agent roster and connected workspace members shown on Overview. */
+/**
+ * The connectable-agent roster shown on the workspace Overview.
+ *
+ * Previously read a hardcoded fixture (`placeholderAgents` from
+ * `data/workspace.ts`) merged with `useMultiplayerPresence`, a hook confirmed
+ * broken: it opened its own WebSocket connection without `clientType=user`,
+ * which the server (`websocket.server.ts`) only treats as an authenticated
+ * user client when that param (or `token`) is present. Without it the
+ * connection never gets a snapshot or any broadcast, so `presence.agents`
+ * stayed permanently empty. `useMultiplayerPresence.ts` has been removed,
+ * this reuses `useAgents`, the same real, project-scoped agent list and
+ * status (`ONLINE`/`OFFLINE`/`BUSY`, DB and connection-manager backed)
+ * already proven live in `LiveAgentsView` (PRD-43/44), plus
+ * `useWorkspaceRealtime`'s existing authenticated connection to refetch on
+ * a real delta, exactly the same wiring `LiveAgentsView` uses. No new
+ * WebSocket connection, no new data-fetching logic.
+ */
 export function AgentRoster() {
-  const presence = useMultiplayerPresence(currentProject.id);
+  const projectId = currentProjectId();
+  const { agents, loading, error, refetch } = useAgents(projectId);
+
+  const refetchRef = useRef(refetch);
+  refetchRef.current = refetch;
+  const { status: realtimeStatus } = useWorkspaceRealtime(
+    projectId,
+    useMemo(
+      () => ({
+        onDelta: (event: RealtimeDeltaEvent) => {
+          if (event.entity === 'agent') {
+            void refetchRef.current();
+          } else if (event.entity === 'presence' && event.fields?.entityType === 'agent') {
+            void refetchRef.current();
+          }
+        },
+        onResync: () => void refetchRef.current(),
+      }),
+      [],
+    ),
+  );
 
   return (
     <section className="agent-roster" aria-label="Agents">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 className="section-heading">Agents</h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <Pill tone="neutral">Task Coordinator: Active</Pill>
-          <Pill tone={presence.connected ? 'success' : 'neutral'} dot>
-            {presence.connected ? 'Multiplayer Live' : presence.isReconnecting ? 'Reconnecting...' : 'Offline'}
+          {error && <Pill tone="warning">{error}</Pill>}
+          <Pill tone={realtimeStatus === 'connected' ? 'success' : 'neutral'} dot>
+            {realtimeStatus === 'connected'
+              ? 'Live'
+              : realtimeStatus === 'reconnecting'
+                ? 'Reconnecting…'
+                : realtimeStatus === 'connecting'
+                  ? 'Connecting…'
+                  : 'Offline'}
           </Pill>
         </div>
       </div>
 
-      {presence.members.length > 0 && (
-        <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)' }}>Workspace Members:</span>
-          {presence.members.map((member) => (
-            <StatusBadge key={member.userId} tone={member.status === 'ONLINE' ? 'success' : 'neutral'}>
-              <User size={12} style={{ marginRight: '4px' }} />
-              {member.displayName || member.userId.substring(0, 8)} ({member.status})
-            </StatusBadge>
-          ))}
-        </div>
-      )}
-
       <div className="agent-roster__grid">
-        {placeholderAgents.map((agent) => {
-          const liveAgent = presence.agents.find((a) => a.name === agent.name || a.agentId === agent.id);
-          const currentStatus = liveAgent ? liveAgent.status : agent.status;
-          return <AgentCard key={agent.id} agent={{ ...agent, status: currentStatus }} />;
-        })}
+        {!projectId ? null : loading && agents.length === 0 ? (
+          <p className="agent-roster__empty">Loading agents…</p>
+        ) : agents.length === 0 ? (
+          <p className="agent-roster__empty">No agents registered yet.</p>
+        ) : (
+          agents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={{ id: agent.id, name: agent.name, vendor: agent.provider, status: agent.status }}
+            />
+          ))
+        )}
       </div>
     </section>
   );
