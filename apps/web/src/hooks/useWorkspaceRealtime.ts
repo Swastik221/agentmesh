@@ -9,9 +9,10 @@ import { envConfig } from '../config/env';
  * `websocket.server.ts`: a connection is only treated as a user client, and
  * only then gets a snapshot or any `broadcastToProjectUsers` message (every
  * delta and presence change), when its URL carries `clientType=user`.
- * Without it the server silently sends nothing meant for users; this is
- * exactly the bug in the pre-existing, unused `useMultiplayerPresence.ts`,
- * left untouched since nothing renders it.
+ * Without it the server silently sends nothing meant for users; this was
+ * exactly the bug in `useMultiplayerPresence.ts`, since removed in favor of
+ * this hook (`AgentRoster.tsx` now reuses `useAgents` + this hook directly,
+ * the same pattern `LiveAgentsView` already uses).
  *
  * Six entity types actually broadcast today, confirmed by reading every
  * `recordAndBroadcastDelta` call site on the server: `task`,

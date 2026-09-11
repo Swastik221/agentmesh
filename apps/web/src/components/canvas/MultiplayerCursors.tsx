@@ -1,12 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Cursor } from '../../adapters/types';
 import { adapters } from '../../adapters';
+import { getAppMode } from '../../config/env';
 
 interface MultiplayerCursorsProps {
   currentUserId?: string;
   isReplayActive?: boolean;
 }
 
+/**
+ * Renders collaborator cursors on the canvas.
+ *
+ * Demo Mode only: this is a scripted flourish (a hardcoded 'checkout-demo'
+ * workspace id and a fully fabricated "Swastik" cursor animated in a
+ * sine/cosine orbit, not driven by any real connection). In Live Mode this
+ * used to run unchanged and show that same fake cursor to real users.
+ *
+ * It cannot be made real by swapping a data source: the realtime protocol
+ * (`@agentmesh/agent-protocol`) has no cursor position field anywhere in its
+ * schemas, only entity-level ONLINE/OFFLINE/BUSY presence
+ * (`workspace.presence.changed`, `workspace.delta` with `entity: 'presence'`).
+ * There is no real (x, y) to render. Rather than fabricate one, this renders
+ * nothing in Live Mode until the protocol actually carries real coordinates.
+ */
 export function MultiplayerCursors({ currentUserId = 'anand', isReplayActive = false }: MultiplayerCursorsProps) {
   const [remoteCursors, setRemoteCursors] = useState<Cursor[]>([]);
   const targetPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -14,6 +30,10 @@ export function MultiplayerCursors({ currentUserId = 'anand', isReplayActive = f
   const [movingNodeBadge, setMovingNodeBadge] = useState<{ actor: string; nodeId: string } | null>(null);
 
   useEffect(() => {
+    // No real cursor coordinates exist in Live Mode (see the module docstring);
+    // this whole simulated overlay is Demo Mode only.
+    if (getAppMode() !== 'demo') return;
+
     // Subscribe to cross-tab cursor sync
     const unsubscribe = adapters.workspaceRealtime.subscribeCursors('checkout-demo', (cursors) => {
       const filtered = cursors.filter((c) => c.id !== currentUserId);

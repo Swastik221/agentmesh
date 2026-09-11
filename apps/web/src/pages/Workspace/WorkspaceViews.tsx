@@ -19,6 +19,7 @@ import { agents, artifact, owners } from '../../features/workspace/workspace.moc
 import type { ProductTaskStatus, ProtocolEventType } from '../../features/workspace/workspace.types';
 import { useDemo } from '../../demo/DemoProvider';
 import { getAppMode } from '../../config/env';
+import { currentProjectId } from '../../utils/currentProjectId';
 import { useAgents } from '../../hooks/useAgents';
 import { useTasks } from '../../hooks/useTasks';
 import { useExecutions } from '../../hooks/useExecutions';
@@ -39,12 +40,6 @@ import {
 
 interface WorkspaceViewProps {
   onOpenCanvas(): void;
-}
-
-/** Current project id from the /workspace/:id route, or null on /canvas. */
-function currentProjectId(): string | null {
-  const match = /\/workspace\/([^/]+)/.exec(location.pathname);
-  return match ? decodeURIComponent(match[1]) : null;
 }
 
 const AGENT_STATUS_META: Record<LiveAgentStatus, { label: string; className: string }> = {
