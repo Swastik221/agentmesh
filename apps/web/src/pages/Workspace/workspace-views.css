@@ -394,3 +394,17 @@
 .task-table__status.is-failed { color: #f19a9a; }
 .task-table__status.is-cancelled { color: var(--canvas-dim); }
 .live-task-card .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+
+/* ---- Real executions, per task (PRD-45) -------------------------------- */
+.live-task-card__executions { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--canvas-line); }
+.live-task-card__executions-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.live-task-card__executions-head span { color: var(--canvas-dim); font: 9px var(--am-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.live-task-card__executions-head button,
+.live-task-card__execution-list button { min-height: 32px; padding: 0 12px; border-radius: 999px; font: 700 11px var(--am-font-sans); cursor: pointer; color: var(--canvas-copy); border: 1px solid var(--canvas-line-strong); background: rgb(28 46 70 / 82%); }
+.live-task-card__executions-head button:disabled,
+.live-task-card__execution-list button:disabled { opacity: .6; cursor: wait; }
+.live-task-card__executions-empty { margin: 0; color: var(--canvas-muted); font: 11px var(--am-font-mono); }
+.live-task-card__execution-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.live-task-card__execution-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--canvas-line); border-radius: 8px; font: 11px var(--am-font-mono); }
+.live-task-card__execution-list code { color: var(--canvas-dim); }
+.live-task-card__execution-error { color: #f19a9a; flex: 1 1 auto; }

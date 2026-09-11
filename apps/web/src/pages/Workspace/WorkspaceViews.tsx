@@ -21,6 +21,7 @@ import { useDemo } from '../../demo/DemoProvider';
 import { getAppMode } from '../../config/env';
 import { useAgents } from '../../hooks/useAgents';
 import { useTasks } from '../../hooks/useTasks';
+import { useExecutions } from '../../hooks/useExecutions';
 import type { LiveAgentStatus } from '../../adapters/live/agent.adapter';
 import {
   taskErrorMessage,
@@ -30,6 +31,10 @@ import {
   type LiveTaskPriority,
   type AssignmentFailureReason,
 } from '../../adapters/live/task.adapter';
+import {
+  executionErrorMessage,
+  type LiveExecutionStatus,
+} from '../../adapters/live/execution.adapter';
 
 interface WorkspaceViewProps {
   onOpenCanvas(): void;
@@ -73,6 +78,14 @@ const ASSIGN_FAILURE_LABEL: Record<AssignmentFailureReason, string> = {
   TASK_ALREADY_ASSIGNED: 'This task is already assigned to an agent.',
   TASK_CANCELLED_OR_COMPLETED: 'This task is cancelled or completed, so it cannot be assigned.',
   DEPENDENCIES_NOT_SATISFIED: 'Blocked: this task is waiting on dependencies that are not ready yet.',
+};
+
+const EXECUTION_STATUS_META: Record<LiveExecutionStatus, { label: string; className: string }> = {
+  QUEUED: { label: 'Queued', className: 'is-todo' },
+  RUNNING: { label: 'Running', className: 'is-progress' },
+  COMPLETED: { label: 'Completed', className: 'is-complete' },
+  FAILED: { label: 'Failed', className: 'is-failed' },
+  CANCELLED: { label: 'Cancelled', className: 'is-cancelled' },
 };
 
 function ViewHeader({ eyebrow, title, description, onOpenCanvas }: { eyebrow: string; title: string; description: string; onOpenCanvas(): void }) {
@@ -230,6 +243,7 @@ export function TasksView(props: WorkspaceViewProps) {
 }
 
 function LiveTaskCard({
+  projectId,
   task,
   agentOptions,
   taskOptions,
@@ -238,6 +252,7 @@ function LiveTaskCard({
   onAddDependency,
   onMarkComplete,
 }: {
+  projectId: string;
   task: LiveTask;
   agentOptions: Array<{ id: string; name: string; status: LiveAgentStatus }>;
   taskOptions: Array<{ id: string; title: string }>;
@@ -409,7 +424,103 @@ function LiveTaskCard({
           {message.text}
         </p>
       )}
+
+      {assigned && <ExecutionPanel projectId={projectId} taskId={task.id} agentId={assigned.agentId} />}
     </article>
+  );
+}
+
+/**
+ * Real execution history and controls for one task, scoped to the agent
+ * currently responsible for it. A distinct action from assignment (PRD-44):
+ * the server only accepts a new execution for an agent that already holds a
+ * responsibility here, never created automatically by assignment itself.
+ *
+ * "Start execution" is disabled while this task already has a non-terminal
+ * execution as a client-side courtesy against accidental duplicates, not
+ * because the server forbids a second one; the server has no such rule.
+ */
+function ExecutionPanel({ projectId, taskId, agentId }: { projectId: string; taskId: string; agentId: string }) {
+  const { executions, loading, error, refetch, createExecution, cancelExecution } = useExecutions(projectId, taskId);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<{ kind: 'error' | 'info' | 'ok'; text: string } | null>(null);
+
+  const activeExecution = executions.find((e) => e.status === 'QUEUED' || e.status === 'RUNNING');
+
+  const start = async () => {
+    setBusy('start');
+    setNote(null);
+    try {
+      const result = await createExecution({ agentId });
+      setNote(
+        result.kind === 'approval_required'
+          ? { kind: 'info', text: `Pending human approval (request ${result.approvalRequestId.slice(0, 10)}…). ${result.message}` }
+          : { kind: 'ok', text: 'Execution started.' },
+      );
+    } catch (err) {
+      setNote({ kind: 'error', text: executionErrorMessage(err) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const cancel = async (executionId: string) => {
+    setBusy(executionId);
+    setNote(null);
+    try {
+      await cancelExecution(executionId);
+      setNote({ kind: 'ok', text: 'Execution cancelled.' });
+    } catch (err) {
+      setNote({ kind: 'error', text: executionErrorMessage(err) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="live-task-card__executions">
+      <div className="live-task-card__executions-head">
+        <span>Executions</span>
+        <button type="button" className="is-secondary" onClick={() => void start()} disabled={busy !== null || Boolean(activeExecution)}>
+          {busy === 'start' ? 'Starting…' : 'Start execution'}
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="live-task-card__msg" role="status">Loading executions…</p>
+      ) : error ? (
+        <div className="live-task-card__msg live-task-card__msg--error" role="alert">
+          <span>{error}</span> <button type="button" onClick={() => void refetch()}>Retry</button>
+        </div>
+      ) : executions.length === 0 ? (
+        <p className="live-task-card__executions-empty">No executions yet.</p>
+      ) : (
+        <ul className="live-task-card__execution-list">
+          {executions.map((exec) => {
+            const emeta = EXECUTION_STATUS_META[exec.status];
+            const cancellable = exec.status === 'QUEUED' || exec.status === 'RUNNING';
+            return (
+              <li key={exec.id}>
+                <b className={`task-table__status ${emeta.className}`}>{emeta.label}</b>
+                <code>{exec.id.slice(0, 10)}…</code>
+                {exec.error && <span className="live-task-card__execution-error">{exec.error}</span>}
+                {cancellable && (
+                  <button type="button" className="is-secondary" onClick={() => void cancel(exec.id)} disabled={busy !== null}>
+                    {busy === exec.id ? 'Cancelling…' : 'Cancel'}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {note && (
+        <p className={`live-task-card__msg live-task-card__msg--${note.kind}`} role={note.kind === 'error' ? 'alert' : 'status'}>
+          {note.text}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -525,6 +636,7 @@ function LiveTasksView({ onOpenCanvas }: WorkspaceViewProps) {
           {tasks.map((task) => (
             <LiveTaskCard
               key={task.id}
+              projectId={projectId}
               task={task}
               agentOptions={agentOptions}
               taskOptions={tasks.filter((t) => t.id !== task.id).map((t) => ({ id: t.id, title: t.title }))}
