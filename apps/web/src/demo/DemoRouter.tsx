@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { DemoProvider } from './DemoProvider';
 import { AuthPage, OnboardingPage, RouteGuard, WorkspacesPage } from './DemoPages';
+import { SignInPage } from '../pages/SignIn/SignInPage';
 const CanvasApp = lazy(() => import('../App'));
 const LandingPage = lazy(() => import('../features/landing/LandingPage'));
 
@@ -40,6 +41,7 @@ function RouterContent() {
   if (path === '/' || path === '/landing') return <LandingPage/>;
   if (path === '/login') return <AuthPage mode="login"/>;
   if (path === '/signup') return <AuthPage mode="signup"/>;
+  if (path === '/signin') return <SignInPage/>;
   if (path === '/onboarding') return <RouteGuard><OnboardingPage/></RouteGuard>;
   if (path === '/workspaces') return <RouteGuard><WorkspacesPage/></RouteGuard>;
   if (path === '/canvas') return <CanvasApp/>;
