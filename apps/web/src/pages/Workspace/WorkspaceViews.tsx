@@ -20,7 +20,16 @@ import type { ProductTaskStatus, ProtocolEventType } from '../../features/worksp
 import { useDemo } from '../../demo/DemoProvider';
 import { getAppMode } from '../../config/env';
 import { useAgents } from '../../hooks/useAgents';
+import { useTasks } from '../../hooks/useTasks';
 import type { LiveAgentStatus } from '../../adapters/live/agent.adapter';
+import {
+  taskErrorMessage,
+  isFileConflict,
+  type LiveTask,
+  type LiveTaskStatus,
+  type LiveTaskPriority,
+  type AssignmentFailureReason,
+} from '../../adapters/live/task.adapter';
 
 interface WorkspaceViewProps {
   onOpenCanvas(): void;
@@ -42,6 +51,28 @@ const labelForStatus: Record<ProductTaskStatus, string> = {
   proposed: 'Open',
   claimed: 'Claimed',
   'auto-assigned': 'Auto assigned',
+};
+
+const LIVE_TASK_STATUS_META: Record<LiveTaskStatus, { label: string; className: string }> = {
+  TODO: { label: 'To do', className: 'is-todo' },
+  IN_PROGRESS: { label: 'In progress', className: 'is-progress' },
+  PENDING_APPROVAL: { label: 'Pending approval', className: 'is-pending' },
+  BLOCKED: { label: 'Blocked', className: 'is-blocked' },
+  COMPLETED: { label: 'Completed', className: 'is-complete' },
+  FAILED: { label: 'Failed', className: 'is-failed' },
+  CANCELLED: { label: 'Cancelled', className: 'is-cancelled' },
+};
+
+const LIVE_TASK_PRIORITIES: LiveTaskPriority[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+
+/** Human sentences for the coordinator's decline reasons (returned with HTTP 200). */
+const ASSIGN_FAILURE_LABEL: Record<AssignmentFailureReason, string> = {
+  NO_ELIGIBLE_AGENT: 'No agent is online and free to take this task right now.',
+  PREFERRED_AGENT_UNAVAILABLE: 'The preferred agent is offline or already busy.',
+  PREFERRED_AGENT_UNAUTHORIZED: 'The preferred agent is not part of this project.',
+  TASK_ALREADY_ASSIGNED: 'This task is already assigned to an agent.',
+  TASK_CANCELLED_OR_COMPLETED: 'This task is cancelled or completed, so it cannot be assigned.',
+  DEPENDENCIES_NOT_SATISFIED: 'Blocked: this task is waiting on dependencies that are not ready yet.',
 };
 
 function ViewHeader({ eyebrow, title, description, onOpenCanvas }: { eyebrow: string; title: string; description: string; onOpenCanvas(): void }) {
@@ -193,7 +224,323 @@ function DemoAgentsView({ onOpenCanvas }: WorkspaceViewProps) {
   );
 }
 
-export function TasksView({ onOpenCanvas }: WorkspaceViewProps) {
+export function TasksView(props: WorkspaceViewProps) {
+  // Live Mode shows the project's real shared task board; Demo Mode is unchanged.
+  return getAppMode() === 'live' ? <LiveTasksView {...props} /> : <DemoTasksView {...props} />;
+}
+
+function LiveTaskCard({
+  task,
+  agentOptions,
+  taskOptions,
+  onClaim,
+  onAutoAssign,
+  onAddDependency,
+  onMarkComplete,
+}: {
+  task: LiveTask;
+  agentOptions: Array<{ id: string; name: string; status: LiveAgentStatus }>;
+  taskOptions: Array<{ id: string; title: string }>;
+  onClaim: (taskId: string, agentId: string) => Promise<void>;
+  onAutoAssign: (taskId: string) => Promise<void>;
+  onAddDependency: (taskId: string, dependsOnTaskId: string) => Promise<void>;
+  onMarkComplete: (taskId: string) => Promise<void>;
+}) {
+  const [agentId, setAgentId] = useState('');
+  const [dependsOnId, setDependsOnId] = useState('');
+  const [busy, setBusy] = useState<'claim' | 'auto' | 'dep' | 'complete' | null>(null);
+  const [message, setMessage] = useState<{ kind: 'error' | 'info' | 'ok'; text: string } | null>(null);
+
+  const responsibilities = task.responsibilities ?? [];
+  const dependencies = task.dependencies ?? [];
+  const assigned = responsibilities[0];
+  const blockingDeps = dependencies.filter((dep) => !dep.available);
+  const meta = LIVE_TASK_STATUS_META[task.status];
+  const terminal = task.status === 'COMPLETED' || task.status === 'CANCELLED' || task.status === 'FAILED';
+
+  const claim = async () => {
+    if (!agentId) {
+      setMessage({ kind: 'error', text: 'Pick an agent to assign.' });
+      return;
+    }
+    setBusy('claim');
+    setMessage(null);
+    try {
+      await onClaim(task.id, agentId);
+      setMessage({ kind: 'ok', text: 'Agent assigned.' });
+    } catch (err) {
+      // Real server error, surfaced verbatim. File conflicts get their own note.
+      setMessage({
+        kind: 'error',
+        text: isFileConflict(err)
+          ? `File conflict: ${taskErrorMessage(err)}`
+          : taskErrorMessage(err),
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const autoAssign = async () => {
+    setBusy('auto');
+    setMessage(null);
+    try {
+      await onAutoAssign(task.id);
+    } catch (err) {
+      setMessage({ kind: 'error', text: taskErrorMessage(err) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const addDependency = async () => {
+    if (!dependsOnId) {
+      setMessage({ kind: 'error', text: 'Pick a task for this one to depend on.' });
+      return;
+    }
+    setBusy('dep');
+    setMessage(null);
+    try {
+      await onAddDependency(task.id, dependsOnId);
+      setMessage({ kind: 'ok', text: 'Dependency added.' });
+      setDependsOnId('');
+    } catch (err) {
+      setMessage({ kind: 'error', text: taskErrorMessage(err) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const markComplete = async () => {
+    setBusy('complete');
+    setMessage(null);
+    try {
+      await onMarkComplete(task.id);
+      setMessage({ kind: 'ok', text: 'Task marked complete.' });
+    } catch (err) {
+      setMessage({ kind: 'error', text: taskErrorMessage(err) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <article className="live-task-card">
+      <header className="live-task-card__head">
+        <div>
+          <code>{task.id.slice(0, 10)}…</code>
+          <h2>{task.title}</h2>
+        </div>
+        <b className={`task-table__status ${meta.className}`}>{meta.label}</b>
+      </header>
+      <p className="live-task-card__desc">{task.description}</p>
+
+      <dl className="live-task-card__meta">
+        <div><dt>Priority</dt><dd>{task.priority}</dd></div>
+        <div><dt>Assigned</dt><dd>{assigned ? (assigned.agent?.name ?? assigned.agentId.slice(0, 10) + '…') : 'Unassigned'}</dd></div>
+        {assigned?.assignmentSource && (
+          <div><dt>Assigned via</dt><dd>{assigned.assignmentSource === 'HUMAN_PREFERENCE' ? 'Human preference' : 'Capability match'}</dd></div>
+        )}
+        {task.requiredCapabilities.length > 0 && (
+          <div><dt>Needs</dt><dd>{task.requiredCapabilities.join(', ')}</dd></div>
+        )}
+        {task.filePaths.length > 0 && (
+          <div><dt>Files</dt><dd>{task.filePaths.join(', ')}</dd></div>
+        )}
+      </dl>
+
+      {dependencies.length > 0 && (
+        <div className={`live-task-card__deps ${blockingDeps.length ? 'is-blocked' : 'is-ready'}`}>
+          {blockingDeps.length > 0 ? (
+            <span><Clock3 size={13} /> Waiting on {blockingDeps.length} of {dependencies.length} dependencies</span>
+          ) : (
+            <span><CheckCircle2 size={13} /> All {dependencies.length} dependencies satisfied</span>
+          )}
+        </div>
+      )}
+
+      {!assigned && !terminal && (
+        <div className="live-task-card__actions">
+          <label className="live-task-card__picker">
+            <span className="sr-only">Assign agent</span>
+            <select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+              <option value="">Assign an agent…</option>
+              {agentOptions.map((a) => (
+                <option key={a.id} value={a.id}>{a.name} ({a.status.toLowerCase()})</option>
+              ))}
+            </select>
+          </label>
+          <button type="button" onClick={claim} disabled={busy !== null}>
+            {busy === 'claim' ? 'Assigning…' : 'Assign'}
+          </button>
+          <button type="button" className="is-secondary" onClick={autoAssign} disabled={busy !== null}>
+            {busy === 'auto' ? 'Coordinating…' : 'Auto assign'}
+          </button>
+        </div>
+      )}
+
+      {assigned && !terminal && (
+        <div className="live-task-card__actions">
+          <button type="button" onClick={markComplete} disabled={busy !== null}>
+            {busy === 'complete' ? 'Completing…' : 'Mark complete'}
+          </button>
+        </div>
+      )}
+
+      {!terminal && taskOptions.length > 0 && (
+        <div className="live-task-card__actions live-task-card__actions--dep">
+          <label className="live-task-card__picker">
+            <span className="sr-only">Depends on</span>
+            <select value={dependsOnId} onChange={(e) => setDependsOnId(e.target.value)}>
+              <option value="">Depends on…</option>
+              {taskOptions.map((t) => (
+                <option key={t.id} value={t.id}>{t.title}</option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="is-secondary" onClick={addDependency} disabled={busy !== null}>
+            {busy === 'dep' ? 'Adding…' : 'Add dependency'}
+          </button>
+        </div>
+      )}
+
+      {message && (
+        <p className={`live-task-card__msg live-task-card__msg--${message.kind}`} role={message.kind === 'error' ? 'alert' : 'status'}>
+          {message.text}
+        </p>
+      )}
+    </article>
+  );
+}
+
+function LiveTasksView({ onOpenCanvas }: WorkspaceViewProps) {
+  const projectId = currentProjectId();
+  const { tasks, loading, error, refetch, createTask, claimTask, autoAssign, addDependency, updateStatus } = useTasks(projectId);
+  const { agents: liveAgents } = useAgents(projectId);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const agentOptions = liveAgents.map((a) => ({ id: a.id, name: a.name, status: a.status }));
+
+  const create = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setBusy(true);
+    setFormError('');
+    try {
+      const data = new FormData(e.currentTarget);
+      const title = String(data.get('title') ?? '').trim();
+      const description = String(data.get('description') ?? '').trim();
+      const priority = String(data.get('priority') ?? 'MEDIUM') as LiveTaskPriority;
+      const capsRaw = String(data.get('caps') ?? '').trim();
+      const filesRaw = String(data.get('files') ?? '').trim();
+      const requiredCapabilities = capsRaw ? capsRaw.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+      const filePaths = filesRaw ? filesRaw.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+      await createTask({ title, description, priority, requiredCapabilities, filePaths });
+      setFormOpen(false);
+      e.currentTarget.reset();
+    } catch (err) {
+      // Real server validation message, never an invented one.
+      setFormError(taskErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runClaim = async (taskId: string, agentId: string) => {
+    await claimTask(taskId, agentId);
+  };
+
+  const runAutoAssign = async (taskId: string) => {
+    setNotice(null);
+    const result = await autoAssign(taskId);
+    if (result.assigned) {
+      const via = result.source === 'HUMAN_PREFERENCE' ? 'human preference' : 'capability match';
+      setNotice(`Coordinator assigned the task via ${via}${result.score !== undefined ? ` (score ${result.score}%)` : ''}.`);
+    } else {
+      // A declined assignment is a real 200 result, surfaced as its reason.
+      setNotice(ASSIGN_FAILURE_LABEL[result.reason]);
+    }
+  };
+
+  const runAddDependency = async (taskId: string, dependsOnTaskId: string) => {
+    await addDependency(taskId, { dependsOnTaskId });
+  };
+
+  const runMarkComplete = async (taskId: string) => {
+    await updateStatus(taskId, 'COMPLETED');
+  };
+
+  const openCount = tasks.filter((t) => (t.responsibilities ?? []).length === 0 && t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length;
+  const assignedCount = tasks.filter((t) => (t.responsibilities ?? []).length > 0).length;
+
+  return (
+    <section className="workspace-view">
+      <ViewHeader eyebrow="COORDINATOR / RESPONSIBILITY" title="Shared task board" description="Assign a preferred agent yourself, or let the coordinator match by capability." onOpenCanvas={onOpenCanvas} />
+      <div className="workspace-metric-row">
+        <article><FileJson2 /><div><strong>{tasks.length}</strong><span>tasks on the board</span></div></article>
+        <article><Clock3 /><div><strong>{openCount}</strong><span>awaiting an agent</span></div></article>
+        <article><CheckCircle2 /><div><strong>{assignedCount}</strong><span>assigned</span></div></article>
+      </div>
+
+      {projectId && (
+        <div className="workspace-list-tools" style={{ gridTemplateColumns: '1fr auto' }}>
+          <div />
+          <button type="button" className="workspace-list-tools__primary" onClick={() => { setFormOpen(!formOpen); setFormError(''); }}>
+            {formOpen ? 'Cancel' : 'New task'}
+          </button>
+        </div>
+      )}
+      {formOpen && (
+        <form className="workspace-inline-form" onSubmit={create} style={{ marginBottom: 16 }}>
+          <label>Title<input name="title" required placeholder="Wire up the payment API" /></label>
+          <label>Description<input name="description" required placeholder="What needs doing and why" /></label>
+          <label>Priority
+            <select name="priority" defaultValue="MEDIUM">
+              {LIVE_TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <label>Required capabilities <span style={{ opacity: 0.6 }}>(comma separated)</span><input name="caps" placeholder="language:solidity, domain:backend" /></label>
+          <label>File paths <span style={{ opacity: 0.6 }}>(comma separated)</span><input name="files" placeholder="src/payment.ts" /></label>
+          <button type="submit" className="workspace-list-tools__primary" disabled={busy}>{busy ? 'Creating…' : 'Create task'}</button>
+          {formError && <p role="alert">{formError}</p>}
+        </form>
+      )}
+
+      {notice && (
+        <p className="workspace-view__note" role="status" style={{ marginBottom: 12 }}>{notice} <button type="button" onClick={() => setNotice(null)}>Dismiss</button></p>
+      )}
+
+      {!projectId ? (
+        <p className="workspace-view__note"><Sparkles /> Open a project to see its shared task board.</p>
+      ) : loading ? (
+        <p role="status" className="workspace-view__note">Loading tasks…</p>
+      ) : error ? (
+        <div role="alert" className="workspace-view__note"><span>{error}</span> <button type="button" onClick={() => void refetch()}>Retry</button></div>
+      ) : tasks.length === 0 ? (
+        <p className="workspace-view__note"><Sparkles /> No tasks on this board yet. Create the first one.</p>
+      ) : (
+        <div className="live-task-board">
+          {tasks.map((task) => (
+            <LiveTaskCard
+              key={task.id}
+              task={task}
+              agentOptions={agentOptions}
+              taskOptions={tasks.filter((t) => t.id !== task.id).map((t) => ({ id: t.id, title: t.title }))}
+              onClaim={runClaim}
+              onAutoAssign={runAutoAssign}
+              onAddDependency={runAddDependency}
+              onMarkComplete={runMarkComplete}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DemoTasksView({ onOpenCanvas }: WorkspaceViewProps) {
   const { state, claimTask, submitPrd } = useDemo();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | ProductTaskStatus>('all');
