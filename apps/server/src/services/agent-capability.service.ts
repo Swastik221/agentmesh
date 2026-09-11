@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { normalizeCapability } from '../schemas/agent-capability.schema.js';
 import { NotFoundError, ConflictError } from '../errors/app-error.js';
+import { deltaSequencerService } from './delta-sequencer.service.js';
 
 export class AgentCapabilityService {
   async addCapability(agentId: string, capabilityInput: string) {
@@ -19,6 +20,16 @@ export class AgentCapabilityService {
           capability: capabilityInput,
         },
       });
+
+      await deltaSequencerService.recordAndBroadcastDelta(agent.projectId, [
+        {
+          entity: 'agent',
+          entityId: agentId,
+          operation: 'updated',
+          fields: { capabilityAdded: capabilityRecord.capability },
+        },
+      ]);
+
       return capabilityRecord;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -77,6 +88,15 @@ export class AgentCapabilityService {
         id: existingCapability.id,
       },
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(agent.projectId, [
+      {
+        entity: 'agent',
+        entityId: agentId,
+        operation: 'updated',
+        fields: { capabilityRemoved: normalizedCap },
+      },
+    ]);
   }
 }
 

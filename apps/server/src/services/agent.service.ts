@@ -4,6 +4,16 @@ import { CreateAgentInput, UpdateAgentInput } from '../schemas/agent.schema.js';
 import { NotFoundError, ForbiddenError } from '../errors/app-error.js';
 import { Agent, AgentStatus } from '@prisma/client';
 import { ensService } from './ens.service.js';
+import { deltaSequencerService } from './delta-sequencer.service.js';
+
+/**
+ * `agent` is already a valid entity in the protocol's delta schema
+ * (`workspaceDeltaChangeSchema`), confirmed by grep, but nothing here ever
+ * emitted it: an agent's own row (status flips driven by execution activity,
+ * capability edits, renames) was invisible to every connected client in
+ * real time. Uses the exact mechanism `task.service.ts` already uses for
+ * `task`/`taskResponsibility` deltas, no new protocol surface.
+ */
 
 export class AgentService {
   private async verifyProjectMembership(projectId: string, userId: string): Promise<void> {
@@ -71,6 +81,15 @@ export class AgentService {
         ...ensFields,
       },
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'agent',
+        entityId: agent.id,
+        operation: 'created',
+        fields: { name: agent.name, provider: agent.provider, status: agent.status },
+      },
+    ]);
 
     return agent;
   }
@@ -171,7 +190,7 @@ export class AgentService {
       }
     }
 
-    return prisma.agent.update({
+    const updated = await prisma.agent.update({
       where: { id: agentId },
       data: {
         ...(input.name !== undefined && { name: input.name }),
@@ -180,6 +199,17 @@ export class AgentService {
         ...ensUpdate,
       },
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(existingAgent.projectId, [
+      {
+        entity: 'agent',
+        entityId: agentId,
+        operation: 'updated',
+        fields: { name: updated.name, provider: updated.provider, status: updated.status },
+      },
+    ]);
+
+    return updated;
   }
 
   async deleteAgent(agentId: string, actorUserId: string): Promise<void> {
@@ -194,6 +224,15 @@ export class AgentService {
     await prisma.agent.delete({
       where: { id: agentId },
     });
+
+    await deltaSequencerService.recordAndBroadcastDelta(existingAgent.projectId, [
+      {
+        entity: 'agent',
+        entityId: agentId,
+        operation: 'removed',
+        fields: {},
+      },
+    ]);
   }
 }
 
