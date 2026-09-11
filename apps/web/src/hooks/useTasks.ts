@@ -7,10 +7,15 @@ import {
   type CreateTaskInput,
   type LiveTask,
   type LiveTaskStatus,
-  type ListTasksQuery,
+  type LiveTaskPriority,
   type TaskDependencyRow,
   type TaskResponsibility,
 } from '../adapters/live/task.adapter';
+
+export interface UseTasksQuery {
+  status?: LiveTaskStatus;
+  priority?: LiveTaskPriority;
+}
 
 export interface UseTasksResult {
   tasks: LiveTask[];
@@ -84,13 +89,19 @@ async function withResolvedDependencies(projectId: string, tasks: LiveTask[]): P
  *
  * Pass `null` for `projectId` when no project is selected: the hook then holds
  * an empty, non-loading, error-free state and makes no request. Live Mode only.
+ *
+ * Always loads the complete set of tasks matching `status`/`priority`, not
+ * just one server page: the board has no paging UI of its own, so a caller
+ * has no way to ask for "the rest" of a project past the server's default
+ * (20) or even max (100) page size. `listAllTasks` on the adapter is what
+ * actually walks every page; this hook never talks to `listTasks` directly.
  */
-export function useTasks(projectId: string | null, query: ListTasksQuery = {}): UseTasksResult {
+export function useTasks(projectId: string | null, query: UseTasksQuery = {}): UseTasksResult {
   const [tasks, setTasks] = useState<LiveTask[]>([]);
   const [loading, setLoading] = useState<boolean>(Boolean(projectId));
   const [error, setError] = useState<string | null>(null);
 
-  const { status, priority, page, limit } = query;
+  const { status, priority } = query;
 
   const load = useCallback(async () => {
     if (!projectId) {
@@ -102,14 +113,14 @@ export function useTasks(projectId: string | null, query: ListTasksQuery = {}): 
     setLoading(true);
     setError(null);
     try {
-      const result = await liveTaskAdapter.listTasks(projectId, { status, priority, page, limit });
-      setTasks(await withResolvedDependencies(projectId, result.items));
+      const items = await liveTaskAdapter.listAllTasks(projectId, { status, priority });
+      setTasks(await withResolvedDependencies(projectId, items));
     } catch (err) {
       setError(taskErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [projectId, status, priority, page, limit]);
+  }, [projectId, status, priority]);
 
   useEffect(() => {
     void load();
