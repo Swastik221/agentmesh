@@ -23,6 +23,7 @@ import { currentProjectId } from '../../utils/currentProjectId';
 import { useAgents } from '../../hooks/useAgents';
 import { useTasks } from '../../hooks/useTasks';
 import { useExecutions } from '../../hooks/useExecutions';
+import { useApprovals } from '../../hooks/useApprovals';
 import { useWorkspaceRealtime, type RealtimeDeltaEvent } from '../../hooks/useWorkspaceRealtime';
 import type { LiveAgentStatus } from '../../adapters/live/agent.adapter';
 import {
@@ -37,6 +38,10 @@ import {
   executionErrorMessage,
   type LiveExecutionStatus,
 } from '../../adapters/live/execution.adapter';
+import {
+  approvalErrorMessage,
+  type ApprovalRequestRecord,
+} from '../../adapters/live/approval.adapter';
 
 interface WorkspaceViewProps {
   onOpenCanvas(): void;
@@ -273,6 +278,10 @@ function LiveTaskCard({
   onAutoAssign,
   onAddDependency,
   onMarkComplete,
+  approvals,
+  onApprove,
+  onReject,
+  onRefetchApprovals,
 }: {
   projectId: string;
   task: LiveTask;
@@ -282,6 +291,10 @@ function LiveTaskCard({
   onAutoAssign: (taskId: string) => Promise<void>;
   onAddDependency: (taskId: string, dependsOnTaskId: string) => Promise<void>;
   onMarkComplete: (taskId: string) => Promise<void>;
+  approvals: ApprovalRequestRecord[];
+  onApprove: (approvalId: string) => Promise<ApprovalRequestRecord>;
+  onReject: (approvalId: string) => Promise<ApprovalRequestRecord>;
+  onRefetchApprovals: () => Promise<void>;
 }) {
   const [agentId, setAgentId] = useState('');
   const [dependsOnId, setDependsOnId] = useState('');
@@ -447,7 +460,17 @@ function LiveTaskCard({
         </p>
       )}
 
-      {assigned && <ExecutionPanel projectId={projectId} taskId={task.id} agentId={assigned.agentId} />}
+      {assigned && (
+        <ExecutionPanel
+          projectId={projectId}
+          taskId={task.id}
+          agentId={assigned.agentId}
+          approvals={approvals}
+          onApprove={onApprove}
+          onReject={onReject}
+          onRefetchApprovals={onRefetchApprovals}
+        />
+      )}
     </article>
   );
 }
@@ -461,24 +484,67 @@ function LiveTaskCard({
  * "Start execution" is disabled while this task already has a non-terminal
  * execution as a client-side courtesy against accidental duplicates, not
  * because the server forbids a second one; the server has no such rule.
+ *
+ * PRD-45 left the 202 path as a one-shot local toast with no persisted
+ * state at all: reload the page, or open the task in a second tab, and
+ * there was zero indication a request was pending. PRD-47 closes that gap
+ * here, in this exact panel, rather than a separate approvals screen: a
+ * pending approval for this task (correlated via the metadata task.execute
+ * stores at creation, `taskId`/`agentId`, the only linkage the API exposes
+ * since an ApprovalRequest has no taskId column of its own) is now real,
+ * fetched state from `useApprovals`, so it survives a reload and shows up
+ * in a second tab on its next poll. Approving resolves the request AND
+ * resumes the blocked action server side (confirmed directly against
+ * approval.service.ts's resumeBlockedAction): a real TaskExecution row
+ * already exists by the time the approve call returns, using the original
+ * requester's identity, not the approver's. No retry of the original
+ * create call is needed here, only a refetch of this task's executions.
  */
-function ExecutionPanel({ projectId, taskId, agentId }: { projectId: string; taskId: string; agentId: string }) {
+function ExecutionPanel({
+  projectId,
+  taskId,
+  agentId,
+  approvals,
+  onApprove,
+  onReject,
+  onRefetchApprovals,
+}: {
+  projectId: string;
+  taskId: string;
+  agentId: string;
+  approvals: ApprovalRequestRecord[];
+  onApprove: (approvalId: string) => Promise<ApprovalRequestRecord>;
+  onReject: (approvalId: string) => Promise<ApprovalRequestRecord>;
+  onRefetchApprovals: () => Promise<void>;
+}) {
   const { executions, loading, error, refetch, createExecution, cancelExecution } = useExecutions(projectId, taskId);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ kind: 'error' | 'info' | 'ok'; text: string } | null>(null);
 
   const activeExecution = executions.find((e) => e.status === 'QUEUED' || e.status === 'RUNNING');
 
+  const pendingApproval = approvals.find(
+    (a) =>
+      a.action === 'task.execute' &&
+      a.status === 'PENDING' &&
+      (a.metadata as { taskId?: string } | null)?.taskId === taskId,
+  );
+
   const start = async () => {
     setBusy('start');
     setNote(null);
     try {
       const result = await createExecution({ agentId });
-      setNote(
-        result.kind === 'approval_required'
-          ? { kind: 'info', text: `Pending human approval (request ${result.approvalRequestId.slice(0, 10)}…). ${result.message}` }
-          : { kind: 'ok', text: 'Execution started.' },
-      );
+      if (result.kind === 'approval_required') {
+        setNote({ kind: 'info', text: 'Pending human approval.' });
+        // The board-level approvals list has no way to know about this new
+        // request until its own next poll; refetch it now so the persisted
+        // pending state (with real Approve/Reject buttons) below appears
+        // immediately, not up to a few seconds later.
+        await onRefetchApprovals();
+      } else {
+        setNote({ kind: 'ok', text: 'Execution started.' });
+      }
     } catch (err) {
       setNote({ kind: 'error', text: executionErrorMessage(err) });
     } finally {
@@ -499,14 +565,72 @@ function ExecutionPanel({ projectId, taskId, agentId }: { projectId: string; tas
     }
   };
 
+  const approve = async () => {
+    if (!pendingApproval) return;
+    setBusy('approve');
+    setNote(null);
+    try {
+      await onApprove(pendingApproval.id);
+      setNote({ kind: 'ok', text: 'Approved. Execution started.' });
+      // The execution resumeBlockedAction created server side already
+      // exists by the time approve resolves; refetch to reveal it now
+      // rather than waiting for the next poll tick.
+      await refetch();
+    } catch (err) {
+      setNote({ kind: 'error', text: approvalErrorMessage(err) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const reject = async () => {
+    if (!pendingApproval) return;
+    setBusy('reject');
+    setNote(null);
+    try {
+      await onReject(pendingApproval.id);
+      setNote({ kind: 'ok', text: 'Rejected. No execution was started.' });
+    } catch (err) {
+      setNote({ kind: 'error', text: approvalErrorMessage(err) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="live-task-card__executions">
       <div className="live-task-card__executions-head">
         <span>Executions</span>
-        <button type="button" className="is-secondary" onClick={() => void start()} disabled={busy !== null || Boolean(activeExecution)}>
+        <button
+          type="button"
+          className="is-secondary"
+          onClick={() => void start()}
+          disabled={busy !== null || Boolean(activeExecution) || Boolean(pendingApproval)}
+        >
           {busy === 'start' ? 'Starting…' : 'Start execution'}
         </button>
       </div>
+
+      {pendingApproval && (
+        <div className="live-task-card__msg live-task-card__msg--info" role="status">
+          <p>
+            Pending human approval, requested by{' '}
+            {pendingApproval.requestedByUser?.displayName ||
+              (pendingApproval.requestedByUser?.walletAddress
+                ? pendingApproval.requestedByUser.walletAddress.slice(0, 10) + '…'
+                : pendingApproval.requestedByUserId.slice(0, 10) + '…')}
+            .{pendingApproval.reason ? ` ${pendingApproval.reason}` : ''}
+          </p>
+          <div>
+            <button type="button" className="is-secondary" onClick={() => void approve()} disabled={busy !== null}>
+              {busy === 'approve' ? 'Approving…' : 'Approve'}
+            </button>
+            <button type="button" className="is-secondary" onClick={() => void reject()} disabled={busy !== null}>
+              {busy === 'reject' ? 'Rejecting…' : 'Reject'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p className="live-task-card__msg" role="status">Loading executions…</p>
@@ -550,6 +674,11 @@ function LiveTasksView({ onOpenCanvas }: WorkspaceViewProps) {
   const projectId = currentProjectId();
   const { tasks, loading, error, refetch, createTask, claimTask, autoAssign, addDependency, updateStatus } = useTasks(projectId);
   const { agents: liveAgents } = useAgents(projectId);
+  // Lifted here rather than fetched once per ExecutionPanel: approvals are
+  // project scoped, not task scoped (an ApprovalRequest has no taskId
+  // column of its own), so one fetch/poll per board serves every task card
+  // instead of one redundant poll per assigned task.
+  const { approvals, approve: approveRequest, reject: rejectRequest, refetch: refetchApprovals } = useApprovals(projectId);
   const [formOpen, setFormOpen] = useState(false);
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -700,6 +829,10 @@ function LiveTasksView({ onOpenCanvas }: WorkspaceViewProps) {
               onAutoAssign={runAutoAssign}
               onAddDependency={runAddDependency}
               onMarkComplete={runMarkComplete}
+              approvals={approvals}
+              onApprove={approveRequest}
+              onReject={rejectRequest}
+              onRefetchApprovals={refetchApprovals}
             />
           ))}
         </div>
