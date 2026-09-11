@@ -119,7 +119,11 @@ function LiveRouteGuard({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => { void check(); }, [check]);
-  useEffect(() => { if (guard === 'unauthenticated') navigate('/login'); }, [guard]);
+  useEffect(() => {
+    if (guard !== 'unauthenticated') return;
+    const next = location.pathname + location.search;
+    navigate(`/signin?next=${encodeURIComponent(next)}`);
+  }, [guard]);
 
   if (guard === 'authenticated') return children;
   if (guard === 'error') {
