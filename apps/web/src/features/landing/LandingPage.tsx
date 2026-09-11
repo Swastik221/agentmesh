@@ -9,6 +9,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
+import { getAppMode } from '../../config/env';
 import { artifact, chapters, faqs, features, repository } from './landing.content';
 import { HeroWorkshop, MiniAgent } from './HeroWorkshop';
 import './landing.css';
@@ -304,7 +305,7 @@ export default function LandingPage() {
                   <p>Vega publishes the schema. Orion receives it and continues.</p>
                 </li>
               </ol>
-              <a className="text-link" href="/login">
+              <a className="text-link" href={getAppMode() === 'live' ? '/signin' : '/login'}>
                 Watch the agents coordinate <ArrowUpRight size={17} />
               </a>
             </div>
