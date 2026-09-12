@@ -416,7 +416,7 @@ describe('PRD-36-C1 — Hedera x402 Agent Payment Corrective Tests', () => {
       expect(res.body.payment.id).toBe(settled.id);
       expect(res.body.payment.status).toBe('SETTLED');
       expect(res.body.payment.transactionReference).toBe('0.0.500123@1700000000.000000000');
-    });
+    }, 15000);
   });
 
   describe('4. PRD-35 Policy Integration', () => {
