@@ -177,7 +177,7 @@ export const executePaidCapability = async (
     // STEP 6: Idempotency check for existing execution associated with this settled payment (Section 17)
     let executionId = settledPayment.executionId;
     if (!executionId) {
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 40; i++) {
         const reCheck = await prisma.payment.findUnique({
           where: { id: settledPayment.id },
           select: { executionId: true },
@@ -196,21 +196,22 @@ export const executePaidCapability = async (
       });
       let execAttempts = 0;
       while (
-        execAttempts < 30 &&
+        execAttempts < 40 &&
         existingExec &&
         (existingExec.status === 'QUEUED' || existingExec.status === 'RUNNING')
       ) {
-        await new Promise((r) => setTimeout(r, 50));
+        await new Promise((r) => setTimeout(r, 100));
         existingExec = await prisma.taskExecution.findUnique({ where: { id: executionId } });
         execAttempts++;
       }
 
       if (existingExec) {
         const isSuccess = existingExec.status === 'COMPLETED';
+        const isPending = existingExec.status === 'QUEUED' || existingExec.status === 'RUNNING';
         res.status(200).json({
-          success: isSuccess,
-          status: isSuccess ? 'COMPLETED' : 'EXECUTION_FAILED',
-          message: existingExec.error || (isSuccess ? undefined : 'Agent execution failed'),
+          success: isSuccess || isPending,
+          status: isSuccess ? 'COMPLETED' : isPending ? existingExec.status : 'EXECUTION_FAILED',
+          message: existingExec.error || (isSuccess ? undefined : isPending ? 'Agent execution in progress' : 'Agent execution failed'),
           result: existingExec.output,
           execution: {
             id: existingExec.id,

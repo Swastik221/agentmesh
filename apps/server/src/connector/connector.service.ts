@@ -126,7 +126,7 @@ export class ConnectorService {
     let sentCount = 0;
 
     for (const conn of connections) {
-      if (conn.socket.readyState === (conn.socket.OPEN ?? 1)) {
+      if (conn.socket.readyState === conn.socket.OPEN) {
         conn.socket.send(dataString);
         sentCount++;
       }
@@ -137,7 +137,7 @@ export class ConnectorService {
 
   public isAgentConnected(agentId: string): boolean {
     const connections = connectionManager.getAuthenticatedAgentConnections(agentId);
-    return connections.some((c) => c.socket.readyState === (c.socket.OPEN ?? 1));
+    return connections.some((c) => c.socket.readyState === c.socket.OPEN);
   }
 
   public async notifyTaskCancelled(
