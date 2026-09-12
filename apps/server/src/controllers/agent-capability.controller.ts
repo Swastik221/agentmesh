@@ -3,7 +3,7 @@ import { AuthenticatedRequest } from '../auth/auth.types.js';
 import { agentCapabilityService } from '../services/agent-capability.service.js';
 import { addCapabilitySchema } from '../schemas/agent-capability.schema.js';
 import { prisma } from '../lib/prisma.js';
-import { ForbiddenError, NotFoundError, UnauthorizedError } from '../errors/app-error.js';
+import { ForbiddenError, NotFoundError, UnauthorizedError, ConflictError } from '../errors/app-error.js';
 import { policyService } from '../services/policy.service.js';
 import { PolicyDecision } from '@prisma/client';
 import { paymentService } from '../payments/payment.service.js';
@@ -293,21 +293,42 @@ export const executePaidCapability = async (
       requireRealAgent: true,
     };
 
-    const execution = await executionService.createExecutionBypassingPolicy(
-      agent.projectId,
-      taskId,
-      actorUserId,
-      {
-        agentId,
-        input: executionInput,
-      },
-    );
+    let execution;
+    try {
+      execution = await executionService.createExecutionBypassingPolicy(
+        agent.projectId,
+        taskId,
+        actorUserId,
+        {
+          agentId,
+          input: executionInput,
+        },
+      );
 
-    // Update payment record with executionId
-    await prisma.payment.update({
-      where: { id: settledPayment.id },
-      data: { executionId: execution.id },
-    });
+      // Update payment record with executionId
+      await prisma.payment.update({
+        where: { id: settledPayment.id },
+        data: { executionId: execution.id },
+      });
+    } catch (err) {
+      if (err instanceof ConflictError || (err as { statusCode?: number })?.statusCode === 409) {
+        const latestExec = await prisma.taskExecution.findFirst({
+          where: { taskId },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (latestExec) {
+          execution = latestExec;
+          await prisma.payment.update({
+            where: { id: settledPayment.id },
+            data: { executionId: execution.id },
+          }).catch(() => {});
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
 
     if (!isConnected) {
       // Disconnected agent: payment SETTLED, execution FAILED / AGENT_UNAVAILABLE (Section 13 & 14)
