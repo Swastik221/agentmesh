@@ -11,6 +11,7 @@ export const createInvitationSchema = z.object({
       message: 'Target wallet address or ENS name must be at least 3 characters',
     }),
   role: projectRoleEnum.optional().default(ProjectRole.MEMBER),
+  expiresAt: z.string().optional(),
 });
 
 export type CreateInvitationInput = z.infer<typeof createInvitationSchema>;

@@ -112,41 +112,57 @@ export class InvitationService {
       return existingPending;
     }
 
-    const invitation = await prisma.projectInvitation.create({
-      data: {
-        projectId,
-        inviterUserId,
-        invitedWallet: canonicalWallet,
-        role: data.role || ProjectRole.MEMBER,
-        status: InvitationStatus.PENDING,
-      },
-      include: {
-        project: true,
-        inviterUser: true,
-      },
-    });
-
-    // WS broadcast & Activity log
     try {
-      await activityService.recordActivity(projectId, {
-        type: 'invitation.created',
-        actorType: 'human',
-        actorId: inviterUserId,
-        payload: {
-          invitationId: invitation.id,
-          invitedWallet: invitation.invitedWallet,
-          role: invitation.role,
+      const invitation = await prisma.projectInvitation.create({
+        data: {
+          projectId,
+          inviterUserId,
+          invitedWallet: canonicalWallet,
+          role: data.role || ProjectRole.MEMBER,
+          status: InvitationStatus.PENDING,
+          expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
+        },
+        include: {
+          project: true,
+          inviterUser: true,
         },
       });
-      connectionManager.broadcastToProject(projectId, {
-        type: 'invitation.created',
-        payload: invitation,
-      } as unknown as WebSocketMessage);
-    } catch {
-      // Activity/WS log is best effort
-    }
 
-    return invitation;
+      // WS broadcast & Activity log
+      try {
+        await activityService.recordActivity(projectId, {
+          type: 'invitation.created',
+          actorType: 'human',
+          actorId: inviterUserId,
+          payload: {
+            invitationId: invitation.id,
+            invitedWallet: invitation.invitedWallet,
+            role: invitation.role,
+          },
+        });
+        connectionManager.broadcastToProject(projectId, {
+          type: 'invitation.created',
+          payload: invitation,
+        } as unknown as WebSocketMessage);
+      } catch {
+        // Activity/WS log is best effort
+      }
+
+      return invitation;
+    } catch (err: unknown) {
+      // If DB unique constraint fails due to concurrent creation
+      if (typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'P2002') {
+        const found = await prisma.projectInvitation.findFirst({
+          where: {
+            projectId,
+            invitedWallet: canonicalWallet,
+            status: InvitationStatus.PENDING,
+          },
+        });
+        if (found) return found;
+      }
+      throw err;
+    }
   }
 
   async listPendingInvitationsForUser(userId: string): Promise<ProjectInvitation[]> {
@@ -225,6 +241,17 @@ export class InvitationService {
       throw new ForbiddenError('Authenticated wallet does not match invitation recipient');
     }
 
+    // Check expiry
+    if (invitation.status === InvitationStatus.EXPIRED || (invitation.expiresAt && invitation.expiresAt < new Date())) {
+      if (invitation.status !== InvitationStatus.EXPIRED) {
+        await prisma.projectInvitation.update({
+          where: { id: invitationId },
+          data: { status: InvitationStatus.EXPIRED },
+        }).catch(() => {});
+      }
+      throw new BadRequestError('Invitation has expired');
+    }
+
     // Idempotency: If already ACCEPTED, verify membership exists and return
     if (invitation.status === InvitationStatus.ACCEPTED) {
       await prisma.projectMember.upsert({
@@ -248,12 +275,33 @@ export class InvitationService {
       throw new ConflictError(`Invitation is no longer pending (status: '${invitation.status}')`);
     }
 
-    // Atomic transaction for accepting invitation and adding member (Section 12 & 13)
+    // Atomic transaction for accepting invitation and adding member
     const updatedInvitation = await prisma.$transaction(async (tx) => {
-      // Re-verify PENDING status inside transaction
       const current = await tx.projectInvitation.findUnique({ where: { id: invitationId } });
-      if (!current || current.status !== InvitationStatus.PENDING) {
-        throw new ConflictError('Invitation status modified concurrently');
+      if (!current) {
+        throw new NotFoundError(`Invitation with ID '${invitationId}' not found`);
+      }
+
+      if (current.status === InvitationStatus.ACCEPTED) {
+        await tx.projectMember.upsert({
+          where: {
+            projectId_userId: {
+              projectId: invitation.projectId,
+              userId,
+            },
+          },
+          create: {
+            projectId: invitation.projectId,
+            userId,
+            role: invitation.role,
+          },
+          update: {},
+        });
+        return current;
+      }
+
+      if (current.status !== InvitationStatus.PENDING) {
+        throw new ConflictError(`Invitation is no longer pending (status: '${current.status}')`);
       }
 
       await tx.projectMember.upsert({

@@ -800,7 +800,13 @@ describe('PRD-56 Real Agent Execution Hardening Integration Tests', () => {
       attempts++;
     }
 
-    agentCheck = await prisma.agent.findUnique({ where: { id: agent.id } });
+    let onlineAttempts = 0;
+    while (onlineAttempts < 20) {
+      agentCheck = await prisma.agent.findUnique({ where: { id: agent.id } });
+      if (agentCheck?.status === 'ONLINE') break;
+      await new Promise((r) => setTimeout(r, 100));
+      onlineAttempts++;
+    }
     expect(agentCheck?.status).toBe('ONLINE');
 
     agentWs.close();

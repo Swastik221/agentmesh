@@ -95,6 +95,7 @@ model ProjectInvitation {
   @@index([projectId])
   @@index([invitedWallet])
   @@index([status])
+  @@unique([projectId, invitedWallet, status])
   @@map("project_invitations")
 }
 
