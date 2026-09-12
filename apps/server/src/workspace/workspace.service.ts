@@ -133,14 +133,24 @@ export class WorkspaceService {
       throw new NotFoundError('Task not found in this project');
     }
 
-    const workspace = await prisma.projectWorkspace.upsert({
+    let workspace = await prisma.projectWorkspace.findUnique({
       where: { projectId },
-      create: {
-        projectId,
-        rootPath: `workspaces/${projectId}`,
-      },
-      update: {},
     });
+
+    if (!workspace) {
+      workspace = await prisma.projectWorkspace.upsert({
+        where: { projectId },
+        create: {
+          projectId,
+          rootPath: `workspaces/${projectId}`,
+        },
+        update: {},
+      }).catch(() =>
+        prisma.projectWorkspace.findUniqueOrThrow({
+          where: { projectId },
+        }),
+      );
+    }
 
     let workingDirectory = workspace.rootPath;
 

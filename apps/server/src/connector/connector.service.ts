@@ -126,7 +126,7 @@ export class ConnectorService {
     let sentCount = 0;
 
     for (const conn of connections) {
-      if (conn.socket.readyState === conn.socket.OPEN) {
+      if (conn.socket.readyState === (conn.socket.OPEN ?? 1)) {
         conn.socket.send(dataString);
         sentCount++;
       }
@@ -137,7 +137,7 @@ export class ConnectorService {
 
   public isAgentConnected(agentId: string): boolean {
     const connections = connectionManager.getAuthenticatedAgentConnections(agentId);
-    return connections.some((c) => c.socket.readyState === c.socket.OPEN);
+    return connections.some((c) => c.socket.readyState === (c.socket.OPEN ?? 1));
   }
 
   public async notifyTaskCancelled(
@@ -286,6 +286,14 @@ export class ConnectorService {
         }
 
         try {
+          // Update result output on execution record if provided before marking COMPLETED
+          if (result !== undefined && result !== null) {
+            await prisma.taskExecution.update({
+              where: { id: targetExecId },
+              data: { output: result as unknown as import('@prisma/client').Prisma.InputJsonValue },
+            }).catch(() => {});
+          }
+
           await executionService.updateExecutionStatus(
             metadata.projectId,
             taskId,
@@ -293,14 +301,6 @@ export class ConnectorService {
             metadata.userId,
             ExecutionStatus.COMPLETED,
           );
-
-          // Update result output on execution record if provided
-          if (result !== undefined && result !== null) {
-            await prisma.taskExecution.update({
-              where: { id: targetExecId },
-              data: { output: result as unknown as import('@prisma/client').Prisma.InputJsonValue },
-            }).catch(() => {});
-          }
         } catch (err: unknown) {
           // Idempotency: if execution is already terminal or cancelled, do not throw
           logger.info(`Connector TASK_COMPLETED handled idempotently for ${targetExecId}: ${String(err)}`);
