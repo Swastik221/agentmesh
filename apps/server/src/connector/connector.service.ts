@@ -285,6 +285,82 @@ export class ConnectorService {
           };
         }
 
+        const targetExec = await prisma.taskExecution.findUnique({
+          where: { id: targetExecId },
+          include: { task: true },
+        });
+
+        if (!targetExec) {
+          return {
+            success: false,
+            error: createAgentMeshMessage({
+              type: AgentMeshMessageType.ERROR,
+              projectId: metadata.projectId,
+              senderId: 'server',
+              payload: {
+                code: 'EXECUTION_NOT_FOUND',
+                message: `Execution '${targetExecId}' not found`,
+              },
+            }),
+          };
+        }
+
+        // Correlation Checks
+        if (targetExec.agentId !== metadata.agentId) {
+          return {
+            success: false,
+            error: createAgentMeshMessage({
+              type: AgentMeshMessageType.ERROR,
+              projectId: metadata.projectId,
+              senderId: 'server',
+              payload: {
+                code: 'AGENT_NOT_AUTHORIZED',
+                message: `Execution '${targetExecId}' belongs to agent '${targetExec.agentId}', not '${metadata.agentId}'`,
+              },
+            }),
+          };
+        }
+
+        if (targetExec.taskId !== taskId) {
+          return {
+            success: false,
+            error: createAgentMeshMessage({
+              type: AgentMeshMessageType.ERROR,
+              projectId: metadata.projectId,
+              senderId: 'server',
+              payload: {
+                code: 'TASK_MISMATCH',
+                message: `Execution '${targetExecId}' belongs to task '${targetExec.taskId}', not '${taskId}'`,
+              },
+            }),
+          };
+        }
+
+        if (targetExec.task.projectId !== metadata.projectId) {
+          return {
+            success: false,
+            error: createAgentMeshMessage({
+              type: AgentMeshMessageType.ERROR,
+              projectId: metadata.projectId,
+              senderId: 'server',
+              payload: {
+                code: 'PROJECT_MISMATCH',
+                message: `Task belongs to project '${targetExec.task.projectId}', not '${metadata.projectId}'`,
+              },
+            }),
+          };
+        }
+
+        // Idempotency: Ignore already-terminal executions
+        if (
+          targetExec.status === ExecutionStatus.COMPLETED ||
+          targetExec.status === ExecutionStatus.FAILED ||
+          targetExec.status === ExecutionStatus.CANCELLED
+        ) {
+          logger.info(`Connector TASK_COMPLETED ignored for already terminal execution ${targetExecId}`);
+          return { success: true };
+        }
+
         try {
           // Update result output on execution record if provided before marking COMPLETED
           if (result !== undefined && result !== null) {
@@ -325,6 +401,82 @@ export class ConnectorService {
               },
             }),
           };
+        }
+
+        const targetExec = await prisma.taskExecution.findUnique({
+          where: { id: targetExecId },
+          include: { task: true },
+        });
+
+        if (!targetExec) {
+          return {
+            success: false,
+            error: createAgentMeshMessage({
+              type: AgentMeshMessageType.ERROR,
+              projectId: metadata.projectId,
+              senderId: 'server',
+              payload: {
+                code: 'EXECUTION_NOT_FOUND',
+                message: `Execution '${targetExecId}' not found`,
+              },
+            }),
+          };
+        }
+
+        // Correlation Checks
+        if (targetExec.agentId !== metadata.agentId) {
+          return {
+            success: false,
+            error: createAgentMeshMessage({
+              type: AgentMeshMessageType.ERROR,
+              projectId: metadata.projectId,
+              senderId: 'server',
+              payload: {
+                code: 'AGENT_NOT_AUTHORIZED',
+                message: `Execution '${targetExecId}' belongs to agent '${targetExec.agentId}', not '${metadata.agentId}'`,
+              },
+            }),
+          };
+        }
+
+        if (targetExec.taskId !== taskId) {
+          return {
+            success: false,
+            error: createAgentMeshMessage({
+              type: AgentMeshMessageType.ERROR,
+              projectId: metadata.projectId,
+              senderId: 'server',
+              payload: {
+                code: 'TASK_MISMATCH',
+                message: `Execution '${targetExecId}' belongs to task '${targetExec.taskId}', not '${taskId}'`,
+              },
+            }),
+          };
+        }
+
+        if (targetExec.task.projectId !== metadata.projectId) {
+          return {
+            success: false,
+            error: createAgentMeshMessage({
+              type: AgentMeshMessageType.ERROR,
+              projectId: metadata.projectId,
+              senderId: 'server',
+              payload: {
+                code: 'PROJECT_MISMATCH',
+                message: `Task belongs to project '${targetExec.task.projectId}', not '${metadata.projectId}'`,
+              },
+            }),
+          };
+        }
+
+        // Idempotency: Ignore already-terminal executions
+        if (
+          targetExec.status === ExecutionStatus.COMPLETED ||
+          targetExec.status === ExecutionStatus.FAILED ||
+          targetExec.status === ExecutionStatus.CANCELLED
+        ) {
+          logger.info(`Connector TASK_FAILED ignored for already terminal execution ${targetExecId}`);
+          return { success: true };
         }
 
         try {

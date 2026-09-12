@@ -74,7 +74,7 @@ export class ExecutionService {
     targetStatus: ExecutionStatus,
   ): void {
     const allowedTransitions: Record<ExecutionStatus, ExecutionStatus[]> = {
-      QUEUED: ['RUNNING', 'CANCELLED'],
+      QUEUED: ['RUNNING', 'CANCELLED', 'FAILED'],
       RUNNING: ['COMPLETED', 'FAILED', 'CANCELLED'],
       COMPLETED: [],
       FAILED: [],
@@ -97,14 +97,29 @@ export class ExecutionService {
       },
     });
 
-    let finalStatus: 'ONLINE' | 'BUSY';
+    let finalStatus: 'ONLINE' | 'BUSY' | 'OFFLINE';
 
     if (activeExecutionsCount === 0) {
+      const { connectorService } = await import('../connector/connector.service.js');
+      const isConnected = connectorService.isAgentConnected(agentId);
+
+      const currentAgent = await prisma.agent.findUnique({
+        where: { id: agentId },
+        select: { status: true, provider: true },
+      });
+
+      if (isConnected) {
+        finalStatus = 'ONLINE';
+      } else if (currentAgent?.status === 'OFFLINE') {
+        finalStatus = 'OFFLINE';
+      } else {
+        finalStatus = 'ONLINE';
+      }
+
       await prisma.agent.update({
         where: { id: agentId },
-        data: { status: 'ONLINE' },
+        data: { status: finalStatus },
       });
-      finalStatus = 'ONLINE';
 
       // Post-update re-check to guarantee zero race condition where an execution
       // became active (QUEUED or RUNNING) concurrently during the ONLINE update window.
@@ -130,12 +145,6 @@ export class ExecutionService {
       finalStatus = 'BUSY';
     }
 
-    // This ONLINE/BUSY flip (driven by execution activity, not a direct
-    // human edit) previously broadcast nothing at all, confirmed by grep
-    // showing zero broadcast/delta calls anywhere in agent.service.ts and
-    // this file alike: a project member watching a real-time agent roster
-    // never saw an agent go BUSY when it picked up work, or back ONLINE
-    // when it finished, without an unrelated refetch.
     const agentForBroadcast = await prisma.agent.findUnique({
       where: { id: agentId },
       select: { projectId: true },
@@ -150,6 +159,150 @@ export class ExecutionService {
         },
       ]);
     }
+  }
+
+  public async handleAgentDisconnectExecutions(agentId: string): Promise<void> {
+    const activeExecutions = await prisma.taskExecution.findMany({
+      where: {
+        agentId,
+        status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
+      },
+      include: {
+        task: {
+          select: { projectId: true },
+        },
+      },
+    });
+
+    for (const exec of activeExecutions) {
+      try {
+        let updatedCount = 0;
+        let taskSyncedToFailed = false;
+
+        await prisma.$transaction(async (tx) => {
+          const updateResult = await tx.taskExecution.updateMany({
+            where: {
+              id: exec.id,
+              status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
+            },
+            data: {
+              status: ExecutionStatus.FAILED,
+              error: 'Agent disconnected during execution',
+              completedAt: new Date(),
+            },
+          });
+          updatedCount = updateResult.count;
+
+          if (updatedCount > 0) {
+            const latestExecution = await tx.taskExecution.findFirst({
+              where: { taskId: exec.taskId },
+              orderBy: { createdAt: 'desc' },
+            });
+
+            if (latestExecution && latestExecution.id === exec.id) {
+              await tx.task.update({
+                where: { id: exec.taskId },
+                data: { status: 'FAILED' },
+              });
+              taskSyncedToFailed = true;
+            }
+          }
+        });
+
+        if (updatedCount > 0 && exec.task.projectId) {
+          await this.broadcastExecutionStatus(
+            exec.task.projectId,
+            exec.id,
+            exec.taskId,
+            exec.agentId,
+            ExecutionStatus.FAILED,
+            'updated',
+          );
+          if (taskSyncedToFailed) {
+            await taskService.broadcastTaskStatusEvent(exec.task.projectId, exec.taskId, 'FAILED');
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to handle disconnected execution ${exec.id}:`, err);
+      }
+    }
+
+    await this.syncAgentStatus(agentId);
+  }
+
+  public async failTimedOutExecutions(timeoutMs = 300000): Promise<number> {
+    const cutoff = new Date(Date.now() - timeoutMs);
+
+    const staleExecutions = await prisma.taskExecution.findMany({
+      where: {
+        status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
+        createdAt: { lt: cutoff },
+      },
+      include: {
+        task: { select: { projectId: true } },
+      },
+    });
+
+    let failedCount = 0;
+
+    for (const exec of staleExecutions) {
+      try {
+        let updatedCount = 0;
+        let taskSyncedToFailed = false;
+
+        await prisma.$transaction(async (tx) => {
+          const updateResult = await tx.taskExecution.updateMany({
+            where: {
+              id: exec.id,
+              status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
+            },
+            data: {
+              status: ExecutionStatus.FAILED,
+              error: 'EXECUTION_TIMEOUT',
+              completedAt: new Date(),
+            },
+          });
+          updatedCount = updateResult.count;
+
+          if (updatedCount > 0) {
+            const latestExecution = await tx.taskExecution.findFirst({
+              where: { taskId: exec.taskId },
+              orderBy: { createdAt: 'desc' },
+            });
+
+            if (latestExecution && latestExecution.id === exec.id) {
+              await tx.task.update({
+                where: { id: exec.taskId },
+                data: { status: 'FAILED' },
+              });
+              taskSyncedToFailed = true;
+            }
+          }
+        });
+
+        if (updatedCount > 0) {
+          failedCount++;
+          if (exec.task.projectId) {
+            await this.broadcastExecutionStatus(
+              exec.task.projectId,
+              exec.id,
+              exec.taskId,
+              exec.agentId,
+              ExecutionStatus.FAILED,
+              'updated',
+            );
+            if (taskSyncedToFailed) {
+              await taskService.broadcastTaskStatusEvent(exec.task.projectId, exec.taskId, 'FAILED');
+            }
+          }
+          await this.syncAgentStatus(exec.agentId);
+        }
+      } catch (err) {
+        console.error(`Error failing timed out execution ${exec.id}:`, err);
+      }
+    }
+
+    return failedCount;
   }
 
   async createExecution(
@@ -833,9 +986,14 @@ export class ExecutionService {
     this.validateStateTransition(execution.status, targetStatus);
 
     let syncedTaskStatus: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | null = null;
-    const updated = await prisma.$transaction(async (tx) => {
-      const updatedExec = await tx.taskExecution.update({
-        where: { id: executionId },
+    let updatedCount = 0;
+
+    await prisma.$transaction(async (tx) => {
+      const updateResult = await tx.taskExecution.updateMany({
+        where: {
+          id: executionId,
+          status: { in: [ExecutionStatus.QUEUED, ExecutionStatus.RUNNING] },
+        },
         data: {
           status: targetStatus,
           ...(error !== undefined && { error }),
@@ -846,11 +1004,12 @@ export class ExecutionService {
             completedAt: new Date(),
           }),
         },
-        include: {
-          agent: true,
-          task: true,
-        },
       });
+
+      updatedCount = updateResult.count;
+      if (updatedCount === 0) {
+        return;
+      }
 
       // Apply Task state sync if latest
       const latestExecution = await tx.taskExecution.findFirst({
@@ -872,8 +1031,20 @@ export class ExecutionService {
           await tx.task.update({ where: { id: taskId }, data: { status: syncedTaskStatus } });
         }
       }
+    });
 
-      return updatedExec;
+    if (updatedCount === 0) {
+      throw new ConflictError(
+        `Invalid execution state transition from '${execution.status}' to '${targetStatus}'`,
+      );
+    }
+
+    const updated = await prisma.taskExecution.findUniqueOrThrow({
+      where: { id: executionId },
+      include: {
+        agent: true,
+        task: true,
+      },
     });
 
     // This is the connector's own status-report path (agent-reported
