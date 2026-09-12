@@ -10,6 +10,7 @@ import {
   PanelLeftOpen,
   Terminal,
   StickyNote,
+  Users,
 } from 'lucide-react';
 import { NavItem, type NavItemIconProps } from './NavItem';
 import { navItems } from '../../data/workspace';
@@ -21,6 +22,7 @@ const SECTION_ICONS: Record<SectionId, ComponentType<NavItemIconProps>> = {
   tasks: ListChecks,
   files: FolderTree,
   activity: Activity,
+  team: Users,
   terminal: Terminal,
   browser: Globe,
   notes: StickyNote,
