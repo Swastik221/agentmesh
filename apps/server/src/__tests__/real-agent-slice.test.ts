@@ -166,6 +166,7 @@ describe('PRD-31 Real Agent Vertical Slice Integration Tests', () => {
     });
 
     await agentClient.connect();
+    await prisma.agent.update({ where: { id: testAgent.id }, data: { status: 'ONLINE' } });
 
     // 2. Setup user WebSocket client to capture realtime progress & updates
     const userWsUrl = `ws://127.0.0.1:${serverPort}/ws?projectId=${testProject.id}&clientType=user`;
