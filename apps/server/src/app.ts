@@ -19,7 +19,6 @@ import activityRouter from './routes/activity.router.js';
 import policyRouter from './routes/policy.router.js';
 import approvalRouter from './routes/approval.router.js';
 import { paymentRouter, projectPaymentRouter } from './routes/payment.router.js';
-import { demoRouter } from './routes/demo.router.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { config } from './config/index.js';
 
@@ -54,7 +53,6 @@ export const createApp = (): Express => {
   app.use('/', approvalRouter);
   app.use('/', paymentRouter);
   app.use('/projects/:projectId', projectPaymentRouter);
-  app.use('/', demoRouter);
 
   app.use(errorHandler);
 

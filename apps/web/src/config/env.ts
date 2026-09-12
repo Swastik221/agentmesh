@@ -1,11 +1,11 @@
 /**
- * AgentMesh Environment & Runtime Mode Configuration
+ * AgentMesh Environment Configuration
  *
- * Provides central configuration for API endpoints, WebSocket servers, and
- * the active application execution mode (Demo vs Live).
+ * Provides central configuration for API endpoints and WebSocket servers.
+ * Product mode is strictly LIVE.
  */
 
-export type AppMode = 'demo' | 'live';
+export type AppMode = 'live';
 
 interface EnvConfig {
   apiUrl: string;
@@ -20,9 +20,6 @@ const getEnvVar = (key: string, defaultValue: string): string => {
   return defaultValue;
 };
 
-// Internal mutable mode state for runtime switching (e.g. dev toggles)
-let currentMode: AppMode = (getEnvVar('VITE_APP_MODE', 'demo') as AppMode) === 'live' ? 'live' : 'demo';
-
 export const envConfig: EnvConfig = {
   get apiUrl(): string {
     return getEnvVar('VITE_API_URL', 'http://localhost:3001');
@@ -31,28 +28,21 @@ export const envConfig: EnvConfig = {
     return getEnvVar('VITE_WS_URL', 'ws://localhost:3001');
   },
   get mode(): AppMode {
-    return currentMode;
+    return 'live';
   },
 };
 
 /**
- * Get current active app mode ('demo' | 'live')
+ * Get current active app mode (always 'live')
  */
-export const getAppMode = (): AppMode => currentMode;
+export const getAppMode = (): AppMode => 'live';
 
 /**
- * Set current active app mode ('demo' | 'live')
+ * Check if app is running in Demo Mode (always false)
  */
-export const setAppMode = (mode: AppMode): void => {
-  currentMode = mode;
-};
+export const isDemoMode = (): boolean => false;
 
 /**
- * Check if app is running in Demo Mode
+ * Check if app is running in Live Mode (always true)
  */
-export const isDemoMode = (): boolean => currentMode === 'demo';
-
-/**
- * Check if app is running in Live Mode
- */
-export const isLiveMode = (): boolean => currentMode === 'live';
+export const isLiveMode = (): boolean => true;

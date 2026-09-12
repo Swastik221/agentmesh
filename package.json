@@ -14,7 +14,6 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "demo:e2e": "pnpm --filter @agentmesh/server exec vitest run src/__tests__/e2e-killer-demo.test.ts",
-    "demo:e2e:live": "pnpm --filter @agentmesh/server exec tsx src/demo/run-live-demo.ts",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "db:generate": "turbo run db:generate",
     "db:migrate": "turbo run db:migrate",

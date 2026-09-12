@@ -1,15 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { prisma } from '../lib/prisma.js';
-import { demoOrchestrator, DemoStage } from '../demo/demo-orchestrator.js';
-import { PolicyDecision, PaymentStatus, ApprovalStatus } from '@prisma/client';
+import { PolicyDecision, ApprovalStatus } from '@prisma/client';
 import { policyService } from '../services/policy.service.js';
 import { approvalService } from '../services/approval.service.js';
 import { artifactService } from '../services/artifact.service.js';
 import { sessionService } from '../auth/session.service.js';
+import { dependencyService } from '../services/dependency.service.js';
 
-describe('PRD-38 Killer Two-Agent E2E Demo Integration Test', () => {
+describe('Real Two-Agent E2E Workflow & Security Integration Tests', () => {
   beforeEach(async () => {
-    // Clean database tables safely
     await prisma.taskDependency.deleteMany().catch(() => {});
     await prisma.artifact.deleteMany().catch(() => {});
     await prisma.payment.deleteMany().catch(() => {});
@@ -41,87 +40,114 @@ describe('PRD-38 Killer Two-Agent E2E Demo Integration Test', () => {
     await prisma.user.deleteMany().catch(() => {});
   });
 
-  it('1. Complete 15-Stage E2E Workflow: Identity → ENS → Agent A → Task → Policy → Approval → x402 → Hedera → Execution → Artifact A → Exchange → Agent B → Artifact B', async () => {
-    const result = await demoOrchestrator.runDemo({ mockHederaSettlement: true });
-
-    // Assert all 15 stage labels are present in exact order
-    const expectedStages: DemoStage[] = [
-      'IDENTITY_VERIFIED',
-      'AGENTS_READY',
-      'TASK_CREATED',
-      'POLICY_APPROVAL_REQUIRED',
-      'EXECUTION_BLOCKED',
-      'APPROVAL_CREATED',
-      'APPROVAL_APPROVED',
-      'PAYMENT_REQUIRED',
-      'PAYMENT_VERIFIED',
-      'PAYMENT_SETTLED',
-      'CAPABILITY_EXECUTED',
-      'ARTIFACT_CREATED',
-      'ARTIFACT_EXCHANGED',
-      'AGENT_B_PROCESSED',
-      'DEMO_COMPLETE',
-    ];
-
-    expect(result.stages).toEqual(expectedStages);
-
-    // Database assertions: Phase A (Identity)
-    const user = await prisma.user.findUnique({ where: { id: result.userId } });
-    expect(user).toBeDefined();
-    const session = await sessionService.validateSession(result.sessionId);
-    expect(session.user.id).toBe(result.userId);
-
-    // Database assertions: Phase B (Agents & Project)
-    const project = await prisma.project.findUnique({ where: { id: result.projectId } });
-    expect(project).toBeDefined();
-
-    const agentA = await prisma.agent.findUnique({ where: { id: result.agentAId } });
-    expect(agentA?.projectId).toBe(result.projectId);
-    expect(agentA?.ensName).toBe('researcher.eth');
-
-    const agentB = await prisma.agent.findUnique({ where: { id: result.agentBId } });
-    expect(agentB?.projectId).toBe(result.projectId);
-
-    // Database assertions: Phase C (Task)
-    const task = await prisma.task.findUnique({ where: { id: result.taskId } });
-    expect(task?.preferredAgentId).toBe(result.agentAId);
-
-    // Database assertions: Phase D & E (Policy & Approval)
-    const policy = await prisma.policy.findUnique({ where: { id: result.policyId } });
-    expect(policy?.decision).toBe(PolicyDecision.APPROVAL_REQUIRED);
-
-    const approval = await prisma.approvalRequest.findUnique({ where: { id: result.approvalId } });
-    expect(approval?.status).toBe(ApprovalStatus.APPROVED);
-    expect(approval?.requestedByUserId).toBe(result.userId);
-    expect(approval?.resolvedByUserId).toBe(result.userId);
-
-    // Database assertions: Phase F (x402 Payment & Hedera Settlement)
-    const payment = await prisma.payment.findUnique({ where: { id: result.paymentId } });
-    expect(payment?.status).toBe(PaymentStatus.SETTLED);
-    expect(payment?.transactionReference).toBe(result.transactionReference);
-    expect(payment?.transactionReference).toBe('MOCK-HEDERA-SETTLEMENT');
-
-    // Database assertions: Phase H (Artifact A by Agent A)
-    const artifactA = await prisma.artifact.findUnique({ where: { id: result.artifactAId } });
-    expect(artifactA?.agentId).toBe(result.agentAId);
-    expect(artifactA?.type).toBe('audit_report');
-
-    // Database assertions: Phase I (Agent-to-Agent Exchange Dependency)
-    const dependency = await prisma.taskDependency.findFirst({
-      where: { artifactId: result.artifactAId },
+  it('1. Complete Real Two-Agent E2E Workflow: Identity → Project → Agent A & B → Policy → Approval → Artifact Exchange', async () => {
+    // 1. Identity & SIWE Session
+    const user = await prisma.user.create({
+      data: {
+        walletAddress: '0x1111111111111111111111111111111111111111',
+        displayName: 'Real Researcher',
+      },
     });
-    expect(dependency).toBeDefined();
+    const session = await sessionService.createSession(user.id);
+    expect(session.id).toBeDefined();
 
-    // Database assertions: Phase J (Artifact B by Agent B)
-    const artifactB = await prisma.artifact.findUnique({ where: { id: result.artifactBId } });
-    expect(artifactB?.agentId).toBe(result.agentBId);
-    expect(artifactB?.type).toBe('remediation_plan');
-    const payloadB = artifactB?.payload as { sourceArtifactId: string };
-    expect(payloadB.sourceArtifactId).toBe(result.artifactAId);
+    // 2. Project Creation & Member
+    const project = await prisma.project.create({
+      data: { name: 'E2E Real Project', ownerId: user.id },
+    });
+    await prisma.projectMember.create({
+      data: { projectId: project.id, userId: user.id, role: 'OWNER' },
+    });
+
+    // 3. Register Agents A & B
+    const agentA = await prisma.agent.create({
+      data: {
+        name: 'Agent A (Audit)',
+        provider: 'real-agent-provider',
+        projectId: project.id,
+        ownerId: user.id,
+        ensName: 'researcher.eth',
+        status: 'ONLINE',
+      },
+    });
+    const agentB = await prisma.agent.create({
+      data: {
+        name: 'Agent B (Remediate)',
+        provider: 'real-agent-provider',
+        projectId: project.id,
+        ownerId: user.id,
+        status: 'ONLINE',
+      },
+    });
+
+    // 4. Tasks & Policy & Approval
+    const taskA = await prisma.task.create({
+      data: {
+        projectId: project.id,
+        creatorId: user.id,
+        title: 'Audit Code',
+        description: 'Audit codebase for security vulnerabilities',
+        status: 'TODO',
+        preferredAgentId: agentA.id,
+      },
+    });
+    const taskB = await prisma.task.create({
+      data: {
+        projectId: project.id,
+        creatorId: user.id,
+        title: 'Remediate Code',
+        description: 'Apply security fixes based on audit',
+        status: 'TODO',
+        preferredAgentId: agentB.id,
+      },
+    });
+
+    const policy = await policyService.createPolicy(project.id, user.id, {
+      name: 'Require Approval for Audit Execution',
+      action: 'capability.execute',
+      enabled: true,
+      decision: PolicyDecision.APPROVAL_REQUIRED,
+    });
+
+    const evalBefore = await policyService.evaluateAction(project.id, 'capability.execute');
+    expect(evalBefore.decision).toBe(PolicyDecision.APPROVAL_REQUIRED);
+
+    const approval = await approvalService.createApprovalRequest(project.id, user.id, {
+      projectId: project.id,
+      action: 'capability.execute',
+      policyId: policy.id,
+      reason: 'Human approval for security audit',
+    });
+
+    const approved = await approvalService.approveRequest(approval.id, user.id);
+    expect(approved.status).toBe(ApprovalStatus.APPROVED);
+
+    // 5. Artifact A Creation & Exchange Dependency to Agent B
+    const artifactA = await artifactService.createArtifact(project.id, taskA.id, user.id, {
+      name: 'audit-report.json',
+      type: 'audit_report',
+      payload: { vulnerabilities: ['CVE-2026-001'] },
+      agentId: agentA.id,
+    });
+
+    const dependency = await dependencyService.createDependency(project.id, taskB.id, user.id, {
+      artifactId: artifactA.id,
+    });
+    expect(dependency.artifactId).toBe(artifactA.id);
+
+    // 6. Artifact B Creation by Agent B
+    const artifactB = await artifactService.createArtifact(project.id, taskB.id, user.id, {
+      name: 'remediation-plan.json',
+      type: 'remediation_plan',
+      payload: { sourceArtifactId: artifactA.id, fix: 'Patched CVE-2026-001' },
+      agentId: agentB.id,
+    });
+
+    expect(artifactB.agentId).toBe(agentB.id);
+    expect((artifactB.payload as { sourceArtifactId: string }).sourceArtifactId).toBe(artifactA.id);
   });
 
   it('2. Security & Failure-Proofing: Rejects pre-approval execution, cross-project approval, and unauthorized artifact access', async () => {
-    // Setup isolated user & project A
     const userA = await prisma.user.create({
       data: { walletAddress: '0x2222222222222222222222222222222222222222' },
     });
@@ -132,7 +158,6 @@ describe('PRD-38 Killer Two-Agent E2E Demo Integration Test', () => {
       data: { projectId: projA.id, userId: userA.id, role: 'OWNER' },
     });
 
-    // Create policy requiring approval
     const polA = await policyService.createPolicy(projA.id, userA.id, {
       name: 'Deny unapproved execution',
       action: 'task.execute',
@@ -140,11 +165,9 @@ describe('PRD-38 Killer Two-Agent E2E Demo Integration Test', () => {
       decision: PolicyDecision.APPROVAL_REQUIRED,
     });
 
-    // 1. Verify policy evaluation blocks execution before approval
     const evalBefore = await policyService.evaluateAction(projA.id, 'task.execute');
     expect(evalBefore.decision).toBe(PolicyDecision.APPROVAL_REQUIRED);
 
-    // 2. Setup isolated user B & project B
     const userB = await prisma.user.create({
       data: { walletAddress: '0x3333333333333333333333333333333333333333' },
     });
@@ -156,12 +179,10 @@ describe('PRD-38 Killer Two-Agent E2E Demo Integration Test', () => {
       reason: 'Requires approval',
     });
 
-    // Verify non-member user B CANNOT approve User A request (Cross-project rejection)
     await expect(approvalService.approveRequest(appReqA.id, userB.id)).rejects.toThrow(
       'User is not a member of this project',
     );
 
-    // Create Agent A in Project A for artifact creation
     const agentA = await prisma.agent.create({
       data: {
         name: 'Agent A (Security Audit)',
@@ -172,7 +193,6 @@ describe('PRD-38 Killer Two-Agent E2E Demo Integration Test', () => {
       },
     });
 
-    // Verify non-member user B CANNOT access Project A artifacts
     const taskA = await prisma.task.create({
       data: {
         projectId: projA.id,

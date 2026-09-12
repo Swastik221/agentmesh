@@ -65,11 +65,10 @@ This is a working monorepo, not a finished product. Roughly:
 
 | Area | State |
 | --- | --- |
-| Server (Express + Prisma + `ws`) | Real. 435 tests. |
-| Protocol package | Real. 57 tests. 28 message types, Zod validated. |
-| CLI agent connector | Real, with a mock adapter and a real file writing adapter. 4 tests. |
-| Web app, demo mode | Real, deterministic, offline. Default mode. |
-| Web app, live mode | Real REST + WS against the server. 157 tests. |
+| Server (Express + Prisma + `ws`) | Real backend APIs & WebSocket hub. |
+| Protocol package | Real. 28 message types, Zod validated. |
+| CLI agent connector | Real BYOA agent connector. |
+| Web app | Real REST + WS against the server (wallet -> SIWE -> project -> real agents -> x402). |
 | SIWE wallet auth | Real (`siwe` v3, httpOnly cookie sessions). |
 | ENS agent identity | Real resolution and reverse resolution via `viem` against a public RPC. |
 | x402 / Hedera payments | Real testnet settlement through the official facilitator. Hard refuses non testnet. |
@@ -81,13 +80,13 @@ This is a working monorepo, not a finished product. Roughly:
 apps/
   server/     Express API + WebSocket hub + Prisma. The system of record.
   cli/        agentmesh connect, the BYOA agent connector.
-  web/        React 19 + Vite workspace UI (canvas, landing page, live/demo adapters).
+  web/        React 19 + Vite workspace UI (canvas, landing page, live adapters).
 packages/
   agent-protocol/   Transport agnostic message envelope, Zod schemas, builders, lifecycle rules.
   shared/           DTOs shared between server and web.
   ui/               Design tokens and a handful of primitives.
   config/           Base tsconfig.
-docs/         Architecture and protocol notes written alongside each PRD.
+docs/         Architecture and protocol notes.
 contracts/    Empty placeholder.
 scripts/      Empty placeholder.
 ```
@@ -107,10 +106,9 @@ pnpm --filter @agentmesh/server exec prisma db seed
 pnpm dev
 ```
 
-The web app boots in demo mode by default and never contacts the server. To run it against the real backend, create `apps/web/.env.local`:
+To configure the web app against a custom backend server, set `apps/web/.env.local`:
 
 ```env
-VITE_APP_MODE=live
 VITE_API_URL=http://localhost:3001
 VITE_WS_URL=ws://localhost:3001
 ```
