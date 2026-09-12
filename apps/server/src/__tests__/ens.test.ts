@@ -197,15 +197,17 @@ describe('PRD-34 Agent ENS API Integration Tests', () => {
     }
 
     // Users
-    const uA = await request(app).post('/users').send({ walletAddress: WALLET_A, displayName: 'Alice' });
-    userAId = uA.body.id;
-    await prisma.user.update({ where: { id: userAId }, data: { walletAddress: WALLET_A } });
+    const uA = await prisma.user.create({
+      data: { walletAddress: WALLET_A, displayName: 'Alice' },
+    });
+    userAId = uA.id;
     const sA = await sessionService.createSession(userAId);
     cookieA = `agentmesh_session=${sA.id}`;
 
-    const uB = await request(app).post('/users').send({ walletAddress: WALLET_B, displayName: 'Bob' });
-    userBId = uB.body.id;
-    await prisma.user.update({ where: { id: userBId }, data: { walletAddress: WALLET_B } });
+    const uB = await prisma.user.create({
+      data: { walletAddress: WALLET_B, displayName: 'Bob' },
+    });
+    userBId = uB.id;
     const sB = await sessionService.createSession(userBId);
     cookieB = `agentmesh_session=${sB.id}`;
 

@@ -29,6 +29,20 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
       }
       await prisma.user.delete({ where: { id: u.id } });
     }
+
+    const uA = await prisma.user.create({
+      data: { walletAddress: userAWallet, displayName: 'User Alice' },
+    });
+    userAId = uA.id;
+    const sessionA = await sessionService.createSession(userAId);
+    sessionCookieA = `agentmesh_session=${sessionA.id}`;
+
+    const uB = await prisma.user.create({
+      data: { walletAddress: userBWallet, displayName: 'User Bob' },
+    });
+    userBId = uB.id;
+    const sessionB = await sessionService.createSession(userBId);
+    sessionCookieB = `agentmesh_session=${sessionB.id}`;
   });
 
   afterAll(async () => {
@@ -46,91 +60,92 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
   });
 
   describe('User API', () => {
-    it('POST /users -> should create a new user', async () => {
-      const res = await request(app).post('/users').send({
-        walletAddress: userAWallet,
-        displayName: 'User Alice',
-      });
+    it('POST /users -> should return existing/updated authenticated user', async () => {
+      const res = await request(app)
+        .post('/users')
+        .set('Cookie', [sessionCookieA])
+        .send({
+          walletAddress: userAWallet,
+          displayName: 'User Alice Updated',
+        });
 
       expect(res.status).toBe(201);
-      expect(res.body.id).toBeDefined();
+      expect(res.body.id).toBe(userAId);
       expect(res.body.walletAddress).toBe(userAWallet);
-      expect(res.body.displayName).toBe('User Alice');
-
-      userAId = res.body.id;
-      const sessionA = await sessionService.createSession(userAId);
-      sessionCookieA = `agentmesh_session=${sessionA.id}`;
+      expect(res.body.displayName).toBe('User Alice Updated');
     });
 
-    it('POST /users -> should create a secondary user', async () => {
-      const res = await request(app).post('/users').send({
-        walletAddress: userBWallet,
-        displayName: 'User Bob',
-      });
+    it('POST /users -> should return 403 Forbidden for trying to create user with another walletAddress', async () => {
+      const res = await request(app)
+        .post('/users')
+        .set('Cookie', [sessionCookieA])
+        .send({
+          walletAddress: userBWallet,
+          displayName: 'Spoofed Bob',
+        });
 
-      expect(res.status).toBe(201);
-      userBId = res.body.id;
-      const sessionB = await sessionService.createSession(userBId);
-      sessionCookieB = `agentmesh_session=${sessionB.id}`;
-    });
-
-    it('POST /users -> should return 409 Conflict for duplicate walletAddress', async () => {
-      const res = await request(app).post('/users').send({
-        walletAddress: userAWallet,
-        displayName: 'Duplicate Alice',
-      });
-
-      expect(res.status).toBe(409);
-      expect(res.body.error).toBe('CONFLICT');
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('FORBIDDEN');
     });
 
     it('GET /users/:userId -> should return user by ID', async () => {
-      const res = await request(app).get(`/users/${userAId}`);
+      const res = await request(app)
+        .get(`/users/${userAId}`)
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(userAId);
-      expect(res.body.displayName).toBe('User Alice');
     });
 
     it('GET /users/:userId -> should return 404 for non-existent user', async () => {
-      const res = await request(app).get('/users/non-existent-user-id');
+      const res = await request(app)
+        .get('/users/non-existent-user-id')
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBe('NOT_FOUND');
     });
 
     it('GET /users/wallet/:walletAddress -> should return matching user', async () => {
-      const res = await request(app).get(`/users/wallet/${userAWallet}`);
+      const res = await request(app)
+        .get(`/users/wallet/${userAWallet}`)
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(userAId);
       expect(res.body.walletAddress).toBe(userAWallet);
     });
 
-    it('GET /users/wallet/:walletAddress -> should return 404 for unknown wallet', async () => {
-      const res = await request(app).get(
-        '/users/wallet/0x0000000000000000000000000000000000000000',
-      );
+    it('GET /users/wallet/:walletAddress -> should return 404 for unknown wallet matching caller', async () => {
+      const res = await request(app)
+        .get('/users/wallet/0x0000000000000000000000000000000000000000')
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBe('NOT_FOUND');
     });
 
     it('PATCH /users/:userId -> should update display name', async () => {
-      const res = await request(app).patch(`/users/${userAId}`).send({
-        displayName: 'Alice Updated',
-      });
+      const res = await request(app)
+        .patch(`/users/${userAId}`)
+        .set('Cookie', [sessionCookieA])
+        .send({
+          displayName: 'Alice Updated',
+        });
 
       expect(res.status).toBe(200);
       expect(res.body.displayName).toBe('Alice Updated');
     });
 
-    it('PATCH /users/:userId -> should return 404 for updating non-existent user', async () => {
-      const res = await request(app).patch('/users/non-existent-user-id').send({
-        displayName: 'Ghost',
-      });
+    it('PATCH /users/:userId -> should return 403 when updating another user profile', async () => {
+      const res = await request(app)
+        .patch(`/users/${userBId}`)
+        .set('Cookie', [sessionCookieA])
+        .send({
+          displayName: 'Ghost',
+        });
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
     });
   });
 
@@ -202,17 +217,22 @@ describe('PRD #3 User + Project System API Integration Tests', () => {
     });
 
     it('GET /users/:userId/projects -> should return projects where user is a member', async () => {
-      const res = await request(app).get(`/users/${userAId}/projects`);
+      const res = await request(app)
+        .get(`/users/${userAId}/projects`)
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body.length).toBeGreaterThanOrEqual(1);
-      expect(res.body[0].id).toBe(projectId);
-      expect(res.body[0].role).toBe('OWNER');
+      const matchingProj = res.body.find((p: { id: string }) => p.id === projectId);
+      expect(matchingProj).toBeDefined();
+      expect(matchingProj.role).toBe('OWNER');
     });
 
     it('GET /users/:userId/projects -> should return 404 if user does not exist', async () => {
-      const res = await request(app).get('/users/non-existent-user-id/projects');
+      const res = await request(app)
+        .get('/users/non-existent-user-id/projects')
+        .set('Cookie', [sessionCookieA]);
 
       expect(res.status).toBe(404);
     });

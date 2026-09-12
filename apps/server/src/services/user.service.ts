@@ -1,7 +1,7 @@
 import { User } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { CreateUserInput, UpdateUserInput } from '../schemas/user.schema.js';
-import { ConflictError, NotFoundError } from '../errors/app-error.js';
+import { NotFoundError } from '../errors/app-error.js';
 
 export class UserService {
   async createUser(data: CreateUserInput): Promise<User> {
@@ -10,7 +10,13 @@ export class UserService {
         where: { walletAddress: data.walletAddress },
       });
       if (existing) {
-        throw new ConflictError('A user with this wallet address already exists');
+        if (data.displayName && data.displayName !== existing.displayName) {
+          return await prisma.user.update({
+            where: { id: existing.id },
+            data: { displayName: data.displayName },
+          });
+        }
+        return existing;
       }
     }
 
@@ -20,6 +26,23 @@ export class UserService {
         displayName: data.displayName || null,
       },
     });
+  }
+
+  async areUsersInSameProject(userAId: string, userBId: string): Promise<boolean> {
+    if (userAId === userBId) return true;
+    const sharedMembership = await prisma.projectMember.findFirst({
+      where: {
+        userId: userAId,
+        project: {
+          members: {
+            some: {
+              userId: userBId,
+            },
+          },
+        },
+      },
+    });
+    return Boolean(sharedMembership);
   }
 
   async getUserById(id: string): Promise<User> {
