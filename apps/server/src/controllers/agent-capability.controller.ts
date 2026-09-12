@@ -177,7 +177,7 @@ export const executePaidCapability = async (
     // STEP 6: Idempotency check for existing execution associated with this settled payment (Section 17)
     let executionId = settledPayment.executionId;
     if (!executionId) {
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < 100; i++) {
         const reCheck = await prisma.payment.findUnique({
           where: { id: settledPayment.id },
           select: { executionId: true },
@@ -196,7 +196,7 @@ export const executePaidCapability = async (
       });
       let execAttempts = 0;
       while (
-        execAttempts < 40 &&
+        execAttempts < 50 &&
         existingExec &&
         (existingExec.status === 'QUEUED' || existingExec.status === 'RUNNING')
       ) {
