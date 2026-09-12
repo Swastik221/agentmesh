@@ -385,8 +385,10 @@ describe('PRD-31 Real Agent Vertical Slice Integration Tests', () => {
       name: 'Hanging Agent',
     });
 
+    let isExecuting = false;
     // Adapter that hangs during execution with unref'd timer
     hangingAdapter.executeTask = async (context: TaskExecutionContext) => {
+      isExecuting = true;
       if (context.onProgress) await context.onProgress(20, 'Execution started, hanging...');
       await new Promise((r) => {
         const timer = setTimeout(r, 60000);
@@ -424,12 +426,12 @@ describe('PRD-31 Real Agent Vertical Slice Integration Tests', () => {
       agentId: agentH.id,
     });
 
-    // Wait for execution to enter RUNNING via BYOA connector dispatch
+    // Wait for execution to enter RUNNING via BYOA connector dispatch and adapter to start executing
     let attempts = 0;
     while (attempts < 60) {
       await new Promise((r) => setTimeout(r, 100));
       const current = await prisma.taskExecution.findUnique({ where: { id: execution.id } });
-      if (current?.status === 'RUNNING') break;
+      if (current?.status === 'RUNNING' && isExecuting) break;
       attempts++;
     }
 
