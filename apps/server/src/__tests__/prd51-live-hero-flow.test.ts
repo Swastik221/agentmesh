@@ -137,6 +137,8 @@ describe('PRD-51 Final Live Hero Flow Integration Tests', () => {
     }
 
     if (testProject?.id) {
+      await prisma.approvalRequest.deleteMany({ where: { projectId: testProject.id } }).catch(() => {});
+      await prisma.policy.deleteMany({ where: { projectId: testProject.id } }).catch(() => {});
       await prisma.gitWorktree.deleteMany({ where: { workspace: { projectId: testProject.id } } }).catch(() => {});
       await prisma.artifact.deleteMany({ where: { projectId: testProject.id } }).catch(() => {});
       await prisma.taskExecution.deleteMany({ where: { task: { projectId: testProject.id } } }).catch(() => {});
