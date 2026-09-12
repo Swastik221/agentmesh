@@ -1,8 +1,15 @@
 import { useEffect, useMemo } from 'react';
 import { ShieldCheck, Wallet, Loader2, Check } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { navigate, isSafeInternalPath } from '../../demo/navigation';
 import './sign-in.css';
+
+function isSafeInternalPath(path: string): boolean {
+  return path.startsWith('/') && !path.startsWith('//') && !path.includes('\\');
+}
+
+function navigate(path: string) {
+  window.location.href = path;
+}
 
 /**
  * Real sign in entry for Live Mode. No `useDemo`, no demo fixtures, no shared

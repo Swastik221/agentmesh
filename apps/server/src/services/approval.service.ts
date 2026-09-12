@@ -391,16 +391,17 @@ export class ApprovalService {
   }
 
   private async resumeBlockedAction(approval: ApprovalRequest): Promise<void> {
+    if (!approval.metadata || typeof approval.metadata !== 'object') {
+      return;
+    }
+
     if (
       approval.action !== 'task.execute' &&
       approval.action !== 'agent.execute' &&
+      approval.action !== 'capability.execute' &&
       approval.action !== 'artifact.write'
     ) {
       throw new BadRequestError(`Unsupported action '${approval.action}' for automatic approval resumption`);
-    }
-
-    if (!approval.metadata || typeof approval.metadata !== 'object') {
-      return;
     }
 
     const meta = approval.metadata as Record<string, unknown>;

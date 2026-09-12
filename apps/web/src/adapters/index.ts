@@ -1,27 +1,14 @@
-import { demoAdapters } from './demo';
 import { liveAdapters } from './live';
-import { getAppMode } from '../config/env';
 
 export * from './types';
-export * from './demo';
 export * from './live';
 
 /**
- * Dynamically resolves the active adapter suite based on current AppMode ('demo' | 'live').
- * When in Demo Mode, returns isolated, deterministic demo adapters.
- * When in Live Mode, returns production REST & WebSocket live adapters.
+ * Returns the production live adapters suite.
  */
-export const getAdapters = () => {
-  return getAppMode() === 'live' ? liveAdapters : demoAdapters;
-};
+export const getAdapters = () => liveAdapters;
 
 /**
- * Proxy object ensuring callers access the current active adapter suite without
- * needing component code changes. Defaults to isolated `demoAdapters`.
+ * Active production adapter suite for REST & WebSocket communication.
  */
-export const adapters = new Proxy(demoAdapters, {
-  get(_target, prop: keyof typeof demoAdapters) {
-    const active = getAdapters();
-    return active[prop];
-  },
-});
+export const adapters = liveAdapters;

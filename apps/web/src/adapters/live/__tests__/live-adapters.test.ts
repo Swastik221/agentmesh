@@ -7,10 +7,9 @@ import { liveFileAdapter, LiveFileAdapterError } from '../file.adapter';
 import { liveTerminalAdapter, LiveTerminalError } from '../terminal.adapter';
 import { liveBrowserPreviewAdapter, LiveBrowserPreviewError } from '../browser-preview.adapter';
 import { liveWorkspaceRealtimeAdapter } from '../workspace-realtime.adapter';
-import { apiClient } from '../../../services/api-client';
-import { demoAdapters } from '../../demo/index';
 import { getAdapters, adapters } from '../../index';
-import { setAppMode, getAppMode } from '../../../config/env';
+import { getAppMode } from '../../../config/env';
+import { apiClient } from '../../../services/api-client';
 
 describe('INT-1-C3 Live Adapters Contract Alignment & Mode Isolation Tests', () => {
   describe('1. Wallet Adapter Correctness', () => {
@@ -219,27 +218,12 @@ describe('INT-1-C3 Live Adapters Contract Alignment & Mode Isolation Tests', () 
     });
   });
 
-  describe('5. Mode Isolation & Demo Non-Regression', () => {
-    it('Demo Mode returns deterministic demo adapters and never calls live adapters', () => {
-      setAppMode('demo');
-      expect(getAppMode()).toBe('demo');
-
-      const active = getAdapters();
-      expect(active).toBe(demoAdapters);
-
-      // Verify proxy routes to demoAdapters
-      expect(adapters.auth.getCurrentUser()).toBe(demoAdapters.auth.getCurrentUser());
-    });
-
-    it('Live Mode never falls back to Demo Mode when set to live', () => {
-      setAppMode('live');
+  describe('5. Live Mode Adapter Resolution', () => {
+    it('getAdapters() and adapters always resolve to liveAdapters suite', () => {
       expect(getAppMode()).toBe('live');
-
       const active = getAdapters();
-      expect(active).not.toBe(demoAdapters);
-
-      // Reset back to demo for clean state
-      setAppMode('demo');
+      expect(active).toBeDefined();
+      expect(adapters).toBe(active);
     });
   });
 });

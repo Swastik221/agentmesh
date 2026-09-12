@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
 import { Folder, FileCode, FileText, ChevronRight, ChevronDown } from 'lucide-react';
-import { DEMO_FILES } from '../../../adapters/demo/file.adapter';
+
+const SAMPLE_FILES: Record<string, string> = {
+  'README.md': `# AgentMesh Workspace\n\nReal-time AI agent orchestration with SIWE identity, x402 payment settlement, and Hedera provenance.`,
+  'payment-api.json': `{\n  "version": 1,\n  "endpoints": ["/payment", "/refund"],\n  "auth": "SIWE",\n  "settlement": "Hedera"\n}`,
+  'CheckoutEscrow.sol': `// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract CheckoutEscrow {\n  // Real agent settlement contract\n}`,
+};
 
 export function FileExplorerNode({ selected }: NodeProps) {
   const [selectedPath, setSelectedPath] = useState('README.md');
@@ -14,15 +19,7 @@ export function FileExplorerNode({ selected }: NodeProps) {
     setOpenFolders((prev) => ({ ...prev, [path]: !prev[path] }));
   };
 
-  const currentFileContent = (() => {
-    if (selectedPath === 'README.md') return DEMO_FILES[0]?.content;
-    if (selectedPath === 'payment-api.json') return DEMO_FILES[1]?.content;
-    if (selectedPath === 'CheckoutEscrow.sol') {
-      const contracts = DEMO_FILES.find((f) => f.name === 'contracts');
-      return contracts?.children?.[0]?.content;
-    }
-    return `// Code preview for ${selectedPath}`;
-  })();
+  const currentFileContent = SAMPLE_FILES[selectedPath] ?? `// Code preview for ${selectedPath}`;
 
   return (
     <article

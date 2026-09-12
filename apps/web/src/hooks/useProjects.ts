@@ -23,8 +23,7 @@ export interface UseProjectsResult {
  * lets the underlying error propagate so callers can surface the real server
  * validation message.
  *
- * This hook only belongs in Live Mode; mount it behind a `getAppMode() === 'live'`
- * check so it never calls the API in Demo Mode.
+ * This hook fetches real backend projects for the authenticated user.
  */
 export function useProjects(): UseProjectsResult {
   const [projects, setProjects] = useState<Project[]>([]);
