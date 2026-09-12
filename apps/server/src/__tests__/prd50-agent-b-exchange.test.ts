@@ -9,7 +9,7 @@ import { setupWebSocketServer, AgentMeshWebSocketServer } from '../websocket/web
 import { executionService } from '../execution/execution.service.js';
 import { coordinatorService } from '../services/coordinator.service.js';
 import { dependencyService } from '../services/dependency.service.js';
-import { artifactService, validateAndSerializeJsonPayload } from '../services/artifact.service.js';
+import { artifactService } from '../services/artifact.service.js';
 import { AgentMeshClient, RealAgentAdapter } from '@agentmesh/cli';
 
 describe('PRD-50 Real Agent B Artifact Exchange Integration Tests', () => {
@@ -310,20 +310,18 @@ describe('PRD-50 Real Agent B Artifact Exchange Integration Tests', () => {
       attempts++;
     }
 
-    if (!artifactA) {
-      artifactA = await artifactService.createArtifact(testProject.id, taskA.id, testUser.id, {
-        type: 'SECURITY_AUDIT',
-        name: 'agent-a-audit',
-        payload: { sourceValue: uniqueProducerValue },
-        agentId: testAgentA.id,
-      });
-    }
-
+    // Hardened requirement 1: Remove fallback creation. Artifact A MUST exist naturally from Agent A execution.
     expect(artifactA).toBeDefined();
+    expect(artifactA?.agentId).toBe(testAgentA.id);
+    expect(artifactA?.taskId).toBe(taskA.id);
+
     const payloadA = artifactA!.payload as Record<string, unknown>;
     expect(payloadA.sourceValue).toBe(uniqueProducerValue);
 
-    const { contentHash: artifactAHash } = validateAndSerializeJsonPayload(artifactA!.payload);
+    // Hardened requirement 4: Use persisted server contentHash from artifactService.getArtifact
+    const artifactADetail = await artifactService.getArtifact(testProject.id, artifactA!.id, testUser.id);
+    expect(artifactADetail.contentHash).toBeDefined();
+    const artifactAHash = artifactADetail.contentHash;
 
     // Verify Task B is ready now
     attempts = 0;
@@ -336,12 +334,26 @@ describe('PRD-50 Real Agent B Artifact Exchange Integration Tests', () => {
     }
     expect(readyRes?.ready).toBe(true);
 
+    // Hardened requirement 3: Verify Agent B receives actual resolved dependency containing Artifact A metadata
+    const taskBDeps = await prisma.taskDependency.findMany({
+      where: { taskId: taskB.id },
+      include: { artifact: true },
+    });
+    expect(taskBDeps.length).toBeGreaterThan(0);
+    const resolvedDep = taskBDeps[0];
+    expect(resolvedDep.artifactId).toBe(artifactA!.id);
+    expect(resolvedDep.artifact).toBeDefined();
+    expect(resolvedDep.artifact?.id).toBe(artifactA!.id);
+    expect(resolvedDep.artifact?.agentId).toBe(testAgentA.id);
+    expect(resolvedDep.artifact?.taskId).toBe(taskA.id);
+
     // Execute Task B with Agent B
     await coordinatorService.assignTask(testProject.id, taskB.id, testUser.id, { preferredAgentId: testAgentB.id });
     const execB = await executionService.createExecution(testProject.id, taskB.id, testUser.id, {
       agentId: testAgentB.id,
       input: { action: 'consume-artifact' },
     });
+    expect(execB).toBeDefined();
 
     attempts = 0;
     let artifactB;
@@ -355,17 +367,18 @@ describe('PRD-50 Real Agent B Artifact Exchange Integration Tests', () => {
     expect(artifactB).toBeDefined();
     expect(artifactB?.agentId).toBe(testAgentB.id);
 
-    // Test 7: Verify Agent B written file inside Worktree B contains exact UNIQUE-PRODUCER-VALUE-12345
+    // Hardened requirement 2: Mandatory Worktree B & consumer.ts proof (no conditionals allowed)
     const worktreeB = await prisma.gitWorktree.findUnique({ where: { executionId: execB.id } });
-    if (worktreeB) {
-      const consumerFile = path.join(worktreeB.path, 'src', 'consumer.ts');
-      if (fs.existsSync(consumerFile)) {
-        const fileText = fs.readFileSync(consumerFile, 'utf8');
-        expect(fileText).toContain(uniqueProducerValue);
-      }
-    }
+    expect(worktreeB).toBeDefined();
+    expect(worktreeB?.path).toBeDefined();
 
-    // Test 8 & 9: Verify Artifact B payload contains provenance referencing Artifact A and contentHash
+    const consumerFile = path.join(worktreeB!.path, 'src', 'consumer.ts');
+    expect(fs.existsSync(consumerFile)).toBe(true);
+
+    const fileText = fs.readFileSync(consumerFile, 'utf8');
+    expect(fileText).toContain(uniqueProducerValue);
+
+    // Verify Artifact B payload contains provenance referencing Artifact A and server contentHash
     const payloadB = artifactB!.payload as Record<string, unknown>;
     expect(payloadB.consumedArtifacts).toBeDefined();
     const consumedList = payloadB.consumedArtifacts as Array<{ artifactId: string; contentHash?: string }>;
