@@ -565,13 +565,19 @@ describe('PRD-36-C1 — Hedera x402 Agent Payment Corrective Tests', () => {
 
         const responses = await Promise.all(promises);
 
-        // 3. Verify all callers receive 200 OK and consistent settled status
+        // 3. Verify all callers receive 200 OK and consistent settled status & same execution ID
+        const executionIds = new Set<string>();
         for (const res of responses) {
           expect(res.status).toBe(200);
           expect(res.body.payment).toBeDefined();
           expect(res.body.payment.status).toBe('SETTLED');
           expect(res.body.payment.transactionReference).toBe('0.0.9185802@1700000000.000000000');
+          if (res.body.execution?.id) {
+            executionIds.add(res.body.execution.id);
+          }
         }
+
+        expect(executionIds.size).toBe(1);
 
         // 4. Verify DB idempotency: EXACTLY 1 payment record created with status SETTLED
         const dbRecords = await prisma.payment.findMany({
@@ -581,6 +587,7 @@ describe('PRD-36-C1 — Hedera x402 Agent Payment Corrective Tests', () => {
         expect(dbRecords.length).toBe(1);
         expect(dbRecords[0].status).toBe('SETTLED');
         expect(dbRecords[0].settledAt).not.toBeNull();
+        expect(dbRecords[0].executionId).toBe(Array.from(executionIds)[0]);
       } finally {
         if (connectionMetadata) {
           connectionManager.removeConnection(connectionMetadata.connectionId);
