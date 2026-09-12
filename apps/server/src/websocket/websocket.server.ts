@@ -232,7 +232,7 @@ export class AgentMeshWebSocketServer {
                 operation: 'updated',
                 fields: { entityType: 'user', status: 'OFFLINE' },
               },
-            ]);
+            ]).catch(() => {});
           }
         }
 

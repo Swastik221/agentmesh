@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Sparkles,
   TerminalSquare,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import { currentProjectId } from '../../utils/currentProjectId';
@@ -18,6 +19,7 @@ import { useTasks } from '../../hooks/useTasks';
 import { useExecutions } from '../../hooks/useExecutions';
 import { useApprovals } from '../../hooks/useApprovals';
 import { useArtifacts } from '../../hooks/useArtifacts';
+import { useProjectMembers, useProjectInvitations, type ProjectRole } from '../../hooks/useInvitations';
 import { useWorkspaceRealtime, type RealtimeDeltaEvent } from '../../hooks/useWorkspaceRealtime';
 import type { LiveAgentStatus } from '../../adapters/live/agent.adapter';
 import {
@@ -1198,3 +1200,276 @@ export function ActivityView({ onOpenCanvas }: WorkspaceViewProps) {
     </section>
   );
 }
+
+export function TeamView({ onOpenCanvas }: WorkspaceViewProps) {
+  const projectId = currentProjectId();
+  const { members, loading: membersLoading, refetch: refetchMembers } = useProjectMembers(projectId ?? undefined);
+  const { invitations, createInvitation, refetch: refetchInvitations } = useProjectInvitations(projectId ?? undefined);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [targetInput, setTargetInput] = useState('');
+  const [roleInput, setRoleInput] = useState<ProjectRole>('MEMBER');
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+
+  const refetchMembersRef = useRef(refetchMembers);
+  const refetchInvitationsRef = useRef(refetchInvitations);
+  refetchMembersRef.current = refetchMembers;
+  refetchInvitationsRef.current = refetchInvitations;
+
+  useWorkspaceRealtime(
+    projectId,
+    useMemo(
+      () => ({
+        onDelta: (event: RealtimeDeltaEvent) => {
+          if ((event.entity as string) === 'invitation' || event.entity === 'member') {
+            void refetchMembersRef.current();
+            void refetchInvitationsRef.current();
+          }
+        },
+        onResync: () => {
+          void refetchMembersRef.current();
+          void refetchInvitationsRef.current();
+        },
+      }),
+      [],
+    ),
+  );
+
+  const handleInvite = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!targetInput.trim()) return;
+    setBusy(true);
+    setFormError('');
+    setSuccessMsg('');
+    try {
+      await createInvitation(targetInput.trim(), roleInput);
+      setSuccessMsg(`Invitation sent to ${targetInput.trim()}`);
+      setTargetInput('');
+      setFormOpen(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to send invitation');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="workspace-view">
+      <ViewHeader
+        eyebrow="TEAM / COLLABORATION"
+        title="Project members & invitations"
+        description="Invite teammates by wallet address or ENS name to collaborate on this workspace."
+        onOpenCanvas={onOpenCanvas}
+      />
+
+      <div className="activity-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>Team Members ({members.length})</h2>
+            <p style={{ fontSize: '13px', color: 'var(--canvas-dim)', margin: '4px 0 0 0' }}>
+              Users with access to this workspace and its agents.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="demo-primary"
+            onClick={() => {
+              setFormOpen(!formOpen);
+              setFormError('');
+              setSuccessMsg('');
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              background: 'var(--canvas-accent, #3b82f6)',
+              color: '#fff',
+              border: 'none',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <UserPlus size={16} /> Invite teammate
+          </button>
+        </div>
+
+        {formOpen && (
+          <form
+            onSubmit={(e) => void handleInvite(e)}
+            style={{
+              padding: '20px',
+              borderRadius: '8px',
+              border: '1px solid var(--canvas-line-strong, #ccc)',
+              background: 'rgba(255, 255, 255, 0.95)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              maxWidth: '500px',
+            }}
+          >
+            <h3 style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>Invite New Teammate</h3>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
+                Wallet Address (0x...) or ENS Name (.eth)
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="0x... or name.eth"
+                value={targetInput}
+                onChange={(e) => setTargetInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--canvas-line-strong, #ccc)',
+                  fontSize: '14px',
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
+                Role
+              </label>
+              <select
+                value={roleInput}
+                onChange={(e) => setRoleInput(e.target.value as ProjectRole)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--canvas-line-strong, #ccc)',
+                  fontSize: '14px',
+                }}
+              >
+                <option value="ADMIN">ADMIN (Full management access)</option>
+                <option value="MEMBER">MEMBER (Create tasks & agents)</option>
+                <option value="VIEWER">VIEWER (Read-only access)</option>
+              </select>
+            </div>
+            {formError && <p style={{ color: 'var(--canvas-red, #ef4444)', fontSize: '13px', margin: 0 }}>{formError}</p>}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setFormOpen(false)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--canvas-line-strong)',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={busy}
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: 'var(--canvas-accent, #3b82f6)',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {busy ? 'Sending...' : 'Send Invitation'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {successMsg && (
+          <p style={{ color: 'var(--canvas-green, #10b981)', fontSize: '14px', fontWeight: 500, margin: 0 }}>
+            {successMsg}
+          </p>
+        )}
+
+        <div style={{ display: 'grid', gap: '12px' }}>
+          {membersLoading ? (
+            <p style={{ color: 'var(--canvas-dim)' }}>Loading team members...</p>
+          ) : members.length === 0 ? (
+            <p style={{ color: 'var(--canvas-dim)' }}>No members found.</p>
+          ) : (
+            members.map((m) => (
+              <div
+                key={m.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--canvas-line-strong, #e5e7eb)',
+                  background: '#fff',
+                }}
+              >
+                <div>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>
+                    {m.user?.displayName || m.user?.ensName || m.user?.walletAddress || 'Member'}
+                  </h3>
+                  {m.user?.walletAddress && (
+                    <code style={{ fontSize: '12px', color: 'var(--canvas-dim)' }}>{m.user.walletAddress}</code>
+                  )}
+                </div>
+                <span
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    background: m.role === 'OWNER' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(107, 114, 128, 0.1)',
+                    color: m.role === 'OWNER' ? '#2563eb' : '#4b5563',
+                  }}
+                >
+                  {m.role}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {invitations.length > 0 && (
+          <div style={{ marginTop: '24px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>
+              Pending Invitations ({invitations.length})
+            </h3>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {invitations.map((inv) => (
+                <div
+                  key={inv.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--canvas-line-strong, #e5e7eb)',
+                    background: 'rgba(249, 250, 251, 0.8)',
+                  }}
+                >
+                  <div>
+                    <span style={{ fontSize: '13px', fontWeight: 600 }}>{inv.invitedWallet}</span>
+                    <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--canvas-dim)', textTransform: 'uppercase' }}>
+                      ({inv.role})
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '12px', color: 'var(--canvas-dim)', fontStyle: 'italic' }}>
+                    Pending Acceptance
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+

@@ -9,7 +9,16 @@ generator client {
 
 enum ProjectRole {
   OWNER
+  ADMIN
   MEMBER
+  VIEWER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
 }
 
 enum AgentStatus {
@@ -36,6 +45,7 @@ model User {
   approvalRequestsRequested ApprovalRequest[] @relation("ApprovalRequester")
   approvalRequestsResolved  ApprovalRequest[] @relation("ApprovalResolver")
   payments                  Payment[]         @relation("PaymentRequester")
+  invitationsSent           ProjectInvitation[] @relation("InvitationInviter")
 
   @@map("users")
 }
@@ -62,9 +72,31 @@ model Project {
   policies         Policy[]
   approvalRequests ApprovalRequest[]
   payments         Payment[]
+  invitations      ProjectInvitation[]
 
   @@index([ownerId])
   @@map("projects")
+}
+
+model ProjectInvitation {
+  id            String           @id @default(cuid())
+  projectId     String
+  inviterUserId String
+  invitedWallet String
+  role          ProjectRole      @default(MEMBER)
+  status        InvitationStatus @default(PENDING)
+  expiresAt     DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  inviterUser User    @relation("InvitationInviter", fields: [inviterUserId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([invitedWallet])
+  @@index([status])
+  @@unique([projectId, invitedWallet, status])
+  @@map("project_invitations")
 }
 
 model ProjectMember {

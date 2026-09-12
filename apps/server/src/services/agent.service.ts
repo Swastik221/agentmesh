@@ -165,6 +165,13 @@ export class AgentService {
     }
     await this.verifyProjectMembership(existingAgent.projectId, actorUserId);
 
+    if (existingAgent.ownerId !== actorUserId) {
+      const project = await prisma.project.findUnique({ where: { id: existingAgent.projectId } });
+      if (!project || project.ownerId !== actorUserId) {
+        throw new ForbiddenError('Only the agent owner or project owner can modify this agent');
+      }
+    }
+
     // Build ENS update fields before touching the DB
     let ensUpdate: {
       ensName?: string | null;
@@ -220,6 +227,13 @@ export class AgentService {
       throw new NotFoundError(`Agent with ID ${agentId} not found`);
     }
     await this.verifyProjectMembership(existingAgent.projectId, actorUserId);
+
+    if (existingAgent.ownerId !== actorUserId) {
+      const project = await prisma.project.findUnique({ where: { id: existingAgent.projectId } });
+      if (!project || project.ownerId !== actorUserId) {
+        throw new ForbiddenError('Only the agent owner or project owner can delete this agent');
+      }
+    }
 
     await prisma.agent.delete({
       where: { id: agentId },

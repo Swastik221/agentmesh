@@ -19,6 +19,7 @@ import activityRouter from './routes/activity.router.js';
 import policyRouter from './routes/policy.router.js';
 import approvalRouter from './routes/approval.router.js';
 import { paymentRouter, projectPaymentRouter } from './routes/payment.router.js';
+import invitationRouter from './routes/invitation.router.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { config } from './config/index.js';
 
@@ -38,6 +39,7 @@ export const createApp = (): Express => {
   app.use('/', authRouter);
   app.use('/', userRouter);
   app.use('/', projectRouter);
+  app.use('/', invitationRouter);
   app.use('/', agentRouter);
   app.use('/', agentCapabilityRouter);
   app.use('/', projectBrainRouter);
