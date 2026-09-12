@@ -36,29 +36,35 @@ describe('PRD #4 Agent Registry API Integration Tests', () => {
     }
 
     // Create User A (Owner of Project A)
-    const userARes = await request(app).post('/users').send({
-      walletAddress: userAWallet,
-      displayName: 'Alice Agent Owner',
+    const userA = await prisma.user.create({
+      data: {
+        walletAddress: userAWallet,
+        displayName: 'Alice Agent Owner',
+      },
     });
-    userAId = userARes.body.id;
+    userAId = userA.id;
     const sessionA = await sessionService.createSession(userAId);
     cookieA = `agentmesh_session=${sessionA.id}`;
 
     // Create User B (Member of Project A, Owner of Project B)
-    const userBRes = await request(app).post('/users').send({
-      walletAddress: userBWallet,
-      displayName: 'Bob Agent Member',
+    const userB = await prisma.user.create({
+      data: {
+        walletAddress: userBWallet,
+        displayName: 'Bob Agent Member',
+      },
     });
-    userBId = userBRes.body.id;
+    userBId = userB.id;
     const sessionB = await sessionService.createSession(userBId);
     cookieB = `agentmesh_session=${sessionB.id}`;
 
     // Create User C (Not a member of Project A)
-    const userCRes = await request(app).post('/users').send({
-      walletAddress: userCWallet,
-      displayName: 'Charlie Outsider',
+    const userC = await prisma.user.create({
+      data: {
+        walletAddress: userCWallet,
+        displayName: 'Charlie Outsider',
+      },
     });
-    userCId = userCRes.body.id;
+    userCId = userC.id;
     const sessionC = await sessionService.createSession(userCId);
     cookieC = `agentmesh_session=${sessionC.id}`;
 

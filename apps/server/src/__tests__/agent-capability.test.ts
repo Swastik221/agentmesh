@@ -32,11 +32,13 @@ describe('PRD #5 Agent Capabilities API Integration Tests', () => {
     }
 
     // Create User
-    const userRes = await request(app).post('/users').send({
-      walletAddress: userWallet,
-      displayName: 'Capability Owner',
+    const user = await prisma.user.create({
+      data: {
+        walletAddress: userWallet,
+        displayName: 'Capability Owner',
+      },
     });
-    userId = userRes.body.id;
+    userId = user.id;
 
     // Create Session
     const session = await sessionService.createSession(userId);
