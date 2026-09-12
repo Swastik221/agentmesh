@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowRight,
   Bot,
@@ -24,6 +24,7 @@ import { useAgents } from '../../hooks/useAgents';
 import { useTasks } from '../../hooks/useTasks';
 import { useExecutions } from '../../hooks/useExecutions';
 import { useApprovals } from '../../hooks/useApprovals';
+import { useArtifacts } from '../../hooks/useArtifacts';
 import { useWorkspaceRealtime, type RealtimeDeltaEvent } from '../../hooks/useWorkspaceRealtime';
 import type { LiveAgentStatus } from '../../adapters/live/agent.adapter';
 import {
@@ -42,6 +43,12 @@ import {
   approvalErrorMessage,
   type ApprovalRequestRecord,
 } from '../../adapters/live/approval.adapter';
+import {
+  artifactErrorMessage,
+  type LiveArtifactDetail,
+} from '../../adapters/live/artifact.adapter';
+
+
 
 interface WorkspaceViewProps {
   onOpenCanvas(): void;
@@ -859,7 +866,295 @@ function DemoTasksView({ onOpenCanvas }: WorkspaceViewProps) {
   );
 }
 
-export function FilesView({ onOpenCanvas }: WorkspaceViewProps) {
+function LiveFilesView({ onOpenCanvas }: WorkspaceViewProps) {
+  const projectId = currentProjectId();
+  const { tasks, loading: tasksLoading, error: tasksError } = useTasks(projectId);
+  const [selectedTaskId, setSelectedTaskId] = useState<string>('');
+
+  useEffect(() => {
+    if (!selectedTaskId && tasks.length > 0) {
+      setSelectedTaskId(tasks[0].id);
+    }
+  }, [tasks, selectedTaskId]);
+
+  const {
+    artifacts,
+    loading: artifactsLoading,
+    error: artifactsError,
+    refetch,
+    getArtifactDetail,
+    reviewArtifact,
+  } = useArtifacts(projectId, selectedTaskId);
+
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
+  const [artifactDetail, setArtifactDetail] = useState<LiveArtifactDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  const [reviewNote, setReviewNote] = useState('');
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+
+  // Auto-select first artifact when list changes
+  useEffect(() => {
+    if (artifacts.length > 0 && (!selectedArtifactId || !artifacts.some((a) => a.id === selectedArtifactId))) {
+      setSelectedArtifactId(artifacts[0].id);
+    } else if (artifacts.length === 0) {
+      setSelectedArtifactId(null);
+    }
+  }, [artifacts, selectedArtifactId]);
+
+  useEffect(() => {
+    const targetArtifactId = selectedArtifactId;
+    if (!targetArtifactId) {
+      setArtifactDetail(null);
+      return;
+    }
+    let canceled = false;
+    setDetailLoading(true);
+    setDetailError(null);
+    getArtifactDetail(targetArtifactId)
+      .then((detail) => {
+        if (!canceled) {
+          setArtifactDetail(detail);
+          setDetailLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!canceled) {
+          setDetailError(artifactErrorMessage(err));
+          setDetailLoading(false);
+        }
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [selectedArtifactId, getArtifactDetail]);
+
+  const handleReview = async (approved: boolean) => {
+    if (!selectedArtifactId) return;
+    setReviewBusy(true);
+    setReviewError('');
+    try {
+      await reviewArtifact(selectedArtifactId, { approved, note: reviewNote.trim() || undefined });
+      const updated = await getArtifactDetail(selectedArtifactId);
+      setArtifactDetail(updated);
+      setReviewNote('');
+    } catch (err) {
+      setReviewError(artifactErrorMessage(err));
+    } finally {
+      setReviewBusy(false);
+    }
+  };
+
+  const selectedTask = tasks.find((t) => t.id === selectedTaskId);
+
+  return (
+    <section className="workspace-view">
+      <ViewHeader
+        eyebrow="ARTIFACTS / SCOPED FILES"
+        title="Workspace files"
+        description="Review real persisted artifacts, content hash integrity, and producer lineage."
+        onOpenCanvas={onOpenCanvas}
+      />
+
+      <div className="workspace-list-tools" style={{ marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+          <label style={{ flex: '0 0 auto', color: 'var(--canvas-dim)', fontSize: '13px', fontWeight: 500 }}>
+            Task filter:
+          </label>
+          <select
+            aria-label="Select task"
+            value={selectedTaskId}
+            onChange={(e) => {
+              setSelectedTaskId(e.target.value);
+              setSelectedArtifactId(null);
+            }}
+            style={{
+              minWidth: '280px',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: '1px solid var(--canvas-line-strong)',
+              background: 'rgb(255 255 255 / 0.9)',
+              color: 'var(--canvas-copy)',
+              fontSize: '13px',
+            }}
+          >
+            {!tasks.length && <option value="">No tasks available</option>}
+            {tasks.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title} ({t.status})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="file-layout">
+        <aside className="file-tree">
+          <h2>
+            <FolderGit2 /> Artifacts {selectedTask ? `(${selectedTask.title})` : ''}
+          </h2>
+
+          {tasksLoading || artifactsLoading ? (
+            <p className="workspace-empty">Loading artifacts...</p>
+          ) : tasksError ? (
+            <div className="workspace-empty">
+              <p>{tasksError}</p>
+            </div>
+          ) : artifactsError ? (
+            <div className="workspace-empty">
+              <p>{artifactsError}</p>
+              <button type="button" onClick={() => void refetch()} style={{ marginTop: '8px' }}>
+                Retry
+              </button>
+            </div>
+          ) : !tasks.length ? (
+            <p className="workspace-empty">No tasks found in project. Create a task to generate artifacts.</p>
+          ) : !artifacts.length ? (
+            <p className="workspace-empty">No artifacts have been created for this task yet.</p>
+          ) : (
+            <ul>
+              {artifacts.map((item) => (
+                <li
+                  key={item.id}
+                  className={item.id === selectedArtifactId ? 'is-selected' : ''}
+                  onClick={() => setSelectedArtifactId(item.id)}
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <FileJson2 size={16} /> {item.name} <small>v{item.version}</small>
+                  </span>
+                  <b className={`task-table__status task-table__status--${item.status.toLowerCase()}`}>
+                    {item.status}
+                  </b>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <footer>
+            <ShieldCheck /> Secrets and .env stay excluded
+          </footer>
+        </aside>
+
+        <article className="artifact-preview">
+          {!selectedArtifactId ? (
+            <div className="workspace-empty">Select an artifact from the list to inspect details.</div>
+          ) : detailLoading ? (
+            <div className="workspace-empty">Loading artifact details...</div>
+          ) : detailError ? (
+            <div className="workspace-empty">
+              <p>{detailError}</p>
+            </div>
+          ) : artifactDetail ? (
+            <>
+              <header>
+                <div>
+                  <FileJson2 />
+                  <span>
+                    <small>{artifactDetail.type.toUpperCase()} · VERSION {artifactDetail.version}</small>
+                    <h2>{artifactDetail.name}</h2>
+                  </span>
+                </div>
+                <b className={`task-table__status task-table__status--${artifactDetail.status.toLowerCase()}`}>
+                  {artifactDetail.status}
+                </b>
+              </header>
+
+              <dl>
+                <div>
+                  <dt>Type</dt>
+                  <dd>{artifactDetail.type}</dd>
+                </div>
+                <div>
+                  <dt>Version</dt>
+                  <dd>v{artifactDetail.version}</dd>
+                </div>
+                <div>
+                  <dt>Content hash</dt>
+                  <dd><code>{artifactDetail.contentHash}</code></dd>
+                </div>
+                <div>
+                  <dt>Producer Agent</dt>
+                  <dd>
+                    {artifactDetail.agent?.name
+                      ? `${artifactDetail.agent.name} (${artifactDetail.agent.provider})`
+                      : artifactDetail.agentId}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Task</dt>
+                  <dd>{artifactDetail.task?.title ?? artifactDetail.taskId}</dd>
+                </div>
+                <div>
+                  <dt>Execution ID</dt>
+                  <dd>{artifactDetail.executionId || 'N/A'}</dd>
+                </div>
+                <div>
+                  <dt>Owner User</dt>
+                  <dd>
+                    {artifactDetail.ownerUser?.displayName ?? artifactDetail.ownerUserId}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Created</dt>
+                  <dd>{new Date(artifactDetail.createdAt).toLocaleString()}</dd>
+                </div>
+              </dl>
+
+              <pre>
+                <code>{JSON.stringify(artifactDetail.payload, null, 2)}</code>
+              </pre>
+
+              {artifactDetail.requiresReview && artifactDetail.status === 'PENDING' && (
+                <div style={{ marginTop: '16px', padding: '16px', border: '1px solid var(--canvas-line)', borderRadius: '8px', background: 'rgba(255,255,255,0.5)' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>Human Review Required</h3>
+                  <textarea
+                    placeholder="Optional review note..."
+                    value={reviewNote}
+                    onChange={(e) => setReviewNote(e.target.value)}
+                    disabled={reviewBusy}
+                    style={{
+                      width: '100%',
+                      minHeight: '60px',
+                      padding: '8px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--canvas-line-strong)',
+                      marginBottom: '8px',
+                      fontSize: '13px',
+                    }}
+                  />
+                  {reviewError && <p style={{ color: 'var(--canvas-red)', fontSize: '12px', marginBottom: '8px' }}>{reviewError}</p>}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      disabled={reviewBusy}
+                      onClick={() => void handleReview(true)}
+                      style={{ background: 'var(--canvas-green)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer' }}
+                    >
+                      {reviewBusy ? 'Submitting...' : 'Approve Artifact'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={reviewBusy}
+                      onClick={() => void handleReview(false)}
+                      style={{ background: 'var(--canvas-red)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer' }}
+                    >
+                      {reviewBusy ? 'Submitting...' : 'Reject Artifact'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : null}
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function DemoFilesView({ onOpenCanvas }: WorkspaceViewProps) {
   const { openBrowser } = useDemo();
   const openArtifact = () => { openBrowser('agentmesh://artifact/payment-api'); window.dispatchEvent(new CustomEvent('agentmesh:open-panel', { detail: 'browser' })); };
   return (
@@ -872,6 +1167,11 @@ export function FilesView({ onOpenCanvas }: WorkspaceViewProps) {
     </section>
   );
 }
+
+export function FilesView(props: WorkspaceViewProps) {
+  return getAppMode() === 'live' ? <LiveFilesView {...props} /> : <DemoFilesView {...props} />;
+}
+
 
 const eventGroups: Array<{ label: string; types: ProtocolEventType[] }> = [
   { label: 'All events', types: [] },

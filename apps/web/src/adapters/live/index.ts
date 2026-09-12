@@ -6,6 +6,7 @@ import { liveTaskProtocolAdapter } from './task-protocol.adapter';
 import { liveFileAdapter } from './file.adapter';
 import { liveTerminalAdapter } from './terminal.adapter';
 import { liveBrowserPreviewAdapter } from './browser-preview.adapter';
+import { artifactAdapter } from './artifact.adapter';
 
 export * from './auth.adapter';
 export * from './wallet.adapter';
@@ -15,6 +16,7 @@ export * from './task-protocol.adapter';
 export * from './file.adapter';
 export * from './terminal.adapter';
 export * from './browser-preview.adapter';
+export * from './artifact.adapter';
 
 export const liveAdapters = {
   auth: liveAuthAdapter,
@@ -25,4 +27,6 @@ export const liveAdapters = {
   file: liveFileAdapter,
   terminal: liveTerminalAdapter,
   browserPreview: liveBrowserPreviewAdapter,
+  artifact: artifactAdapter,
 };
+
