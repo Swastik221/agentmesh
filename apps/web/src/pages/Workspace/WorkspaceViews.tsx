@@ -1103,6 +1103,24 @@ function LiveFilesView({ onOpenCanvas }: WorkspaceViewProps) {
                 </div>
               </dl>
 
+              {Array.isArray((artifactDetail.payload as Record<string, unknown>)?.consumedArtifacts) &&
+                ((artifactDetail.payload as Record<string, unknown>).consumedArtifacts as Array<{ artifactId: string; contentHash?: string; name?: string }>).length > 0 && (
+                <div style={{ marginTop: '16px', padding: '12px 16px', border: '1px solid var(--canvas-line-strong)', borderRadius: '8px', background: 'rgba(255,255,255,0.7)' }}>
+                  <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--canvas-copy)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ShieldCheck size={15} /> Provenance &amp; Consumed Artifacts
+                  </h3>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {((artifactDetail.payload as Record<string, unknown>).consumedArtifacts as Array<{ artifactId: string; contentHash?: string; name?: string }>).map((c, i) => (
+                      <li key={c.artifactId || i} style={{ fontSize: '12px', padding: '6px 0', borderBottom: i < ((artifactDetail.payload as Record<string, unknown>).consumedArtifacts as Array<unknown>).length - 1 ? '1px solid var(--canvas-line)' : 'none' }}>
+                        <div><strong>Source Artifact ID:</strong> <code>{c.artifactId}</code></div>
+                        {c.contentHash && <div><strong>Content Hash:</strong> <code>{c.contentHash}</code></div>}
+                        {c.name && <div><strong>Source Artifact Name:</strong> {c.name}</div>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <pre>
                 <code>{JSON.stringify(artifactDetail.payload, null, 2)}</code>
               </pre>
