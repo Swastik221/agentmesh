@@ -77,7 +77,17 @@ export const executePaidCapability = async (
       throw new NotFoundError(`Agent with ID '${agentId}' not found`);
     }
 
-    // Verify project membership
+    // STEP 1: Capability Authorization (Section 5)
+    const hasCapability = agent.capabilities.some(
+      (c) => c.capability.trim().toLowerCase() === capability.trim().toLowerCase(),
+    );
+    if (!hasCapability) {
+      throw new ForbiddenError(
+        `Capability '${capability}' is not assigned to agent '${agent.name}'`,
+      );
+    }
+
+    // STEP 2: Verify project membership
     const membership = await prisma.projectMember.findUnique({
       where: {
         projectId_userId: {
@@ -91,7 +101,7 @@ export const executePaidCapability = async (
       throw new ForbiddenError('User is not a member of this project');
     }
 
-    // STEP 4 & 5: Evaluate Policy
+    // STEP 3: Evaluate Policy (Section 6)
     const policyResult = await policyService.evaluateAction(agent.projectId, 'capability.execute');
 
     if (policyResult.decision === PolicyDecision.DENY) {
@@ -112,11 +122,12 @@ export const executePaidCapability = async (
       return;
     }
 
-    // STEP 7-10: Payment Gate
+    // STEP 4: Payment Gate (Section 7)
     const authHeader = req.headers['authorization'];
     const paymentHeader = (
       req.headers['payment-signature'] ||
       req.headers['x-payment'] ||
+      req.headers['x-payment-proof'] ||
       (authHeader && authHeader.toLowerCase().startsWith('x402 ') ? authHeader : undefined)
     ) as string | undefined;
 
@@ -146,7 +157,7 @@ export const executePaidCapability = async (
       return;
     }
 
-    // Process & Settle Payment
+    // STEP 5: Process & Settle Payment (Section 8)
     const requirement = x402Service.generateRequirement({
       paymentReference: reqHeaderPaymentRef,
       amount: PAYMENT_CONFIG.DEFAULT_ATOMIC_AMOUNT,
@@ -163,23 +174,210 @@ export const executePaidCapability = async (
       agentId,
     );
 
-    // Capability Execution
-    const executionResult = {
-      capability,
-      agentId,
-      agentName: agent.name,
-      ensName: agent.ensName,
-      executedAt: new Date().toISOString(),
-      output: {
-        summary: `Successfully executed paid capability '${capability}'`,
-        analysis: `Premium analysis result from ${agent.ensName || agent.name}`,
-        data: req.body?.input || {},
+    // STEP 6: Idempotency check for existing execution associated with this settled payment (Section 17)
+    let executionId = settledPayment.executionId;
+    if (!executionId) {
+      for (let i = 0; i < 20; i++) {
+        const reCheck = await prisma.payment.findUnique({
+          where: { id: settledPayment.id },
+          select: { executionId: true },
+        });
+        if (reCheck?.executionId) {
+          executionId = reCheck.executionId;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }
+
+    if (executionId) {
+      let existingExec = await prisma.taskExecution.findUnique({
+        where: { id: executionId },
+      });
+      let execAttempts = 0;
+      while (
+        execAttempts < 50 &&
+        existingExec &&
+        (existingExec.status === 'QUEUED' || existingExec.status === 'RUNNING')
+      ) {
+        await new Promise((r) => setTimeout(r, 100));
+        existingExec = await prisma.taskExecution.findUnique({ where: { id: executionId } });
+        execAttempts++;
+      }
+
+      if (existingExec) {
+        const isSuccess = existingExec.status === 'COMPLETED';
+        const isPending = existingExec.status === 'QUEUED' || existingExec.status === 'RUNNING';
+        res.status(200).json({
+          success: isSuccess || isPending,
+          status: isSuccess ? 'COMPLETED' : isPending ? existingExec.status : 'EXECUTION_FAILED',
+          message: existingExec.error || (isSuccess ? undefined : isPending ? 'Agent execution in progress' : 'Agent execution failed'),
+          result: existingExec.output,
+          execution: {
+            id: existingExec.id,
+            status: existingExec.status,
+            output: existingExec.output,
+            error: existingExec.error || undefined,
+          },
+          payment: {
+            id: settledPayment.id,
+            status: settledPayment.status,
+            amount: settledPayment.amount,
+            asset: settledPayment.asset,
+            network: settledPayment.network,
+            transactionReference: settledPayment.transactionReference,
+            payerAddress: settledPayment.payerAddress,
+            receiverAddress: settledPayment.receiverAddress,
+            settledAt: settledPayment.settledAt,
+          },
+        });
+        return;
+      }
+    }
+
+    // STEP 7: Resolve or Create Task Context (Section 10)
+    let taskId = (req.body?.taskId || req.headers['x-task-id']) as string | undefined;
+    if (taskId) {
+      const existingTask = await prisma.task.findUnique({ where: { id: taskId } });
+      if (!existingTask || existingTask.projectId !== agent.projectId) {
+        taskId = undefined;
+      }
+    }
+
+    if (!taskId) {
+      let capabilityTask = await prisma.task.findFirst({
+        where: {
+          projectId: agent.projectId,
+          title: `Paid Capability: ${capability}`,
+        },
+      });
+
+      if (!capabilityTask) {
+        capabilityTask = await prisma.task.create({
+          data: {
+            projectId: agent.projectId,
+            creatorId: actorUserId,
+            title: `Paid Capability: ${capability}`,
+            description: `Paid capability execution for '${capability}'`,
+            status: 'TODO',
+          },
+        });
+      }
+      taskId = capabilityTask.id;
+    }
+
+    // Ensure TaskResponsibility exists for agent
+    await prisma.taskResponsibility.upsert({
+      where: {
+        taskId_agentId: {
+          taskId,
+          agentId,
+        },
       },
+      create: {
+        taskId,
+        agentId,
+        role: 'PRIMARY',
+      },
+      update: {},
+    });
+
+    // STEP 8: Connected Agent Check & Execution Dispatch (Section 12 & 13)
+    const { connectorService } = await import('../connector/connector.service.js');
+    const { executionService } = await import('../execution/execution.service.js');
+
+    const isConnected = connectorService.isAgentConnected(agentId);
+    const executionInput = {
+      ...(req.body?.input && typeof req.body.input === 'object' ? req.body.input : {}),
+      capability,
+      requireRealAgent: true,
     };
 
+    const execution = await executionService.createExecutionBypassingPolicy(
+      agent.projectId,
+      taskId,
+      actorUserId,
+      {
+        agentId,
+        input: executionInput,
+      },
+    );
+
+    // Update payment record with executionId
+    await prisma.payment.update({
+      where: { id: settledPayment.id },
+      data: { executionId: execution.id },
+    });
+
+    if (!isConnected) {
+      // Disconnected agent: payment SETTLED, execution FAILED / AGENT_UNAVAILABLE (Section 13 & 14)
+      res.status(200).json({
+        success: false,
+        status: 'EXECUTION_FAILED',
+        message: 'Payment settled on Hedera Testnet, but requested agent is not connected via WebSocket.',
+        execution: {
+          id: execution.id,
+          status: 'FAILED',
+          error: 'Agent is not connected via WebSocket',
+        },
+        payment: {
+          id: settledPayment.id,
+          status: settledPayment.status,
+          amount: settledPayment.amount,
+          asset: settledPayment.asset,
+          network: settledPayment.network,
+          transactionReference: settledPayment.transactionReference,
+          payerAddress: settledPayment.payerAddress,
+          receiverAddress: settledPayment.receiverAddress,
+          settledAt: settledPayment.settledAt,
+        },
+      });
+      return;
+    }
+
+    // Await connected agent execution completion (up to 6 seconds) (Section 15 & 16)
+    let attempts = 0;
+    let updatedExec = await prisma.taskExecution.findUnique({ where: { id: execution.id } });
+
+    while (attempts < 40 && updatedExec && (updatedExec.status === 'QUEUED' || updatedExec.status === 'RUNNING')) {
+      await new Promise((r) => setTimeout(r, 150));
+      updatedExec = await prisma.taskExecution.findUnique({ where: { id: execution.id } });
+      attempts++;
+    }
+
+    if (updatedExec && updatedExec.status === 'COMPLETED') {
+      res.status(200).json({
+        success: true,
+        result: updatedExec.output,
+        execution: {
+          id: updatedExec.id,
+          status: updatedExec.status,
+          output: updatedExec.output,
+        },
+        payment: {
+          id: settledPayment.id,
+          status: settledPayment.status,
+          amount: settledPayment.amount,
+          asset: settledPayment.asset,
+          network: settledPayment.network,
+          transactionReference: settledPayment.transactionReference,
+          payerAddress: settledPayment.payerAddress,
+          receiverAddress: settledPayment.receiverAddress,
+          settledAt: settledPayment.settledAt,
+        },
+      });
+      return;
+    }
+
     res.status(200).json({
-      success: true,
-      result: executionResult,
+      success: false,
+      status: 'EXECUTION_FAILED',
+      message: updatedExec?.error || 'Agent execution did not complete successfully',
+      execution: {
+        id: updatedExec?.id || execution.id,
+        status: updatedExec?.status || 'FAILED',
+        error: updatedExec?.error || 'Agent execution failed',
+      },
       payment: {
         id: settledPayment.id,
         status: settledPayment.status,

@@ -1,8 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
+import type { WebSocket } from 'ws';
+import { createAgentMeshMessage, AgentMeshMessageType } from '@agentmesh/agent-protocol';
 import { createApp } from '../app.js';
 import { prisma } from '../lib/prisma.js';
 import { sessionService } from '../auth/session.service.js';
+import { connectionManager } from '../websocket/connection.manager.js';
+import { connectorService } from '../connector/connector.service.js';
+import { x402Service } from '../payments/x402.service.js';
+import { PAYMENT_CONFIG } from '../payments/payment.config.js';
 
 describe('PRD #5 Agent Capabilities API Integration Tests', () => {
   const app = createApp();
@@ -98,6 +104,27 @@ describe('PRD #5 Agent Capabilities API Integration Tests', () => {
         provider: 'openai',
       });
     agent3Id = a3Res.body.id;
+
+    // Ensure project memberships
+    await prisma.projectMember.createMany({
+      data: [
+        { projectId: project1Id, userId, role: 'OWNER' },
+        { projectId: project2Id, userId, role: 'OWNER' },
+      ],
+      skipDuplicates: true,
+    });
+
+    vi.spyOn(x402Service, 'verifyAndSettle').mockImplementation(async (_payload, requirement) => {
+      return {
+        valid: true,
+        paymentReference: requirement.paymentReference,
+        transactionReference: `0.0.10442231@${Date.now()}.000000000`,
+        receiverAddress: requirement.receiver,
+        amount: requirement.amount,
+        asset: requirement.asset,
+        network: requirement.network,
+      };
+    });
   });
 
   afterAll(async () => {
@@ -387,4 +414,176 @@ describe('PRD #5 Agent Capabilities API Integration Tests', () => {
       expect(capAfterDelete).toBeNull();
     });
   });
+
+  describe('PRD-54 Paid Capability Execution (POST /agents/:agentId/capabilities/:capability/execute)', () => {
+    const validPaymentHeader = JSON.stringify({
+      scheme: 'exact',
+      network: PAYMENT_CONFIG.NETWORK || 'hedera:testnet',
+      asset: PAYMENT_CONFIG.USDC_TOKEN_ID || '0.0.429274',
+      amount: '1000',
+      receiverAddress: PAYMENT_CONFIG.RECEIVER_ADDRESS,
+    });
+
+    it('should return 403 Forbidden when requested capability is NOT assigned to agent', async () => {
+      const res = await request(app)
+        .post(`/agents/${agent1Id}/capabilities/unassigned-cap/execute`)
+        .set('Cookie', [sessionCookie])
+        .set('X-Payment', validPaymentHeader)
+        .send({
+          input: { task: 'test' },
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('FORBIDDEN');
+    });
+
+    it('should return 404 Not Found when agent does not exist', async () => {
+      const res = await request(app)
+        .post('/agents/nonexistent-agent-id/capabilities/backend/execute')
+        .set('Cookie', [sessionCookie])
+        .set('X-Payment', validPaymentHeader)
+        .send({
+          input: { task: 'test' },
+        });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('NOT_FOUND');
+    });
+
+    it('should return 402 Payment Required when payment header is missing', async () => {
+      const res = await request(app)
+        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+        .set('Cookie', [sessionCookie])
+        .send({
+          input: { task: 'test' },
+        });
+
+      expect(res.status).toBe(402);
+      expect(res.headers['x-payment-requirement'] || res.body.paymentRequirement).toBeDefined();
+      expect(res.body.error).toBe('Payment Required');
+    });
+
+    it('should settle payment and return execution AGENT_UNAVAILABLE when agent is disconnected', async () => {
+      const res = await request(app)
+        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+        .set('Cookie', [sessionCookie])
+        .set('X-Payment', validPaymentHeader)
+        .send({
+          input: { query: 'disconnected-test' },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.payment).toBeDefined();
+      expect(res.body.payment.status).toBe('SETTLED');
+      expect(res.body.execution).toBeDefined();
+      expect(res.body.execution.status).toBe('FAILED');
+      expect(res.body.execution.error).toContain('not connected');
+    }, 15000);
+
+    it('should settle payment and execute task via real connected WebSocket agent with causal proof', async () => {
+      const causalProof = 'PAID-CAPABILITY-PROOF-9876';
+
+      // Setup connected agent mock
+      const fakeSocket = {
+        send: (data: string) => {
+          try {
+            const msg = JSON.parse(data);
+            if (msg.type === AgentMeshMessageType.TASK_REQUEST) {
+              const { taskId, executionId } = msg.payload;
+              setTimeout(async () => {
+                const completedMsg = createAgentMeshMessage({
+                  type: AgentMeshMessageType.TASK_COMPLETED,
+                  projectId: project1Id,
+                  senderId: agent1Id,
+                  payload: {
+                    taskId,
+                    executionId,
+                    result: {
+                      summary: `Real Paid Capability Executed: ${causalProof}`,
+                    },
+                  },
+                });
+                if (connectionMetadata) {
+                  await connectorService.processConnectorTaskMessage(connectionMetadata, completedMsg);
+                }
+              }, 150);
+            }
+          } catch {
+            // ignore
+          }
+        },
+        readyState: 1,
+        OPEN: 1,
+        on: () => {},
+      } as unknown as WebSocket;
+
+      const connectionMetadata = connectionManager.addConnection(project1Id, fakeSocket);
+      connectionMetadata.authenticated = true;
+      connectionMetadata.agentId = agent1Id;
+      connectionMetadata.userId = userId;
+
+      try {
+        const res = await request(app)
+          .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+          .set('Cookie', [sessionCookie])
+          .set('X-Payment', validPaymentHeader)
+          .send({
+            input: { query: causalProof },
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.payment).toBeDefined();
+        expect(res.body.payment.status).toBe('SETTLED');
+        expect(res.body.execution.id).toBeDefined();
+        expect(res.body.execution.status).toBe('COMPLETED');
+        expect(res.body.execution.output || res.body.result).toBeDefined();
+        expect(JSON.stringify(res.body.execution.output || res.body.result)).toContain(causalProof);
+      } finally {
+        if (connectionMetadata) {
+          connectionManager.removeConnection(connectionMetadata.connectionId);
+        }
+      }
+    }, 15000);
+
+    it('should enforce idempotency and return existing execution result on duplicate payment reference', async () => {
+      const reqRes = await request(app)
+        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+        .set('Cookie', [sessionCookie])
+        .send({});
+
+      const reqData = reqRes.body.paymentRequirement;
+      const customPaymentHeader = JSON.stringify({
+        scheme: 'exact',
+        network: PAYMENT_CONFIG.NETWORK || 'hedera:testnet',
+        asset: PAYMENT_CONFIG.USDC_TOKEN_ID || '0.0.429274',
+        amount: '1000',
+        receiverAddress: PAYMENT_CONFIG.RECEIVER_ADDRESS,
+        paymentReference: reqData.paymentReference,
+      });
+
+      // First call (agent disconnected -> SETTLED + FAILED)
+      const res1 = await request(app)
+        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+        .set('Cookie', [sessionCookie])
+        .set('X-Payment', customPaymentHeader)
+        .set('X-Payment-Reference', reqData.paymentReference)
+        .send({ input: { query: 'idempotent-test' } });
+
+      expect(res1.status).toBe(200);
+      expect(res1.body.payment.status).toBe('SETTLED');
+
+      // Second call with exact same payment reference
+      const res2 = await request(app)
+        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+        .set('Cookie', [sessionCookie])
+        .set('X-Payment', customPaymentHeader)
+        .set('X-Payment-Reference', reqData.paymentReference)
+        .send({ input: { query: 'idempotent-test' } });
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.payment.status).toBe('SETTLED');
+      expect(res2.body.payment.id).toBe(res1.body.payment.id);
+    }, 15000);
+  });
 });
+

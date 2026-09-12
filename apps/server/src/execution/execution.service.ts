@@ -421,7 +421,7 @@ export class ExecutionService {
       await prisma.agent.update({
         where: { id: execution.agentId },
         data: { status: 'BUSY' },
-      });
+      }).catch(() => null);
       if (projectId) {
         await deltaSequencerService.recordAndBroadcastDelta(projectId, [
           { entity: 'agent', entityId: execution.agentId, operation: 'updated', fields: { status: 'BUSY' } },
@@ -466,15 +466,12 @@ export class ExecutionService {
       }
 
       // 3. Check if BYOA agent is connected via WebSocket connector
+      let dispatched = false;
       try {
-        const taskObj = await prisma.task.findUnique({
-          where: { id: execution.taskId },
-          select: { projectId: true },
-        });
-        if (taskObj) {
+        if (projectId) {
           const { connectorService } = await import('../connector/connector.service.js');
-          const dispatched = await connectorService.dispatchTaskToAgent(
-            taskObj.projectId,
+          dispatched = await connectorService.dispatchTaskToAgent(
+            projectId,
             execution.taskId,
             execution.id,
             execution.agentId,
@@ -485,6 +482,54 @@ export class ExecutionService {
         }
       } catch (connErr) {
         console.error(`Failed to dispatch execution ${executionId} via connector:`, connErr);
+      }
+
+      const isRequireRealAgent =
+        Boolean(rawInput?.requireRealAgent) ||
+        (typeof execution.input === 'object' &&
+          execution.input !== null &&
+          (execution.input as Record<string, unknown>).requireRealAgent === true);
+
+      if (isRequireRealAgent) {
+        // Enforce strict no-mock policy for paid capabilities: fail execution if agent is disconnected
+        await prisma.$transaction(async (tx) => {
+          await tx.taskExecution.updateMany({
+            where: {
+              id: executionId,
+              status: ExecutionStatus.RUNNING,
+            },
+            data: {
+              status: ExecutionStatus.FAILED,
+              error: 'Agent is not connected via WebSocket',
+              completedAt: new Date(),
+            },
+          });
+          const latestExecution = await tx.taskExecution.findFirst({
+            where: { taskId: execution.taskId },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (latestExecution && latestExecution.id === executionId) {
+            await tx.task.update({
+              where: { id: execution.taskId },
+              data: { status: 'FAILED' },
+            });
+          }
+        });
+
+        if (projectId) {
+          await this.broadcastExecutionStatus(
+            projectId,
+            executionId,
+            execution.taskId,
+            execution.agentId,
+            ExecutionStatus.FAILED,
+            'updated',
+          );
+          await taskService.broadcastTaskStatusEvent(projectId, execution.taskId, 'FAILED');
+        }
+
+        await this.syncAgentStatus(execution.agentId);
+        return;
       }
 
       // 4. Invoke Executor

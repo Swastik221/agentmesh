@@ -492,6 +492,7 @@ model Payment {
   status               PaymentStatus @default(REQUIRED)
   x402PaymentReference String?       @unique
   transactionReference String?
+  executionId          String?
   metadata             Json?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
