@@ -128,7 +128,7 @@ Server environment variables, read in `apps/server/src/config/index.ts` and `pay
 | `ENS_RPC_URL` / `ENS_TIMEOUT_MS` | `https://eth.llamarpc.com` / `8000` | ENS resolution |
 | `HEDERA_NETWORK` | `hedera:testnet` | CAIP-2 network id |
 | `HEDERA_PAYMENT_RECEIVER` | required, no fallback | Server controlled payee, throws at startup if missing |
-| `X402_FACILITATOR_URL` | `https://testnet.facilitator.x402.org` | x402 facilitator |
+| `X402_FACILITATOR_URL` | `https://x402.org/facilitator` | x402 facilitator |
 
 ## See the idea in one flow
 

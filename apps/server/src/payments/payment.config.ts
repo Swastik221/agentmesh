@@ -20,7 +20,7 @@ export const PAYMENT_CONFIG = {
   DEFAULT_PRICE_USDC: '0.001',
   DEFAULT_ATOMIC_AMOUNT: '1000', // 0.001 USDC * 10^6
   get FACILITATOR_URL() {
-    return process.env.X402_FACILITATOR_URL || 'https://testnet.facilitator.x402.org';
+    return process.env.X402_FACILITATOR_URL || 'https://x402.org/facilitator';
   },
   SCHEME: 'exact',
 };
