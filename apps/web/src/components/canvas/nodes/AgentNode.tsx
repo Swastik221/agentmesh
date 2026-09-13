@@ -6,9 +6,13 @@ export interface AgentNodeData {
 }
 
 export function AgentNode({ data, selected }: NodeProps) {
-  const agent = (data as unknown as AgentNodeData).agent;
+  const agent = (data as unknown as AgentNodeData)?.agent;
+  if (!agent) return null;
+
   const isAnand = agent.ownerColor === 'purple';
   const ownerClass = isAnand ? 'product-agent--anand' : 'product-agent--swastik';
+  const capabilities = agent.capabilities ?? [];
+  const logs = agent.logs ?? [];
 
   return (
     <article
@@ -71,7 +75,7 @@ export function AgentNode({ data, selected }: NodeProps) {
 
         {/* Capability Badges */}
         <div className="product-agent__caps">
-          {agent.capabilities.map((cap) => (
+          {capabilities.map((cap) => (
             <span key={cap} className="product-agent__cap-pill">
               {cap}
             </span>
@@ -80,7 +84,7 @@ export function AgentNode({ data, selected }: NodeProps) {
 
         {/* Monospace Protocol Terminal Logs */}
         <div className="product-agent__terminal nowheel nodrag">
-          {agent.logs.slice(-4).map((log, index) => (
+          {logs.slice(-4).map((log, index) => (
             <div key={index} className="product-agent__log-line">
               <span className="product-agent__log-prefix">›</span>
               <span>{log}</span>
