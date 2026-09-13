@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { SiweMessage } from 'siwe';
 import { authSessionService } from '../services/auth-session';
 
 export interface AuthUser {
@@ -201,15 +202,18 @@ export function useAuth() {
       const origin = (typeof window !== 'undefined' && window.location.origin) || 'http://localhost:5173';
       const issuedAt = new Date().toISOString();
 
-      const message =
-        `${domain} wants you to sign in with your Ethereum account:\n` +
-        `${addr}\n\n` +
-        `Sign in with Ethereum to AgentMesh.\n\n` +
-        `URI: ${origin}\n` +
-        `Version: 1\n` +
-        `Chain ID: ${activeChainId}\n` +
-        `Nonce: ${nonce}\n` +
-        `Issued At: ${issuedAt}`;
+      const siweMessage = new SiweMessage({
+        domain,
+        address: addr,
+        statement: 'Sign in with Ethereum to AgentMesh.',
+        uri: origin,
+        version: '1',
+        chainId: activeChainId,
+        nonce,
+        issuedAt,
+      });
+
+      const message = siweMessage.prepareMessage();
 
       let signature: string;
       const ethereum = (window as unknown as { ethereum?: EthereumProvider }).ethereum;
