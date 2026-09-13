@@ -620,7 +620,8 @@ describe('PRD-59 Production Acceptance Integration Tests', () => {
       expect(approved.status).toBe('APPROVED');
     });
 
-    it('Test 12 — Paid capability requirement boundary: Generates canonical x402 payment requirements with enforced network, asset, and payment reference', async () => {
+    it('Test 12 — Paid capability requirement boundary: Verifies canonical x402 payment-requirement generation with USDC asset and atomic amount', async () => {
+      // Note: This test verifies the canonical x402 payment-requirement boundary generation with USDC semantics ($0.001 = 1000 atomic units), not live Hedera network settlement.
       const p = await prisma.project.create({
         data: {
           name: 'Payment Requirement Project',
@@ -633,14 +634,16 @@ describe('PRD-59 Production Acceptance Integration Tests', () => {
         projectId: p.id,
         requesterUserId: ownerUser.id,
         action: 'capability.execute',
-        amount: '500',
-        asset: 'HBAR',
+        amount: PAYMENT_CONFIG.DEFAULT_ATOMIC_AMOUNT,
+        asset: PAYMENT_CONFIG.USDC_TOKEN_ID,
         network: 'hedera:testnet',
       });
 
       expect(requirement.requirement).toBeDefined();
       expect(requirement.requirement.scheme).toBe('exact');
       expect(requirement.requirement.network).toBe('hedera:testnet');
+      expect(requirement.requirement.asset).toBe(PAYMENT_CONFIG.USDC_TOKEN_ID);
+      expect(requirement.requirement.amount).toBe('1000');
       expect(requirement.requirement.paymentReference).toBeDefined();
       expect(PAYMENT_CONFIG.FACILITATOR_URL).toBe('https://x402.org/facilitator');
 
@@ -648,8 +651,8 @@ describe('PRD-59 Production Acceptance Integration Tests', () => {
       const invalidHeader = JSON.stringify({
         scheme: 'exact',
         network: 'hedera:testnet',
-        asset: 'HBAR',
-        amount: '500',
+        asset: PAYMENT_CONFIG.USDC_TOKEN_ID,
+        amount: '1000',
         paymentReference: requirement.requirement.paymentReference,
       });
 
@@ -723,7 +726,7 @@ describe('PRD-59 Production Acceptance Integration Tests', () => {
         SIWE_DOMAIN: 'localhost',
         SIWE_URI: 'http://localhost:5173',
         HEDERA_NETWORK: 'hedera:mainnet',
-        HEDERA_PAYMENT_RECEIVER: '0.0.500123',
+        HEDERA_PAYMENT_RECEIVER: '0.0.9185802',
         X402_FACILITATOR_URL: 'https://x402.org/facilitator',
       };
       expect(() => validateProductionConfig(invalidNetworkEnv)).toThrow('[ProductionConfigError]');

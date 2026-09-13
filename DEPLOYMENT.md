@@ -33,7 +33,7 @@ SIWE_CHAIN_ID=1
 
 # Hedera x402 Architecture Configuration (Current Supported Deployment: Hedera Testnet + USDC + Official x402 Facilitator)
 HEDERA_NETWORK=hedera:testnet
-HEDERA_PAYMENT_RECEIVER=0.0.500123
+HEDERA_PAYMENT_RECEIVER=0.0.9185802
 X402_FACILITATOR_URL=https://x402.org/facilitator
 ```
 
