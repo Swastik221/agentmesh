@@ -99,32 +99,34 @@ Expected HTTP 200 Response:
 
 ## 5. Manual Final Browser Acceptance Checklist
 
+Automated integration tests verify the underlying backend, authentication, authorization, realtime, agent, artifact, approval, and payment-boundary behavior. The checklist below is the final manual/browser acceptance and must only be checked after those steps are actually performed against the deployed product.
+
 Perform the following manual acceptance checklist in modern Web3 browsers (e.g. Chrome with MetaMask):
 
 ### Phase A — User A (Workspace Creator)
-- [x] Open `https://app.agentmesh.io`.
-- [x] Connect real Web3 wallet via MetaMask/Injected Provider.
-- [x] Sign SIWE EIP-4361 authentication message challenge.
-- [x] Verify session cookie established and ENS identity displayed when resolvable.
-- [x] Verify fresh user starts with blank workspace.
-- [x] Create project "Project Alpha".
-- [x] Invite teammate User B by wallet address (`0x...`) or ENS (`bob.eth`).
-- [x] Onboard real AI agent and send protocol `AGENT_HANDSHAKE`. Verify agent status becomes `ONLINE`.
+- [ ] Open `https://app.agentmesh.io`.
+- [ ] Connect real Web3 wallet via MetaMask/Injected Provider.
+- [ ] Sign SIWE EIP-4361 authentication message challenge.
+- [ ] Verify session cookie established and ENS identity displayed when resolvable.
+- [ ] Verify fresh user starts with blank workspace.
+- [ ] Create project "Project Alpha".
+- [ ] Invite teammate User B by wallet address (`0x...`) or ENS (`bob.eth`).
+- [ ] Onboard real AI agent and send protocol `AGENT_HANDSHAKE`. Verify agent status becomes `ONLINE`.
 
 ### Phase B — User B (Teammate)
-- [x] Open `https://app.agentmesh.io` in a separate browser profile.
-- [x] Connect different Web3 wallet.
-- [x] Sign SIWE authentication challenge.
-- [x] See pending invitation banner for "Project Alpha".
-- [x] Click **Accept**.
-- [x] Enter shared "Project Alpha" workspace.
+- [ ] Open `https://app.agentmesh.io` in a separate browser profile.
+- [ ] Connect different Web3 wallet.
+- [ ] Sign SIWE authentication challenge.
+- [ ] See pending invitation banner for "Project Alpha".
+- [ ] Click **Accept**.
+- [ ] Enter shared "Project Alpha" workspace.
 
 ### Phase C — Shared Collaboration & Realtime Sync
-- [x] User A creates task "Production Build".
-- [x] User B's UI instantly receives `workspace.delta` realtime WebSocket event.
-- [x] Agent executes task and publishes artifact.
-- [x] Dependency gating evaluates causal provenance.
-- [x] Browser reload restores complete server-persisted state from PostgreSQL.
+- [ ] User A creates task "Production Build".
+- [ ] User B's UI instantly receives `workspace.delta` realtime WebSocket event.
+- [ ] Agent executes task and publishes artifact.
+- [ ] Dependency gating evaluates causal provenance.
+- [ ] Browser reload restores complete server-persisted state from PostgreSQL.
 
 ### Phase D — Paid Capability & Hedera x402 Settlement
 - [ ] User requests paid capability execution.
