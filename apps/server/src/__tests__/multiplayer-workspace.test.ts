@@ -461,9 +461,43 @@ describe('PRD-58 & PRD-58-C1 Real Multi-User Workspace, Invitations & Agent Onbo
         where: { projectId, userId: teammateUser.id },
       });
       expect(members.length).toBe(1);
+      expect(members[0].projectId).toBe(projectId);
+      expect(members[0].userId).toBe(teammateUser.id);
+      expect(members[0].role).toBe('MEMBER');
 
       const dbInv = await prisma.projectInvitation.findUnique({ where: { id: inv.id } });
       expect(dbInv?.status).toBe('ACCEPTED');
+    });
+
+    it('Scenario 9B: High-concurrency (10 requests) & Unauthorized Concurrent Acceptance Protection', async () => {
+      const inv = await prisma.projectInvitation.create({
+        data: {
+          projectId,
+          inviterUserId: ownerUser.id,
+          invitedWallet: teammateUser.walletAddress.toLowerCase(),
+          role: 'ADMIN',
+          status: 'PENDING',
+        },
+      });
+
+      const promises = Array.from({ length: 10 }).map(() =>
+        request.post(`/invitations/${inv.id}/accept`).set('Cookie', teammateCookie),
+      );
+
+      const results = await Promise.all(promises);
+      const statuses = results.map((r) => r.status);
+      expect(statuses.every((s) => s === 200)).toBe(true);
+
+      const members = await prisma.projectMember.findMany({
+        where: { projectId, userId: teammateUser.id },
+      });
+      expect(members.length).toBe(1);
+      expect(members[0].role).toBe('ADMIN');
+
+      const unauthorizedRes = await request
+        .post(`/invitations/${inv.id}/accept`)
+        .set('Cookie', ownerCookie);
+      expect(unauthorizedRes.status).toBe(403);
     });
 
     it('Scenario 10: Fix Concurrent Invitation Creation -> 5 concurrent creation requests yield exactly 1 pending invitation without DB errors', async () => {
