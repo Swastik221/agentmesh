@@ -45,6 +45,7 @@ model User {
   approvalRequestsRequested ApprovalRequest[] @relation("ApprovalRequester")
   approvalRequestsResolved  ApprovalRequest[] @relation("ApprovalResolver")
   payments                  Payment[]         @relation("PaymentRequester")
+  agentConnectTokens        AgentConnectToken[] @relation("AgentConnectTokenIssuer")
   invitationsSent           ProjectInvitation[] @relation("InvitationInviter")
 
   @@map("users")
@@ -73,6 +74,7 @@ model Project {
   approvalRequests ApprovalRequest[]
   payments         Payment[]
   invitations      ProjectInvitation[]
+  agentConnectTokens AgentConnectToken[]
 
   @@index([ownerId])
   @@map("projects")
@@ -140,6 +142,7 @@ model Agent {
   artifacts            Artifact[]
   approvalRequests     ApprovalRequest[]
   payments             Payment[]
+  connectTokens        AgentConnectToken[]
 
   @@index([projectId])
   @@index([ownerId])
@@ -541,3 +544,28 @@ model Payment {
   @@map("payments")
 }
 
+
+/// Short-lived credential that lets one BYOA agent process open a WebSocket for
+/// exactly one agent in one project. Deliberately not a session: it cannot be
+/// used against the REST API, it carries no user login, and it expires. Only
+/// the project member who owns the agent can mint one. Stored as a SHA-256
+/// hash so a database read cannot be replayed against the socket.
+model AgentConnectToken {
+  id             String    @id @default(cuid())
+  tokenHash      String    @unique
+  agentId        String
+  projectId      String
+  issuedByUserId String
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  agent    Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issuedBy User    @relation("AgentConnectTokenIssuer", fields: [issuedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([projectId])
+  @@index([expiresAt])
+  @@map("agent_connect_tokens")
+}

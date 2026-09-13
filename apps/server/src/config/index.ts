@@ -1,3 +1,4 @@
+import path from 'node:path';
 import dotenv from 'dotenv';
 import { DEFAULT_SIWE_CHAIN_ID } from '@agentmesh/shared';
 
@@ -14,6 +15,12 @@ export const config = {
   maxArtifactsPerPage: parseInt(process.env.MAX_ARTIFACTS_PER_PAGE || '50', 10),
   maxDependencyTraversalDepth: parseInt(process.env.MAX_DEPENDENCY_TRAVERSAL_DEPTH || '10', 10),
   maxWorkspaceDeltaBytes: parseInt(process.env.MAX_WORKSPACE_DELTA_BYTES || '65536', 10), // 64KB
+  /**
+   * Absolute base directory that per-project workspaces are provisioned under.
+   * Must be absolute: execution working directories are handed to agent
+   * processes whose CWD is not the server's.
+   */
+  workspaceRoot: path.resolve(process.env.WORKSPACE_ROOT || path.join(process.cwd(), 'workspaces')),
   ensRpcUrl: process.env.ENS_RPC_URL || 'https://eth.llamarpc.com',
   ensTimeoutMs: parseInt(process.env.ENS_TIMEOUT_MS || '8000', 10),
 };

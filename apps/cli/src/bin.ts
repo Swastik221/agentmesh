@@ -10,8 +10,12 @@ function parseArgs(args: string[]): Record<string, string> {
       result.agent = args[++i];
     } else if (arg === '--session-id' || arg === '--token') {
       result.sessionId = args[++i];
+    } else if (arg === '--connect-token') {
+      result.connectToken = args[++i];
     } else if (arg === '--url' || arg === '-u') {
       result.url = args[++i];
+    } else if (arg === '--mock') {
+      result.mock = 'true';
     }
   }
   return result;
@@ -27,8 +31,10 @@ async function main() {
       await runConnect({
         workspace: options.workspace,
         agent: options.agent,
+        connectToken: options.connectToken,
         sessionId: options.sessionId,
         url: options.url,
+        mock: options.mock === 'true',
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -39,7 +45,15 @@ async function main() {
     console.log(`AgentMesh CLI v0.1.0
 
 Usage:
-  agentmesh connect --workspace <workspace-id> [--agent <agent-id>] [--session-id <token>]
+  agentmesh connect --workspace <workspace-id> --agent <agent-id> --connect-token <token>
+
+Options:
+  -w, --workspace <id>     Project the agent joins
+  -a, --agent <id>         Agent to connect as
+      --connect-token <t>  Short-lived token from the workspace UI
+                           (or set AGENTMESH_CONNECT_TOKEN)
+  -u, --url <url>          Server URL (default http://localhost:3001)
+      --mock               Use the canned mock adapter instead of doing real work
 `);
     process.exit(command ? 1 : 0);
   }

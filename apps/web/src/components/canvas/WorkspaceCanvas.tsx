@@ -43,6 +43,7 @@ import { CommandComposer } from './CommandComposer';
 import { MultiplayerCursors } from './MultiplayerCursors';
 
 import { currentProjectId } from '../../utils/currentProjectId';
+import { authSessionService } from '../../services/auth-session';
 import { useAgents } from '../../hooks/useAgents';
 import { useTasks } from '../../hooks/useTasks';
 import { useWorkspaceRealtime } from '../../hooks/useWorkspaceRealtime';
@@ -98,6 +99,10 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
     ),
   );
 
+  // Resolved synchronously from the session the route guard already fetched;
+  // used only to label and colour agents the signed-in user owns.
+  const viewerUserId = authSessionService.getCurrentUser()?.id ?? null;
+
   const initialNodes = useMemo<Node[]>(() => {
     const coordinatorNode: Node = {
       id: 'coordinator',
@@ -136,14 +141,19 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
           id: agent.id,
           name: agent.name,
           provider: agent.provider,
-          ens: agent.ensName ?? 'unlinked.eth',
+          status: agent.status,
+          ens: agent.ensName,
+          address: agent.ensAddress,
+          ownerLabel: agent.ownerId === viewerUserId ? 'you' : agent.ownerId,
+          ownedByViewer: agent.ownerId === viewerUserId,
           capabilities: (agent.capabilities ?? []).map((c) => c.capability),
+          logs: [],
         },
       },
     }));
 
     return [coordinatorNode, tasksNode, ...agentNodes];
-  }, [liveAgents, liveTasks, claimTask]);
+  }, [liveAgents, liveTasks, claimTask, viewerUserId]);
 
   const initialEdges = useMemo<Edge[]>(() => {
     const edges: Edge[] = [

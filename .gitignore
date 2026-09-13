@@ -2,6 +2,9 @@
 node_modules/
 .pnpm-store/
 
+# Provisioned agent workspaces (real git repos cut per project)
+workspaces/
+
 # Build outputs
 dist/
 build/

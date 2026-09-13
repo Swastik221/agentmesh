@@ -55,6 +55,46 @@ export class GitService {
     }
   }
 
+  /**
+   * Creates a real Git repository at `repositoryPath` if one is not already
+   * there, with a single initial commit so `git worktree add` has a commit to
+   * branch from. Idempotent: an existing valid repository is left untouched.
+   */
+  async ensureRepository(repositoryPath: string): Promise<void> {
+    try {
+      await this.validateRepository(repositoryPath);
+      return;
+    } catch {
+      // Fall through and initialise below.
+    }
+
+    await fs.promises.mkdir(repositoryPath, { recursive: true });
+    await this.runGitCommand(['-C', repositoryPath, 'init', '--quiet']);
+    await this.runGitCommand(['-C', repositoryPath, 'config', 'user.email', 'agent@agentmesh.local']);
+    await this.runGitCommand(['-C', repositoryPath, 'config', 'user.name', 'AgentMesh']);
+
+    const readmePath = path.join(repositoryPath, 'README.md');
+    if (!fs.existsSync(readmePath)) {
+      await fs.promises.writeFile(
+        readmePath,
+        '# AgentMesh workspace\n\nAgent executions are cut as Git worktrees from this repository.\n',
+        'utf8',
+      );
+    }
+
+    await this.runGitCommand(['-C', repositoryPath, 'add', '.']);
+    await this.runGitCommand([
+      '-C',
+      repositoryPath,
+      'commit',
+      '--quiet',
+      '-m',
+      'Initialise AgentMesh workspace repository',
+    ]);
+
+    await this.validateRepository(repositoryPath);
+  }
+
   async createWorktree(params: CreateWorktreeParams): Promise<void> {
     await this.validateRepository(params.repositoryPath);
 

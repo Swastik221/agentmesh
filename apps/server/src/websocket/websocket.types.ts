@@ -28,4 +28,14 @@ export interface ConnectionMetadata {
   agentId?: string;
   sessionId?: string;
   authenticated: boolean;
+  /**
+   * Set when the connection presented an agent connect token instead of a SIWE
+   * session. Scoped to exactly this agent in this project; it never stands in
+   * for a user login anywhere else.
+   */
+  connectToken?: {
+    agentId: string;
+    projectId: string;
+    issuedByUserId: string;
+  };
 }

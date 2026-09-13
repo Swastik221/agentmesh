@@ -13,6 +13,8 @@ export interface ClientOptions {
   agentId: string;
   sessionId?: string;
   token?: string;
+  /** Short-lived, agent-scoped credential. Preferred over a full session. */
+  connectToken?: string;
   adapter?: AgentAdapter;
   reconnectIntervalMs?: number;
   maxReconnectAttempts?: number;
@@ -31,6 +33,7 @@ export class AgentMeshClient {
   private workspaceId: string;
   private agentId: string;
   private sessionId: string;
+  private connectToken: string;
   private adapter: AgentAdapter;
   private ws: WebSocket | null = null;
   private state: ConnectionState = 'DISCONNECTED';
@@ -39,12 +42,15 @@ export class AgentMeshClient {
   private reconnectAttempts = 0;
   private isExplicitClose = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  /** The server's own reason for rejecting the handshake, surfaced verbatim. */
+  private lastRejection: string | null = null;
 
   constructor(options: ClientOptions) {
     this.serverUrl = options.serverUrl;
     this.workspaceId = options.workspaceId;
     this.agentId = options.agentId;
     this.sessionId = options.sessionId || options.token || '';
+    this.connectToken = options.connectToken || '';
     this.adapter = options.adapter || ({
       getIdentity: async () => ({ id: options.agentId, name: 'DefaultAgent', provider: 'default' }),
       getCapabilities: async () => ({ capabilities: [] }),
@@ -71,10 +77,14 @@ export class AgentMeshClient {
     this.state = 'CONNECTING';
 
     const wsUrl = this.buildWsUrl();
-    const headers = {
-      Authorization: `Bearer ${this.sessionId}`,
-      Cookie: `agentmesh_session=${this.sessionId}`,
-    };
+    // An agent-scoped connect token is sent on its own header so the server
+    // never has to disambiguate it from a browser session.
+    const headers: Record<string, string> = this.connectToken
+      ? { 'x-agent-connect-token': this.connectToken }
+      : {
+          Authorization: `Bearer ${this.sessionId}`,
+          Cookie: `agentmesh_session=${this.sessionId}`,
+        };
 
     return new Promise<void>((resolve, reject) => {
       try {
@@ -95,7 +105,7 @@ export class AgentMeshClient {
           if (this.state === 'REGISTERED') {
             resolve();
           } else if (this.state === 'FAILED') {
-            reject(new Error('Handshake failed'));
+            reject(new Error(this.lastRejection || 'Handshake failed'));
           }
         });
 
@@ -161,6 +171,7 @@ export class AgentMeshClient {
       }
 
       case AgentMeshMessageType.AGENT_HANDSHAKE_REJECTED: {
+        this.lastRejection = `${message.payload.code}: ${message.payload.message}`;
         this.state = 'FAILED';
         this.disconnect();
         break;

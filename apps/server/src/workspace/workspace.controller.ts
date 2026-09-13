@@ -18,6 +18,7 @@ export const createWorkspace = async (
       id: workspace.id,
       projectId: workspace.projectId,
       rootPath: workspace.rootPath,
+      gitRepoPath: workspace.gitRepoPath,
       createdAt: workspace.createdAt.toISOString(),
       updatedAt: workspace.updatedAt.toISOString(),
     });
@@ -41,6 +42,7 @@ export const getWorkspace = async (
       id: workspace.id,
       projectId: workspace.projectId,
       rootPath: workspace.rootPath,
+      gitRepoPath: workspace.gitRepoPath,
       createdAt: workspace.createdAt.toISOString(),
       updatedAt: workspace.updatedAt.toISOString(),
     });

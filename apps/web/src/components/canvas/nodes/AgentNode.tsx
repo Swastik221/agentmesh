@@ -1,14 +1,53 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import type { Agent } from '../../../adapters/types';
 
-export interface AgentNodeData {
-  agent: Agent;
+/**
+ * The agent shape this node renders.
+ *
+ * Every field except identity is optional because the canvas builds this from
+ * the real `GET /projects/:id/agents` payload, where ENS, wallet and
+ * capabilities are all legitimately absent for a freshly registered agent.
+ * Rendering must survive that: an unguarded read here unmounts the whole app,
+ * since a thrown render in a React Flow node takes the tree with it.
+ */
+export interface CanvasAgent {
+  id: string;
+  name: string;
+  provider: string;
+  /** The real backend status, shown verbatim. */
+  status: 'ONLINE' | 'OFFLINE' | 'BUSY';
+  ens?: string | null;
+  address?: string | null;
+  ownerLabel?: string | null;
+  /** True when the signed-in user owns this agent, used only for colour. */
+  ownedByViewer?: boolean;
+  capabilities?: string[];
+  logs?: string[];
 }
 
+export interface AgentNodeData {
+  agent: CanvasAgent;
+}
+
+/** Maps the backend status onto the pill variants the stylesheet defines. */
+const STATUS_CLASS: Record<CanvasAgent['status'], string> = {
+  ONLINE: 'connected',
+  BUSY: 'working',
+  OFFLINE: 'idle',
+};
+
 export function AgentNode({ data, selected }: NodeProps) {
-  const agent = (data as unknown as AgentNodeData).agent;
-  const isAnand = agent.ownerColor === 'purple';
-  const ownerClass = isAnand ? 'product-agent--anand' : 'product-agent--swastik';
+  const agent = (data as unknown as AgentNodeData | undefined)?.agent;
+
+  if (!agent) {
+    return null;
+  }
+
+  const ownedByViewer = agent.ownedByViewer === true;
+  const ownerClass = ownedByViewer ? 'product-agent--anand' : 'product-agent--swastik';
+  const accentVar = ownedByViewer ? 'var(--mesh-owner-anand)' : 'var(--mesh-owner-swastik)';
+  const capabilities = agent.capabilities ?? [];
+  const logs = agent.logs ?? [];
+  const statusClass = STATUS_CLASS[agent.status] ?? 'idle';
 
   return (
     <article
@@ -29,10 +68,13 @@ export function AgentNode({ data, selected }: NodeProps) {
             <i />
           </span>
           <strong style={{ fontSize: 13, color: 'var(--mesh-text-main)' }}>
-            {agent.name} <span style={{ fontWeight: 400, color: 'var(--mesh-text-muted)' }}>/ {agent.provider}</span>
+            {agent.name}{' '}
+            <span style={{ fontWeight: 400, color: 'var(--mesh-text-muted)' }}>
+              / {agent.provider}
+            </span>
           </strong>
         </div>
-        <span className={`product-status-pill product-status-pill--${agent.status}`}>
+        <span className={`product-status-pill product-status-pill--${statusClass}`}>
           {agent.status}
         </span>
       </header>
@@ -52,35 +94,42 @@ export function AgentNode({ data, selected }: NodeProps) {
                 borderRadius: 4,
               }}
             >
-              {agent.ownerName} ({agent.ownerEns})
+              {agent.ownerLabel || 'unknown owner'}
             </span>
           </div>
           <div className="product-agent__identity-row">
             <span className="product-agent__identity-label">Agent ENS</span>
-            <span className="product-agent__identity-value" style={{ color: isAnand ? 'var(--mesh-owner-anand)' : 'var(--mesh-owner-swastik)' }}>
-              {agent.ens}
+            <span className="product-agent__identity-value" style={{ color: accentVar }}>
+              {agent.ens || 'not linked'}
             </span>
           </div>
           <div className="product-agent__identity-row">
             <span className="product-agent__identity-label">Wallet</span>
-            <span className="product-agent__identity-value" style={{ color: 'var(--mesh-text-muted)', fontSize: 10 }}>
-              {agent.address}
+            <span
+              className="product-agent__identity-value"
+              style={{ color: 'var(--mesh-text-muted)', fontSize: 10 }}
+            >
+              {agent.address || 'not linked'}
             </span>
           </div>
         </div>
 
         {/* Capability Badges */}
         <div className="product-agent__caps">
-          {agent.capabilities.map((cap) => (
-            <span key={cap} className="product-agent__cap-pill">
-              {cap}
-            </span>
-          ))}
+          {capabilities.length === 0 ? (
+            <span className="product-agent__cap-pill">no declared capabilities</span>
+          ) : (
+            capabilities.map((cap) => (
+              <span key={cap} className="product-agent__cap-pill">
+                {cap}
+              </span>
+            ))
+          )}
         </div>
 
         {/* Monospace Protocol Terminal Logs */}
         <div className="product-agent__terminal nowheel nodrag">
-          {agent.logs.slice(-4).map((log, index) => (
+          {logs.slice(-4).map((log, index) => (
             <div key={index} className="product-agent__log-line">
               <span className="product-agent__log-prefix">›</span>
               <span>{log}</span>
