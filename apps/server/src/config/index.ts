@@ -18,3 +18,14 @@ export const config = {
   ensTimeoutMs: parseInt(process.env.ENS_TIMEOUT_MS || '8000', 10),
 };
 
+export const validateProductionConfig = (envRecord: Record<string, string | undefined> = process.env): void => {
+  if (envRecord.NODE_ENV === 'production') {
+    const requiredVars = ['DATABASE_URL', 'SIWE_DOMAIN', 'SIWE_URI'];
+    const missing = requiredVars.filter((key) => !envRecord[key] || envRecord[key]?.trim() === '');
+    if (missing.length > 0) {
+      throw new Error(`[ProductionConfigError] Missing required production environment variables: ${missing.join(', ')}`);
+    }
+  }
+};
+
+validateProductionConfig();
