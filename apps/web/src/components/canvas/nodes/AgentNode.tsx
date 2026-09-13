@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react';
+import type { LiveAgent } from '../../../adapters/live/agent.adapter';
 
 /**
  * The agent shape this node renders.
@@ -26,6 +27,29 @@ export interface CanvasAgent {
 
 export interface AgentNodeData {
   agent: CanvasAgent;
+}
+
+/**
+ * The one place a real `GET /projects/:id/agents` row becomes canvas node
+ * data. Everything shown is either the backend value or an explicit "not
+ * linked" / "unknown"; nothing is synthesised to look populated. Missing
+ * optional fields are the normal case for a freshly registered agent, and
+ * rendering must survive them.
+ */
+export function toCanvasAgent(agent: LiveAgent, viewerUserId: string | null): CanvasAgent {
+  const ownedByViewer = viewerUserId !== null && agent.ownerId === viewerUserId;
+  return {
+    id: agent.id,
+    name: agent.name,
+    provider: agent.provider,
+    status: agent.status,
+    ens: agent.ensName,
+    address: agent.ensAddress,
+    ownerLabel: ownedByViewer ? 'you' : agent.ownerId,
+    ownedByViewer,
+    capabilities: (agent.capabilities ?? []).map((c) => c.capability),
+    logs: [],
+  };
 }
 
 /** Maps the backend status onto the pill variants the stylesheet defines. */

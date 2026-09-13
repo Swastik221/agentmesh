@@ -37,6 +37,7 @@ import '../../features/workspace/autumn-workspace.css';
 import '../../features/workspace/chrome.css';
 
 import { workspaceNodeTypes } from './nodes';
+import { toCanvasAgent } from './nodes/AgentNode';
 import { ProtocolEdge } from './ProtocolEdge';
 import { ToolDock, type DockToolType } from './ToolDock';
 import { CommandComposer } from './CommandComposer';
@@ -136,20 +137,7 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
       id: agent.id,
       type: 'productAgent',
       position: { x: 30 + index * 320, y: 380 },
-      data: {
-        agent: {
-          id: agent.id,
-          name: agent.name,
-          provider: agent.provider,
-          status: agent.status,
-          ens: agent.ensName,
-          address: agent.ensAddress,
-          ownerLabel: agent.ownerId === viewerUserId ? 'you' : agent.ownerId,
-          ownedByViewer: agent.ownerId === viewerUserId,
-          capabilities: (agent.capabilities ?? []).map((c) => c.capability),
-          logs: [],
-        },
-      },
+      data: { agent: toCanvasAgent(agent, viewerUserId) },
     }));
 
     return [coordinatorNode, tasksNode, ...agentNodes];
