@@ -637,3 +637,156 @@ body {
     padding: 12px;
   }
 }
+
+/* ------------------------------------------------------- workspace invite */
+
+/*
+ * The invite code is the whole point of this dialog, so it is styled as the
+ * thing you read, not as a form field. It previously sat on --mesh-bg-secondary,
+ * a light cream from the other palette, while inheriting the dark modal's light
+ * text: the code was very nearly invisible. Everything here is drawn from the
+ * same --am-* tokens the modal and the landing page already use.
+ */
+.invite-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--am-green);
+  border-radius: 10px;
+  background: var(--am-ink-950);
+}
+
+.invite-code-row__value {
+  flex: 1 1 180px;
+  min-width: 0;
+  font-family: var(--am-font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--am-green);
+  /* A code is copied by hand as often as by button, so let it be selected. */
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.invite-code-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--canvas-line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--canvas-copy);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.invite-code-row button:hover:not(:disabled) {
+  border-color: var(--am-green);
+  color: var(--am-green);
+}
+
+.invite-code-row button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.invite-modal__status {
+  font-size: 13px;
+  color: var(--canvas-muted);
+}
+
+.invite-modal__error {
+  font-size: 12px;
+  color: var(--am-red, #c94f4f);
+}
+
+.invite-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.invite-modal__footer button {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--canvas-line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--canvas-copy);
+  cursor: pointer;
+}
+
+.invite-modal__footer button:hover {
+  border-color: var(--am-green);
+  color: var(--am-green);
+}
+
+/* The join dialog is the other half of the same flow, so it reads the same. */
+.join-code-field {
+  width: 100%;
+  padding: 11px 13px;
+  margin-bottom: 14px;
+  border: 1px solid var(--canvas-line-strong);
+  border-radius: 10px;
+  background: var(--am-ink-950);
+  color: var(--canvas-copy);
+  font-family: var(--am-font-mono);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.join-code-field:focus {
+  outline: none;
+  border-color: var(--am-green);
+}
+
+.join-code-field::placeholder {
+  color: var(--canvas-muted);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.invite-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.invite-modal__actions button {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--canvas-line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--canvas-copy);
+  cursor: pointer;
+}
+
+.invite-modal__actions button:hover:not(:disabled) {
+  border-color: var(--am-green);
+  color: var(--am-green);
+}
+
+.invite-modal__actions button.is-primary {
+  border-color: var(--am-green);
+  background: var(--am-green);
+  color: var(--am-ink-950);
+  font-weight: 700;
+}
+
+.invite-modal__actions button.is-primary:hover:not(:disabled) {
+  color: var(--am-ink-950);
+}
+
+.invite-modal__actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

@@ -199,57 +199,25 @@ export function Header() {
                 <h2>Join Project</h2>
               </div>
             </header>
-            <form onSubmit={handleJoin} style={{ marginTop: 12 }}>
-              <p style={{ fontSize: 12, color: 'var(--mesh-text-muted)', marginBottom: 12 }}>
-                Enter a project invite code to join a peer session.
-              </p>
+            <form onSubmit={handleJoin}>
+              <p>Enter a project invite code to join a peer session.</p>
               <input
-                style={{
-                  width: '100%',
-                  padding: '8px 10px',
-                  borderRadius: 6,
-                  border: '1px solid var(--mesh-border-strong)',
-                  fontFamily: 'var(--mesh-font-mono)',
-                  fontSize: 13,
-                  marginBottom: 14,
-                }}
+                className="join-code-field"
                 placeholder="MESH-XXXXXXXX"
                 value={inviteCodeInput}
                 onChange={(e) => setInviteCodeInput(e.target.value)}
                 autoFocus
               />
               {joinError && (
-                <p role="alert" style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--mesh-error-red, #c94f4f)' }}>
+                <p role="alert" className="invite-modal__error" style={{ margin: '0 0 12px' }}>
                   {joinError}
                 </p>
               )}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => setJoinModalOpen(false)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: 6,
-                    border: '1px solid var(--mesh-border-subtle)',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                  }}
-                >
+              <div className="invite-modal__actions">
+                <button type="button" onClick={() => setJoinModalOpen(false)}>
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={joinBusy}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 6,
-                    border: 'none',
-                    backgroundColor: 'var(--mesh-primary-green)',
-                    color: '#FFF',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
+                <button type="submit" className="is-primary" disabled={joinBusy}>
                   {joinBusy ? 'Joining…' : 'Join'}
                 </button>
               </div>
@@ -275,36 +243,21 @@ export function Header() {
                 <h2>Invite code</h2>
               </div>
             </header>
-            <p style={{ fontSize: 12, color: 'var(--mesh-text-muted)', margin: '12px 0' }}>
-              Share this code. Anyone signed in who enters it joins this workspace as a member.
-            </p>
+            <p>Share this code. Anyone signed in who enters it joins this workspace as a member.</p>
 
             {inviteBusy && !inviteCode ? (
-              <p style={{ fontSize: 13 }}>Loading…</p>
+              <p className="invite-modal__status">Loading…</p>
             ) : inviteError ? (
-              <p role="alert" style={{ fontSize: 12, color: 'var(--mesh-error-red, #c94f4f)' }}>
+              <p role="alert" className="invite-modal__error">
                 {inviteError}
               </p>
             ) : inviteCode ? (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  border: '1px solid var(--mesh-border-strong)',
-                  background: 'var(--mesh-bg-secondary, rgba(0,0,0,0.04))',
-                }}
-              >
-                <code style={{ flex: 1, fontFamily: 'var(--mesh-font-mono)', fontSize: 15, fontWeight: 600 }}>
-                  {inviteCode}
-                </code>
+              <div className="invite-code-row">
+                <code className="invite-code-row__value">{inviteCode}</code>
                 <button
                   type="button"
                   title="Copy invite code"
                   onClick={() => void copy(inviteCode, 'invite')}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--mesh-border-subtle)', background: 'transparent', cursor: 'pointer' }}
                 >
                   {copied === 'invite' ? <Check size={13} /> : <Copy size={13} />}
                   {copied === 'invite' ? 'Copied' : 'Copy'}
@@ -314,19 +267,14 @@ export function Header() {
                   title="Replace this code, invalidating the old one"
                   disabled={inviteBusy}
                   onClick={() => void rotateInvite()}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--mesh-border-subtle)', background: 'transparent', cursor: 'pointer' }}
                 >
                   <RotateCcw size={13} /> New
                 </button>
               </div>
             ) : null}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
-              <button
-                type="button"
-                onClick={() => setInviteModalOpen(false)}
-                style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--mesh-border-subtle)', background: 'transparent', cursor: 'pointer' }}
-              >
+            <div className="invite-modal__footer">
+              <button type="button" onClick={() => setInviteModalOpen(false)}>
                 Close
               </button>
             </div>
