@@ -23,6 +23,47 @@ interface EthereumProvider {
   removeListener?: (event: string, listener: (...args: unknown[]) => void) => void;
 }
 
+export const AGENTMESH_CHAIN_ID = 11155111;
+export const AGENTMESH_CHAIN_HEX = '0xaa36a7';
+
+async function ensureSepoliaNetwork(ethereum: EthereumProvider): Promise<number> {
+  let hexChain = (await ethereum.request({ method: 'eth_chainId' })) as string;
+  if (!hexChain || typeof hexChain !== 'string') {
+    throw new Error('Invalid or missing chain ID returned by wallet provider.');
+  }
+  let currentChainId = parseInt(hexChain, 16);
+  if (isNaN(currentChainId) || currentChainId <= 0) {
+    throw new Error(`Malformed chain ID returned by wallet provider: ${hexChain}`);
+  }
+
+  if (currentChainId !== AGENTMESH_CHAIN_ID) {
+    try {
+      await ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: AGENTMESH_CHAIN_HEX }],
+      });
+    } catch (err: unknown) {
+      throw new Error(
+        `NETWORK_SWITCH_REJECTED: Please switch MetaMask to Sepolia to sign in.${err instanceof Error && err.message ? ' ' + err.message : ''}`,
+      );
+    }
+
+    hexChain = (await ethereum.request({ method: 'eth_chainId' })) as string;
+    if (!hexChain || typeof hexChain !== 'string') {
+      throw new Error('Invalid or missing chain ID returned by wallet provider after network switch.');
+    }
+    currentChainId = parseInt(hexChain, 16);
+
+    if (currentChainId !== AGENTMESH_CHAIN_ID) {
+      throw new Error(
+        `WRONG_NETWORK: AgentMesh requires Sepolia (chain ID ${AGENTMESH_CHAIN_ID}).`,
+      );
+    }
+  }
+
+  return currentChainId;
+}
+
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
@@ -92,6 +133,10 @@ export function useAuth() {
         const parsed = parseInt(hexChain, 16);
         if (!isNaN(parsed) && parsed > 0) {
           setChainId(parsed);
+          if (parsed !== AGENTMESH_CHAIN_ID && user) {
+            setUser(null);
+            setStatus('connected_unauthenticated');
+          }
         } else {
           setChainId(null);
           setStatus('error');
@@ -137,23 +182,7 @@ export function useAuth() {
       }
 
       const address = getAddress(accounts[0]);
-
-      let chainIdNum: number;
-      try {
-        const hexChainId = (await ethereum.request({ method: 'eth_chainId' })) as string;
-        if (!hexChainId || typeof hexChainId !== 'string') {
-          throw new Error('Invalid or missing chain ID returned by wallet provider.');
-        }
-        const parsed = parseInt(hexChainId, 16);
-        if (isNaN(parsed) || parsed <= 0) {
-          throw new Error(`Malformed chain ID returned by wallet provider: ${hexChainId}`);
-        }
-        chainIdNum = parsed;
-      } catch (err: unknown) {
-        throw new Error(
-          `CHAIN_ID_READ_FAILED: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
+      const chainIdNum = await ensureSepoliaNetwork(ethereum);
 
       setConnectedAddress(address);
       setChainId(chainIdNum);
@@ -167,7 +196,7 @@ export function useAuth() {
         chainId: chainIdNum,
       });
 
-      return address;
+      return { address, chainId: chainIdNum };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to connect wallet';
       setError(msg);
@@ -180,19 +209,28 @@ export function useAuth() {
     setError(null);
     setStatus('authenticating');
     try {
-      let rawAddr = connectedAddress;
-      if (!rawAddr) {
-        rawAddr = await connectWallet();
+      if (typeof window === 'undefined' || !(window as unknown as { ethereum?: EthereumProvider }).ethereum) {
+        throw new Error('WALLET_NOT_INSTALLED: Ethereum wallet (window.ethereum) not detected.');
       }
-      if (!rawAddr) {
-        throw new Error('WALLET_NOT_CONNECTED: Wallet not connected');
-      }
-      const addr = getAddress(rawAddr);
 
-      if (!chainId) {
-        throw new Error('CHAIN_ID_MISSING: Wallet chain ID is not available for SIWE.');
+      const ethereum = (window as unknown as { ethereum: EthereumProvider }).ethereum;
+
+      let rawAddr = connectedAddress;
+      let activeChainId = chainId;
+
+      if (!rawAddr || !activeChainId) {
+        const conn = await connectWallet();
+        if (!conn) {
+          throw new Error('WALLET_NOT_CONNECTED: Wallet not connected');
+        }
+        rawAddr = conn.address;
+        activeChainId = conn.chainId;
+      } else {
+        activeChainId = await ensureSepoliaNetwork(ethereum);
+        setChainId(activeChainId);
       }
-      const activeChainId = chainId;
+
+      const addr = getAddress(rawAddr);
 
       let nonce: string;
       try {
@@ -219,12 +257,6 @@ export function useAuth() {
       const message = siweMessage.prepareMessage();
 
       let signature: string;
-      const ethereum = (window as unknown as { ethereum?: EthereumProvider }).ethereum;
-
-      if (typeof window === 'undefined' || !ethereum) {
-        throw new Error('WALLET_NOT_INSTALLED: Ethereum wallet not detected for signing.');
-      }
-
       try {
         signature = (await ethereum.request({
           method: 'personal_sign',
@@ -257,7 +289,7 @@ export function useAuth() {
       setStatus('error');
       return null;
     }
-  }, [connectedAddress, connectWallet, chainId]);
+  }, [connectedAddress, chainId, connectWallet]);
 
   const logout = useCallback(async () => {
     try {
