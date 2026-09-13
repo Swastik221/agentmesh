@@ -44,6 +44,38 @@
   --mesh-font-mono: 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
 }
 
+/*
+ * The light palette, scoped to the canvas cards.
+ *
+ * workspace-spatial.css is a dark canvas skin. It still dresses the app chrome
+ * (header, rail, status bar), which really is dark, so its --canvas-* palette
+ * cannot simply be replaced. But the cards on the canvas are cream, and every
+ * rule of that stylesheet which reads --canvas-copy was therefore drawing
+ * near-white text on a light card: the agent node's Owner, Agent ENS and
+ * Wallet labels, and the coordinator's status line, were all invisible.
+ *
+ * Custom properties inherit, so redefining them on the card root fixes every
+ * such rule at once and leaves the dark chrome outside untouched. The values
+ * mirror the --mesh-* tokens above, which are the landing page's.
+ */
+.product-node {
+  --canvas-panel: #FFFDF7;
+  --canvas-panel-solid: #FFFDF7;
+  --canvas-line: var(--mesh-border-subtle);
+  --canvas-line-strong: var(--mesh-border-strong);
+  --canvas-copy: var(--mesh-text-main);
+  --canvas-muted: var(--mesh-text-muted);
+  --canvas-dim: var(--mesh-text-dim);
+  --canvas-violet: var(--mesh-owner-anand);
+  --canvas-teal: var(--mesh-owner-swastik);
+  --canvas-cyan: var(--mesh-flow-cyan);
+  --canvas-amber: #B87A1F;
+  --canvas-green: var(--mesh-primary-green);
+  --canvas-red: #B42318;
+  --canvas-glass: none;
+}
+
+
 /* ==========================================================================
    Shell Overrides
    ========================================================================== */
@@ -353,13 +385,19 @@
   font-size: 11px;
 }
 
-.product-agent__identity-label {
+/* Matched on .product-agent__identity so these beat the dark skin's
+   ".product-agent__identity span", which would otherwise flatten the label and
+   the value to a single colour and weight. */
+.product-agent__identity .product-agent__identity-label {
   color: var(--mesh-text-muted);
+  font-size: 11px;
+  font-weight: 500;
 }
 
-.product-agent__identity-value {
+.product-agent__identity .product-agent__identity-value {
   font-family: var(--mesh-font-mono);
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--mesh-text-main);
 }
 
@@ -409,6 +447,10 @@
 .product-coordinator {
   width: 280px;
   background-color: var(--mesh-coordinator-bg);
+  /* workspace-spatial.css paints a navy gradient here for its dark canvas.
+     A background-image sits on top of a background-color, so setting the
+     colour alone left the card dark. */
+  background-image: none;
   border-color: var(--mesh-coordinator-lime);
   padding: 14px;
 }
@@ -429,13 +471,15 @@
   color: var(--mesh-text-main);
 }
 
-.product-coordinator__status {
-  background-color: #FFFDF7;
-  border: 1px solid var(--mesh-border-subtle);
+.product-coordinator__status,
+.product-coordinator > .product-coordinator__status {
+  background-color: var(--mesh-bg-card);
+  border: 1px solid var(--mesh-coordinator-lime);
   border-radius: 6px;
   padding: 8px 10px;
-  font-size: 11px;
-  color: var(--mesh-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mesh-text-main);
   display: flex;
   align-items: center;
   gap: 8px;
