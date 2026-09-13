@@ -87,3 +87,24 @@ export const liveAgentAdapter: AgentAdapter = {
     return apiClient.get<AgentIdentity>(`/agents/${encodeURIComponent(agentId)}/identity`);
   },
 };
+
+/** A short-lived credential for one agent in one project, minted by its owner. */
+export interface AgentConnectToken {
+  token: string;
+  agentId: string;
+  projectId: string;
+  expiresAt: string;
+}
+
+/**
+ * Mints a connect token for an agent the signed-in user owns.
+ *
+ * The server enforces project membership and agent ownership, and returns the
+ * plaintext token exactly once. Errors propagate with the real server message.
+ */
+export async function createAgentConnectToken(agentId: string): Promise<AgentConnectToken> {
+  return apiClient.post<AgentConnectToken>(
+    `/agents/${encodeURIComponent(agentId)}/connect-token`,
+    {},
+  );
+}

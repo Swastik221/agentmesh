@@ -37,12 +37,14 @@ import '../../features/workspace/autumn-workspace.css';
 import '../../features/workspace/chrome.css';
 
 import { workspaceNodeTypes } from './nodes';
+import { toCanvasAgent } from './nodes/AgentNode';
 import { ProtocolEdge } from './ProtocolEdge';
 import { ToolDock, type DockToolType } from './ToolDock';
 import { CommandComposer } from './CommandComposer';
 import { MultiplayerCursors } from './MultiplayerCursors';
 
 import { currentProjectId } from '../../utils/currentProjectId';
+import { authSessionService } from '../../services/auth-session';
 import { useAgents } from '../../hooks/useAgents';
 import { useTasks } from '../../hooks/useTasks';
 import { useWorkspaceRealtime } from '../../hooks/useWorkspaceRealtime';
@@ -98,6 +100,10 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
     ),
   );
 
+  // Resolved synchronously from the session the route guard already fetched;
+  // used only to label and colour agents the signed-in user owns.
+  const viewerUserId = authSessionService.getCurrentUser()?.id ?? null;
+
   const initialNodes = useMemo<Node[]>(() => {
     const coordinatorNode: Node = {
       id: 'coordinator',
@@ -131,26 +137,11 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
       id: agent.id,
       type: 'productAgent',
       position: { x: 30 + index * 320, y: 380 },
-      data: {
-        agent: {
-          id: agent.id,
-          name: agent.name,
-          provider: agent.provider,
-          status: agent.status ? (agent.status.toLowerCase() as 'connected' | 'idle' | 'working' | 'waiting' | 'offline') : 'connected',
-          ownerId: agent.ownerId,
-          ownerName: agent.ownerId ? `User (${agent.ownerId.slice(0, 6)}...)` : 'Owner',
-          ownerEns: agent.ensName ?? 'unlinked.eth',
-          ownerColor: index % 2 === 0 ? 'green' : 'purple',
-          ens: agent.ensName ?? 'unlinked.eth',
-          address: agent.ensAddress ?? (agent.ownerId ? `${agent.ownerId.slice(0, 6)}...${agent.ownerId.slice(-4)}` : '0x000...000'),
-          capabilities: (agent.capabilities ?? []).map((c) => c.capability),
-          logs: [],
-        },
-      },
+      data: { agent: toCanvasAgent(agent, viewerUserId) },
     }));
 
     return [coordinatorNode, tasksNode, ...agentNodes];
-  }, [liveAgents, liveTasks, claimTask]);
+  }, [liveAgents, liveTasks, claimTask, viewerUserId]);
 
   const initialEdges = useMemo<Edge[]>(() => {
     const edges: Edge[] = [

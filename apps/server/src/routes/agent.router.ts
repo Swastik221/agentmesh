@@ -7,6 +7,7 @@ import {
   updateAgent,
   deleteAgent,
   getAgentIdentity,
+  createAgentConnectToken,
 } from '../controllers/agent.controller.js';
 
 const router: Router = Router();
@@ -22,5 +23,8 @@ router.delete('/agents/:agentId', deleteAgent);
 
 // ENS Identity
 router.get('/agents/:agentId/identity', getAgentIdentity);
+
+// Short-lived credential a BYOA agent process uses to open its WebSocket.
+router.post('/agents/:agentId/connect-token', createAgentConnectToken);
 
 export default router;

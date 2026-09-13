@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../app.js';
@@ -113,7 +115,16 @@ describe('Shared Development Environment (PRD #14)', () => {
 
       expect(res.body).toHaveProperty('id');
       expect(res.body.projectId).toBe(projectA.id);
-      expect(res.body.rootPath).toBe(`workspaces/${projectA.id}`);
+      // The root is absolute and actually exists: an agent process receiving
+      // this path does not share the server's working directory, and a path
+      // that was never created on disk failed every real execution.
+      expect(path.isAbsolute(res.body.rootPath)).toBe(true);
+      expect(path.basename(res.body.rootPath)).toBe(projectA.id);
+      expect(fs.existsSync(res.body.rootPath)).toBe(true);
+      // Provisioned with a real repository so worktrees have something to
+      // branch from.
+      expect(res.body.gitRepoPath).toBe(path.join(res.body.rootPath, 'repo'));
+      expect(fs.existsSync(path.join(res.body.gitRepoPath, '.git'))).toBe(true);
 
       // Also via /api prefix
       const resApi = await request(app)
@@ -507,17 +518,27 @@ describe('Shared Development Environment (PRD #14)', () => {
         .send({ agentId: agentA.id })
         .expect(201);
 
-      // Wait for background execution pipeline to run
-      for (let i = 0; i < 40 && !capturedRequest; i++) {
-        await new Promise((r) => setTimeout(r, 50));
+      // Poll rather than sleep: the pipeline now provisions a real workspace
+      // and cuts a real Git worktree before invoking the executor, so a fixed
+      // short delay is not a reliable signal that it has run.
+      const deadline = Date.now() + 20000;
+      while (!capturedRequest && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 100));
       }
 
       expect(capturedRequest).toBeDefined();
       expect(capturedRequest?.executionId).toBe(execRes.body.id);
       expect(capturedRequest?.context).toBeDefined();
       expect(capturedRequest?.context?.projectId).toBe(projectA.id);
-      expect(capturedRequest?.context?.rootPath).toBe(`workspaces/${projectA.id}`);
-      expect(capturedRequest?.context?.workingDirectory).toBe(`workspaces/${projectA.id}`);
+      const ctxRoot = capturedRequest?.context?.rootPath as string;
+      const ctxWorking = capturedRequest?.context?.workingDirectory as string;
+      expect(path.isAbsolute(ctxRoot)).toBe(true);
+      expect(path.basename(ctxRoot)).toBe(projectA.id);
+      expect(fs.existsSync(ctxRoot)).toBe(true);
+      // The working directory is either the workspace root or a worktree cut
+      // beneath it, never a path outside the workspace boundary.
+      expect(path.isAbsolute(ctxWorking)).toBe(true);
+      expect(ctxWorking === ctxRoot || ctxWorking.startsWith(ctxRoot + path.sep)).toBe(true);
     });
   });
 });

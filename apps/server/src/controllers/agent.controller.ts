@@ -3,6 +3,7 @@ import { agentService } from '../services/agent.service.js';
 import { createAgentSchema, updateAgentSchema } from '../schemas/agent.schema.js';
 import { AuthenticatedRequest } from '../auth/auth.types.js';
 import { UnauthorizedError } from '../errors/app-error.js';
+import { agentConnectTokenService } from '../services/agent-connect-token.service.js';
 
 export const createAgent = async (
   req: AuthenticatedRequest,
@@ -137,6 +138,38 @@ export const getAgentIdentity = async (
       ensAddress: agent.ensAddress ?? null,
       verified: agent.ensVerifiedAt !== null,
       verifiedAt: agent.ensVerifiedAt ?? null,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /agents/:agentId/connect-token
+ *
+ * Mints a short-lived, project-and-agent-scoped credential the owner can paste
+ * into `agentmesh connect`. Authorisation lives in the service: project member
+ * plus agent owner. Returns the plaintext token once; it is stored hashed.
+ */
+export const createAgentConnectToken = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const actorUserId = req.auth?.userId;
+    if (!actorUserId) {
+      throw new UnauthorizedError();
+    }
+
+    const agentId = req.params.agentId as string;
+    const issued = await agentConnectTokenService.issue(agentId, actorUserId);
+
+    res.status(201).json({
+      token: issued.token,
+      agentId: issued.agentId,
+      projectId: issued.projectId,
+      expiresAt: issued.expiresAt.toISOString(),
     });
   } catch (error) {
     next(error);

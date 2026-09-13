@@ -810,9 +810,17 @@ describe('PRD-56 Real Agent Execution Hardening Integration Tests', () => {
     expect(agentCheck?.status).toBe('ONLINE');
 
     agentWs.close();
-    await new Promise((r) => setTimeout(r, 200));
 
-    agentCheck = await prisma.agent.findUnique({ where: { id: agent.id } });
+    // Poll, as the COMPLETED and ONLINE checks above already do. Disconnect
+    // cleanup updates the row, broadcasts presence, records a delta and an
+    // activity event; a fixed 200ms was not reliably enough for that on CI.
+    let offlineAttempts = 0;
+    while (offlineAttempts < 50) {
+      agentCheck = await prisma.agent.findUnique({ where: { id: agent.id } });
+      if (agentCheck?.status === 'OFFLINE') break;
+      await new Promise((r) => setTimeout(r, 100));
+      offlineAttempts++;
+    }
     expect(agentCheck?.status).toBe('OFFLINE');
   }, 15000);
 });

@@ -289,8 +289,15 @@ describe('PRD #11 BYOA Real Agent Connector Integration Tests', () => {
       { agentId: agentA1.id },
     );
 
-    // Wait briefly for WS exchange to complete
-    await new Promise((res) => setTimeout(res, 300));
+    // Poll for the execution to reach COMPLETED rather than sleeping a fixed
+    // 300ms. The first execution in a project now provisions a real workspace
+    // and git repository before dispatching, which is more than 300ms on a
+    // slow runner; polling makes the test assert the outcome, not a timing.
+    for (let i = 0; i < 100; i++) {
+      const exec = await prisma.taskExecution.findUnique({ where: { id: execution.id } });
+      if (exec?.status === ExecutionStatus.COMPLETED) break;
+      await new Promise((res) => setTimeout(res, 100));
+    }
 
     expect(receivedTaskRequest).not.toBeNull();
     const taskPayload = (receivedTaskRequest as unknown as AgentMeshMessage).payload as { taskId: string; executionId: string; title: string };

@@ -85,32 +85,68 @@ export class HandshakeService {
 
     const { payload } = handshakeMsg;
 
-    // Step 3: Obtain authenticated user from SIWE session
-    if (!connection.httpSessionId) {
-      return {
-        success: false,
-        message: this.createRejection(
-          connection,
-          HandshakeErrorCode.UNAUTHENTICATED,
-          'Authentication required. No session cookie provided.',
-          handshakeMsg.id,
-        ),
-      };
-    }
+    // Step 3: Resolve the authenticated user.
+    //
+    // Two credentials are accepted, and only two. A browser client presents its
+    // SIWE session, exactly as before. An agent process presents a connect
+    // token, which the upgrade already validated and which names a single agent
+    // in a single project. The token resolves to the user who minted it, and
+    // every ownership, project and membership check below then runs unchanged
+    // against that user, so the token can never reach further than the member
+    // who created it could reach themselves.
+    let authenticatedUserId: string;
 
-    let session;
-    try {
-      session = await sessionService.validateSession(connection.httpSessionId);
-    } catch {
-      return {
-        success: false,
-        message: this.createRejection(
-          connection,
-          HandshakeErrorCode.UNAUTHENTICATED,
-          'Invalid or expired authentication session',
-          handshakeMsg.id,
-        ),
-      };
+    if (connection.connectToken) {
+      if (connection.connectToken.agentId !== payload.agentId) {
+        return {
+          success: false,
+          message: this.createRejection(
+            connection,
+            HandshakeErrorCode.AGENT_NOT_OWNED,
+            `Connect token is scoped to agent '${connection.connectToken.agentId}', not '${payload.agentId}'`,
+            handshakeMsg.id,
+          ),
+        };
+      }
+      if (connection.connectToken.projectId !== connection.projectId) {
+        return {
+          success: false,
+          message: this.createRejection(
+            connection,
+            HandshakeErrorCode.AGENT_PROJECT_MISMATCH,
+            `Connect token is scoped to project '${connection.connectToken.projectId}', not '${connection.projectId}'`,
+            handshakeMsg.id,
+          ),
+        };
+      }
+      authenticatedUserId = connection.connectToken.issuedByUserId;
+    } else {
+      if (!connection.httpSessionId) {
+        return {
+          success: false,
+          message: this.createRejection(
+            connection,
+            HandshakeErrorCode.UNAUTHENTICATED,
+            'Authentication required. No session cookie provided.',
+            handshakeMsg.id,
+          ),
+        };
+      }
+
+      try {
+        const session = await sessionService.validateSession(connection.httpSessionId);
+        authenticatedUserId = session.user.id;
+      } catch {
+        return {
+          success: false,
+          message: this.createRejection(
+            connection,
+            HandshakeErrorCode.UNAUTHENTICATED,
+            'Invalid or expired authentication session',
+            handshakeMsg.id,
+          ),
+        };
+      }
     }
 
     // Step 4: Find agent in database
@@ -132,7 +168,7 @@ export class HandshakeService {
     }
 
     // Step 5: Verify ownership (agent.ownerId === authenticatedUser.id)
-    if (agent.ownerId !== session.user.id) {
+    if (agent.ownerId !== authenticatedUserId) {
       return {
         success: false,
         message: this.createRejection(
@@ -165,12 +201,12 @@ export class HandshakeService {
       where: {
         projectId_userId: {
           projectId: connection.projectId,
-          userId: session.user.id,
+          userId: authenticatedUserId,
         },
       },
     });
 
-    if (!member && project?.ownerId !== session.user.id) {
+    if (!member && project?.ownerId !== authenticatedUserId) {
       return {
         success: false,
         message: this.createRejection(
@@ -205,7 +241,7 @@ export class HandshakeService {
     // Step 9: Establish authenticated agent session
     const sessionId = crypto.randomUUID();
     connection.authenticated = true;
-    connection.userId = session.user.id;
+    connection.userId = authenticatedUserId;
     connection.agentId = agent.id;
     connection.sessionId = sessionId;
 

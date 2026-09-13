@@ -408,3 +408,98 @@
 .live-task-card__execution-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--canvas-line); border-radius: 8px; font: 11px var(--am-font-mono); }
 .live-task-card__execution-list code { color: var(--canvas-dim); }
 .live-task-card__execution-error { color: #f19a9a; flex: 1 1 auto; }
+
+/* Agent connect panel: the real onboarding handoff on each agent card. */
+.agent-connect-panel {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.agent-connect-panel__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.1);
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agent-connect-panel__btn:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.agent-connect-panel__btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.agent-connect-panel__hint {
+  margin: 0 0 6px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.agent-connect-panel__cmd {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.agent-connect-panel__cmd code {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #e2e8f0;
+  word-break: break-all;
+}
+
+.agent-connect-panel__cmd button {
+  flex: none;
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  border-radius: 5px;
+  background: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.agent-connect-panel__link {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.agent-connect-panel__error {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #dc2626;
+}
+
+.agent-directory__paid {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.agent-directory__paid > summary {
+  cursor: pointer;
+  font-weight: 600;
+  opacity: 0.8;
+}

@@ -9,9 +9,6 @@ import {
 } from 'lucide-react';
 
 export type DockToolType =
-  | 'codex'
-  | 'claude'
-  | 'gemini'
   | 'terminal'
   | 'browser'
   | 'note'
@@ -29,10 +26,11 @@ interface DockToolItem {
   colorClass: string;
 }
 
+// Agents are not dock tools: a real agent is registered in the Agents view and
+// then connects over the protocol. Dock entries that dropped a named agent onto
+// the canvas created nothing server-side, so they were removed rather than left
+// looking like they worked.
 export const DOCK_TOOLS: DockToolItem[] = [
-  { id: 'codex', label: 'Codex agent (Orion)', icon: Bot, colorClass: 'mesh-dock-item--purple' },
-  { id: 'claude', label: 'Claude agent (Vega)', icon: Bot, colorClass: 'mesh-dock-item--green' },
-  { id: 'gemini', label: 'Gemini agent (Nova)', icon: Bot, colorClass: 'mesh-dock-item--purple' },
   { id: 'terminal', label: 'Terminal', isTerminalText: true, colorClass: '' },
   { id: 'browser', label: 'Browser', icon: Globe, colorClass: '' },
   { id: 'note', label: 'Note', icon: StickyNote, colorClass: '' },

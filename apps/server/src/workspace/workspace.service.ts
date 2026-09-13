@@ -1,4 +1,7 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { prisma } from '../lib/prisma.js';
+import { config } from '../config/index.js';
 import { ForbiddenError, NotFoundError } from '../errors/app-error.js';
 import { WorkspaceStateDTO, ExecutionContextDTO } from '@agentmesh/shared';
 
@@ -26,10 +29,34 @@ export class WorkspaceService {
     }
   }
 
+  /**
+   * Resolves the absolute workspace root for a project and makes it exist on
+   * disk, together with a real Git repository that worktrees can branch from.
+   *
+   * This used to store the relative string `workspaces/<projectId>` and create
+   * nothing, so every execution that needed a working directory failed with
+   * "worktree directory does not exist". The path is absolute because the
+   * agent process that receives it does not share the server's CWD.
+   */
+  private async provisionWorkspaceOnDisk(projectId: string): Promise<{
+    rootPath: string;
+    gitRepoPath: string;
+  }> {
+    const rootPath = path.join(config.workspaceRoot, projectId);
+    const gitRepoPath = path.join(rootPath, 'repo');
+
+    await fs.promises.mkdir(rootPath, { recursive: true });
+
+    const { gitService } = await import('../git/git.service.js');
+    await gitService.ensureRepository(gitRepoPath);
+
+    return { rootPath, gitRepoPath };
+  }
+
   async createWorkspace(projectId: string, userId: string) {
     await this.verifyProjectMembership(projectId, userId);
 
-    const rootPath = `workspaces/${projectId}`;
+    const { rootPath, gitRepoPath } = await this.provisionWorkspaceOnDisk(projectId);
 
     // Use upsert to rely on the database unique constraint for atomic concurrency safety
     return await prisma.projectWorkspace.upsert({
@@ -37,8 +64,12 @@ export class WorkspaceService {
       create: {
         projectId,
         rootPath,
+        gitRepoPath,
       },
-      update: {},
+      update: {
+        rootPath,
+        gitRepoPath,
+      },
     });
   }
 
@@ -137,19 +168,22 @@ export class WorkspaceService {
       where: { projectId },
     });
 
-    if (!workspace) {
-      workspace = await prisma.projectWorkspace.upsert({
-        where: { projectId },
-        create: {
-          projectId,
-          rootPath: `workspaces/${projectId}`,
-        },
-        update: {},
-      }).catch(() =>
-        prisma.projectWorkspace.findUniqueOrThrow({
+    // An execution can be the first thing that ever needs a workspace, so
+    // provision one for real here rather than recording a path that does not
+    // exist. Also repairs rows written before workspaces were provisioned.
+    if (!workspace || !workspace.gitRepoPath || !path.isAbsolute(workspace.rootPath)) {
+      const { rootPath, gitRepoPath } = await this.provisionWorkspaceOnDisk(projectId);
+      workspace = await prisma.projectWorkspace
+        .upsert({
           where: { projectId },
-        }),
-      );
+          create: { projectId, rootPath, gitRepoPath },
+          update: { rootPath, gitRepoPath },
+        })
+        .catch(() =>
+          prisma.projectWorkspace.findUniqueOrThrow({
+            where: { projectId },
+          }),
+        );
     }
 
     let workingDirectory = workspace.rootPath;

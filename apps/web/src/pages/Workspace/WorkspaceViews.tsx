@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import { currentProjectId } from '../../utils/currentProjectId';
 import { useAgents } from '../../hooks/useAgents';
+import { AgentConnectPanel } from '../../components/agents/AgentConnectPanel';
+import { authSessionService } from '../../services/auth-session';
+import { PaidCapabilityCard } from '../../components/agents/PaidCapabilityCard';
 import { useTasks } from '../../hooks/useTasks';
 import { useExecutions } from '../../hooks/useExecutions';
 import { useApprovals } from '../../hooks/useApprovals';
@@ -155,6 +158,10 @@ function LiveAgentsView({ onOpenCanvas }: WorkspaceViewProps) {
     }
   };
 
+  // Only the owner can mint a connect token, so only the owner is offered the
+  // action. Showing it on a teammate's agent would be a button that can only
+  // ever return 403.
+  const viewerUserId = authSessionService.getCurrentUser()?.id ?? null;
   const ownerCount = new Set(liveAgents.map((a) => a.ownerId)).size;
   const onlineCount = liveAgents.filter((a) => a.status !== 'OFFLINE').length;
 
@@ -215,6 +222,23 @@ function LiveAgentsView({ onOpenCanvas }: WorkspaceViewProps) {
                     ? <span style={{ opacity: 0.6 }}>no declared capabilities</span>
                     : agent.capabilities!.map((cap) => <span key={cap.id}>{cap.capability}</span>)}
                 </div>
+                {agent.ownerId === viewerUserId && (
+                  <AgentConnectPanel agentId={agent.id} agentName={agent.name} />
+                )}
+                {(agent.capabilities ?? []).length > 0 && (
+                  <details className="agent-directory__paid">
+                    <summary>Paid capabilities</summary>
+                    {agent.capabilities!.map((cap) => (
+                      <PaidCapabilityCard
+                        key={cap.id}
+                        agentId={agent.id}
+                        agentName={agent.name}
+                        ensName={agent.ensName}
+                        capability={cap.capability}
+                      />
+                    ))}
+                  </details>
+                )}
                 <footer><span><ShieldCheck /> Owned by {agent.ownerId.slice(0, 10)}…</span></footer>
               </article>
             );

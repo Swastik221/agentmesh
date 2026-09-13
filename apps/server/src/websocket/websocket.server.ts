@@ -14,6 +14,7 @@ import { handshakeService, HandshakeErrorCode } from '../handshake/index.js';
 import { messagingService } from '../messaging/index.js';
 import { sessionService } from '../auth/session.service.js';
 import { deltaSequencerService } from '../services/delta-sequencer.service.js';
+import { agentConnectTokenService } from '../services/agent-connect-token.service.js';
 
 function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
   const cookieHeader = req.headers.cookie;
@@ -35,6 +36,30 @@ function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
       const token = parsedUrl.searchParams.get('token');
       if (token && token.trim() !== '') {
         return token.trim();
+      }
+    } catch {
+      // Ignore URL parse errors on invalid URLs
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Reads an agent connect token, if one was presented. Deliberately a different
+ * header and query name from the session so the two credentials can never be
+ * confused for one another.
+ */
+function extractConnectTokenFromReq(req: IncomingMessage): string | undefined {
+  const header = req.headers['x-agent-connect-token'];
+  if (typeof header === 'string' && header.trim() !== '') {
+    return header.trim();
+  }
+  if (req.url) {
+    try {
+      const parsedUrl = new URL(req.url, 'http://localhost');
+      const qp = parsedUrl.searchParams.get('connectToken');
+      if (qp && qp.trim() !== '') {
+        return qp.trim();
       }
     } catch {
       // Ignore URL parse errors on invalid URLs
@@ -87,6 +112,30 @@ export class AgentMeshWebSocketServer {
         socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
         socket.destroy();
         return;
+      }
+
+      // An agent process authenticates with its own scoped connect token rather
+      // than the browser's SIWE session. Checked before the session path and
+      // kept entirely separate from it: a connect token authorises one agent in
+      // one project and nothing else, and the session path below is unchanged.
+      const connectToken = extractConnectTokenFromReq(req);
+      if (connectToken) {
+        try {
+          const resolved = await agentConnectTokenService.resolve(connectToken);
+          if (resolved.projectId !== projectId) {
+            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+          this.wss.handleUpgrade(req, socket, head, (ws) => {
+            this.wss.emit('connection', ws, req, projectId);
+          });
+          return;
+        } catch {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
       }
 
       // Pre-Upgrade Session Authentication & Project Authorization (PRD-37 FIX 1)
@@ -146,6 +195,19 @@ export class AgentMeshWebSocketServer {
   ): Promise<void> {
     const httpSessionId = extractSessionIdFromReq(req);
     const metadata = connectionManager.addConnection(projectId, ws, httpSessionId);
+
+    const presentedConnectToken = extractConnectTokenFromReq(req);
+    if (presentedConnectToken) {
+      try {
+        const resolved = await agentConnectTokenService.resolve(presentedConnectToken);
+        if (resolved.projectId === projectId) {
+          metadata.connectToken = resolved;
+        }
+      } catch {
+        // Already rejected at upgrade time; a token that expires in between
+        // simply leaves the connection unauthenticated and the handshake fails.
+      }
+    }
     logger.info(
       `[WebSocket] Connection ${metadata.connectionId} established for project ${projectId}`,
     );
