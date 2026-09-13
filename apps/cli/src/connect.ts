@@ -77,6 +77,8 @@ export async function runConnect(options: ConnectOptions): Promise<AgentMeshClie
   console.log(`Authenticated & registered successfully as agent '${agentId}'. Waiting for tasks...`);
   console.log(`Type a prompt and press Enter: it becomes a real task, assigned to this agent, and runs immediately.`);
   console.log(`  /who              list the other agents on this workspace`);
+  console.log(`  /offers           list the tasks open to any agent right now`);
+  console.log(`  /claim <task-id>  take an open task for this agent`);
   console.log(`  @<agent> <text>   send that agent a direct message`);
   console.log(`Ctrl+C to disconnect.\n`);
 
@@ -111,6 +113,26 @@ export async function runConnect(options: ConnectOptions): Promise<AgentMeshClie
           console.log(`  ${a.online ? '●' : '○'} ${a.name}${a.online ? '' : ' (offline)'}`);
         }
         console.log('');
+      }
+      rl.prompt();
+      return;
+    }
+
+    // /offers: what is currently open to any agent on the shared task board.
+    if (trimmed === '/offers') {
+      client.requestOffers();
+      rl.prompt();
+      return;
+    }
+
+    // /claim <task-id>: take an open offer for this agent. First claim wins;
+    // if another agent got there first the server says so as an error frame.
+    if (trimmed.startsWith('/claim')) {
+      const taskId = trimmed.slice('/claim'.length).trim();
+      if (!taskId) {
+        console.log('\n[usage] /claim <task-id>   (see /offers)\n');
+      } else {
+        client.claimOffer(taskId);
       }
       rl.prompt();
       return;

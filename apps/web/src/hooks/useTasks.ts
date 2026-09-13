@@ -4,8 +4,10 @@ import {
   taskErrorMessage,
   type AssignmentResult,
   type CreateDependencyInput,
+  type CreateOfferInput,
   type CreateTaskInput,
   type LiveTask,
+  type OfferCandidate,
   type LiveTaskStatus,
   type LiveTaskPriority,
   type TaskDependencyRow,
@@ -25,6 +27,12 @@ export interface UseTasksResult {
   error: string | null;
   refetch: () => Promise<void>;
   createTask: (input: CreateTaskInput) => Promise<LiveTask>;
+  /** Post work to the board open to any agent, with an auto assign deadline. */
+  createOffer: (input: CreateOfferInput) => Promise<LiveTask>;
+  /** Hand an open offer to one agent immediately. */
+  claimOffer: (taskId: string, agentId: string) => Promise<TaskResponsibility>;
+  /** Agents that could take an offer right now, with their busy state. */
+  listOfferCandidates: () => Promise<OfferCandidate[]>;
   /** Manual claim: a human assigns a specific agent (responsibility). */
   claimTask: (taskId: string, agentId: string, role?: string) => Promise<TaskResponsibility>;
   /** Coordinator auto-assign. Resolves with the domain result (may be `assigned: false`). */
@@ -111,6 +119,31 @@ export function useTasks(projectId: string | null, query: UseTasksQuery = {}): U
     [projectId, load],
   );
 
+  const createOffer = useCallback(
+    async (input: CreateOfferInput): Promise<LiveTask> => {
+      if (!projectId) throw new Error('No project selected');
+      const created = await liveTaskAdapter.createOffer(projectId, input);
+      await load();
+      return created;
+    },
+    [projectId, load],
+  );
+
+  const claimOffer = useCallback(
+    async (taskId: string, agentId: string): Promise<TaskResponsibility> => {
+      if (!projectId) throw new Error('No project selected');
+      const responsibility = await liveTaskAdapter.claimOffer(projectId, taskId, agentId);
+      await load();
+      return responsibility;
+    },
+    [projectId, load],
+  );
+
+  const listOfferCandidates = useCallback(async (): Promise<OfferCandidate[]> => {
+    if (!projectId) return [];
+    return liveTaskAdapter.listOfferCandidates(projectId);
+  }, [projectId]);
+
   const autoAssign = useCallback(
     async (taskId: string, preferredAgentId?: string): Promise<AssignmentResult> => {
       if (!projectId) throw new Error('No project selected');
@@ -148,6 +181,9 @@ export function useTasks(projectId: string | null, query: UseTasksQuery = {}): U
     refetch: load,
     createTask,
     claimTask,
+    createOffer,
+    claimOffer,
+    listOfferCandidates,
     autoAssign,
     addDependency,
     updateStatus,

@@ -28,6 +28,14 @@ const creatorSelect = {
 };
 
 export class TaskService {
+  /**
+   * Public wrapper so sibling services can reuse the same membership rule
+   * instead of each writing their own and drifting from it.
+   */
+  async verifyMembership(projectId: string, userId: string): Promise<void> {
+    return this.verifyProjectMembership(projectId, userId);
+  }
+
   private async verifyProjectMembership(projectId: string, userId: string): Promise<void> {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -414,6 +422,70 @@ export class TaskService {
     } catch {
       // Assignment already committed; a failed activity write must not undo it.
     }
+
+    return responsibility;
+  }
+
+  /**
+   * Assign an agent to a task on the system's own authority.
+   *
+   * assignResponsibility above requires a human member as the actor, which is
+   * right for a human assigning work. An agent claiming an open offer, and the
+   * coordinator placing one nobody claimed, have no such user: the authority
+   * comes from the agent already belonging to the project. Everything else
+   * (file-conflict check, row lock, delta, activity) is deliberately the same
+   * path, so a self-claimed task behaves exactly like an assigned one.
+   */
+  async assignResponsibilityAsSystem(
+    projectId: string,
+    taskId: string,
+    agentId: string,
+    assignmentSource: string,
+  ) {
+    const task = await prisma.task.findUnique({ where: { id: taskId } });
+    if (!task || task.projectId !== projectId) {
+      throw new NotFoundError('Task not found');
+    }
+
+    const agent = await prisma.agent.findUnique({ where: { id: agentId } });
+    if (!agent) {
+      throw new NotFoundError('Agent not found');
+    }
+    if (agent.projectId !== projectId) {
+      throw new ForbiddenError('Agent does not belong to this project');
+    }
+
+    const responsibility = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT * FROM tasks WHERE "projectId" = ${projectId} FOR UPDATE`;
+
+      const freshTask = await tx.task.findUnique({ where: { id: taskId } });
+      if (!freshTask || freshTask.projectId !== projectId) {
+        throw new NotFoundError('Task not found');
+      }
+
+      await assertNoFileConflicts(projectId, taskId, freshTask.filePaths, tx);
+
+      try {
+        return await tx.taskResponsibility.create({
+          data: { taskId, agentId, assignmentSource },
+          include: { agent: true },
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError('Agent is already assigned to this task');
+        }
+        throw error;
+      }
+    });
+
+    await deltaSequencerService.recordAndBroadcastDelta(projectId, [
+      {
+        entity: 'taskResponsibility',
+        entityId: `${taskId}_${agentId}`,
+        operation: 'created',
+        fields: { taskId, agentId, assignmentSource },
+      },
+    ]);
 
     return responsibility;
   }

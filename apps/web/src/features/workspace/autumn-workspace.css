@@ -565,6 +565,170 @@
   color: var(--mesh-text-muted);
 }
 
+/* Posting work to the board, and the controls that go with an open offer. */
+.product-taskboard__heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.product-taskboard__badge {
+  font-size: 10px;
+  font-weight: 600;
+  background-color: var(--mesh-bg-card);
+  border: 1px solid var(--mesh-border-subtle);
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--mesh-text-muted);
+  white-space: nowrap;
+}
+
+.product-taskboard__compose {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px 6px;
+  background-color: var(--mesh-bg-card);
+}
+
+.product-taskboard__compose input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 6px 9px;
+  border: 1px solid var(--mesh-border-subtle);
+  border-radius: 6px;
+  background-color: #fff;
+  color: var(--mesh-text-main);
+}
+
+.product-taskboard__compose input:focus {
+  outline: none;
+  border-color: var(--mesh-primary-green);
+}
+
+.product-taskboard__compose input::placeholder {
+  color: var(--mesh-text-muted);
+}
+
+.product-taskboard__compose select {
+  font-size: 11px;
+  padding: 6px 4px;
+  border: 1px solid var(--mesh-border-subtle);
+  border-radius: 6px;
+  background-color: #fff;
+  color: var(--mesh-text-main);
+  cursor: pointer;
+}
+
+.product-taskboard__compose button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border: 1px solid var(--mesh-primary-green);
+  border-radius: 6px;
+  background-color: var(--mesh-primary-green);
+  color: #fff;
+  cursor: pointer;
+}
+
+.product-taskboard__compose button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.product-taskboard__hint {
+  margin: 0;
+  padding: 0 14px 10px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--mesh-text-muted);
+  background-color: var(--mesh-bg-card);
+  border-bottom: 1px solid var(--mesh-border-subtle);
+}
+
+.product-taskboard__error {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: #B42318;
+  background-color: #FEF3F2;
+  border-bottom: 1px solid var(--mesh-border-subtle);
+}
+
+.product-taskboard__empty {
+  padding: 16px 14px;
+  font-size: 11px;
+  color: var(--mesh-text-muted);
+  text-align: center;
+}
+
+.product-taskboard__status {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.product-taskboard__status--open {
+  background-color: #EBF5FF;
+  color: #0066CC;
+}
+
+.product-taskboard__status--claimed {
+  background-color: var(--mesh-soft-mint);
+  color: var(--mesh-primary-green);
+}
+
+.product-taskboard__status--assigned {
+  background-color: #F5E8FF;
+  color: var(--mesh-owner-anand);
+}
+
+/* Choosing which agent an open offer goes to. */
+.product-taskboard__picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  max-width: 68%;
+}
+
+.product-taskboard__picker span {
+  font-size: 10px;
+  color: var(--mesh-text-muted);
+}
+
+.product-taskboard__picker button {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border: 1px solid var(--mesh-border-subtle);
+  border-radius: 4px;
+  background-color: #fff;
+  color: var(--mesh-text-main);
+  cursor: pointer;
+}
+
+.product-taskboard__picker button:hover:not(:disabled) {
+  border-color: var(--mesh-primary-green);
+  color: var(--mesh-primary-green);
+}
+
+.product-taskboard__picker button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.product-taskboard__claim-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* ==========================================================================
    Human Approval Node
    ========================================================================== */

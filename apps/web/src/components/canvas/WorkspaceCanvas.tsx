@@ -38,6 +38,8 @@ import '../../features/workspace/chrome.css';
 
 import { workspaceNodeTypes } from './nodes';
 import { toCanvasAgent } from './nodes/AgentNode';
+import { toBoardTask } from './nodes/TaskBoardNode';
+import type { OfferCandidate } from '../../adapters/live/task.adapter';
 import { ProtocolEdge } from './ProtocolEdge';
 import { ToolDock, type DockToolType } from './ToolDock';
 import { MultiplayerCursors } from './MultiplayerCursors';
@@ -72,7 +74,29 @@ interface WorkspaceCanvasInnerProps {
 function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasInnerProps) {
   const projectId = currentProjectId();
   const { agents: liveAgents, refetch: refetchAgents } = useAgents(projectId);
-  const { tasks: liveTasks, refetch: refetchTasks, claimTask } = useTasks(projectId);
+  const {
+    tasks: liveTasks,
+    refetch: refetchTasks,
+    createOffer,
+    claimOffer,
+    listOfferCandidates,
+  } = useTasks(projectId);
+
+  // Who could take an offer right now. Refreshed whenever agents or tasks
+  // change, so the board's free/busy badges track the real roster.
+  const [candidates, setCandidates] = useState<OfferCandidate[]>([]);
+
+  // Open offers count down to an auto assignment that happens server-side.
+  // This tick only redraws the remaining seconds; it never decides anything.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const hasOpenOffer = liveTasks.some(
+      (task) => task.offerExpiresAt && !(task.responsibilities?.length),
+    );
+    if (!hasOpenOffer) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [liveTasks]);
 
   const refetchAgentsRef = useRef(refetchAgents);
   refetchAgentsRef.current = refetchAgents;
@@ -117,6 +141,20 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
     ),
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    void listOfferCandidates()
+      .then((rows) => {
+        if (!cancelled) setCandidates(rows);
+      })
+      // A candidates lookup that fails leaves the board's free/busy badges
+      // stale rather than breaking the canvas; posting and claiming still work.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [listOfferCandidates, liveAgents, liveTasks]);
+
   // Resolved synchronously from the session the route guard already fetched;
   // used only to label and colour agents the signed-in user owns.
   const viewerUserId = authSessionService.getCurrentUser()?.id ?? null;
@@ -140,16 +178,13 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
       type: 'productTasks',
       position: { x: 370, y: 180 },
       data: {
-        tasks: liveTasks.map((t) => ({
-          id: t.id,
-          title: t.title,
-          status: t.status === 'COMPLETED' ? 'claimed' : 'proposed',
-          claimedBy: t.preferredAgentId ?? undefined,
-        })),
-        onClaimTask: (id: string) => {
-          if (liveAgents.length > 0) {
-            void claimTask(id, liveAgents[0].id);
-          }
+        tasks: liveTasks.map((task) => toBoardTask(task, now)),
+        candidates,
+        onCreateOffer: async (title: string, offerSeconds: number) => {
+          await createOffer({ title, offerSeconds });
+        },
+        onClaimFor: async (taskId: string, agentId: string) => {
+          await claimOffer(taskId, agentId);
         },
       },
     };
@@ -164,7 +199,7 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
     }));
 
     return [coordinatorNode, tasksNode, ...agentNodes];
-  }, [liveAgents, liveTasks, claimTask, viewerUserId, agentLogs]);
+  }, [liveAgents, liveTasks, createOffer, claimOffer, candidates, now, viewerUserId, agentLogs]);
 
   const initialEdges = useMemo<Edge[]>(() => {
     const edges: Edge[] = [

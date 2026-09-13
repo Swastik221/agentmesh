@@ -9,6 +9,48 @@ import { deltaSequencerService } from './delta-sequencer.service.js';
 
 export type AssignmentSource = 'HUMAN_PREFERENCE' | 'CAPABILITY_MATCH';
 
+/**
+ * How to choose between agents the capability scoring cannot separate.
+ *
+ * 'deterministic' (the default) breaks ties by age then id, so the same inputs
+ * always produce the same assignment. 'random' picks uniformly among the tied
+ * agents, which is what auto-assigning an open board offer wants: when every
+ * agent is equally free and equally suited, always handing the work to the
+ * oldest agent would starve the others.
+ */
+export type TieBreak = 'deterministic' | 'random';
+
+/**
+ * Task states in which an agent still owes work on a task it already owns.
+ *
+ * The default occupancy rule counts only IN_PROGRESS, which is what the
+ * ordinary assignment flow expects: a task is assigned while still TODO, so
+ * treating TODO as occupying would make an agent ineligible for the very
+ * assignment being made. Auto-assigning an unclaimed board offer wants the
+ * stricter reading, because "give it to whichever agent is free" should not
+ * hand a second task to an agent that has not started its first. That is
+ * opt-in through requireIdle rather than the default, so the existing
+ * assignment contract is unchanged.
+ */
+const UNFINISHED_TASK_STATUSES = new Set<string>([
+  'TODO',
+  'IN_PROGRESS',
+  'PENDING_APPROVAL',
+  'BLOCKED',
+]);
+
+const isOccupiedBy = (
+  responsibilities: Array<{ task?: { status: string } | null }>,
+  requireIdle: boolean,
+): boolean =>
+  responsibilities.some(
+    (resp) =>
+      !!resp.task &&
+      (requireIdle
+        ? UNFINISHED_TASK_STATUSES.has(resp.task.status)
+        : resp.task.status === 'IN_PROGRESS'),
+  );
+
 export interface AssignmentExplanation {
   matchedCapabilities?: string[];
   unmatchedCapabilities?: string[];
@@ -225,7 +267,7 @@ export class CoordinatorService {
     projectId: string,
     taskId: string,
     actorUserId: string,
-    options?: { preferredAgentId?: string },
+    options?: { preferredAgentId?: string; tieBreak?: TieBreak; requireIdle?: boolean },
   ): Promise<AssignmentResult> {
     await this.verifyProjectMembership(projectId, actorUserId);
 
@@ -300,9 +342,7 @@ export class CoordinatorService {
 
       const isOccupied =
         preferredAgent.executions.length > 0 ||
-        preferredAgent.taskResponsibilities.some(
-          (resp) => resp.task && resp.task.status === 'IN_PROGRESS',
-        );
+        isOccupiedBy(preferredAgent.taskResponsibilities, options?.requireIdle === true);
 
       if (preferredAgent.status !== 'ONLINE' || isOccupied) {
         return {
@@ -353,10 +393,7 @@ export class CoordinatorService {
     const eligibleAgents = candidates.filter((agent) => {
       if (agent.status !== 'ONLINE') return false;
       if (agent.executions.length > 0) return false;
-      const hasActiveTask = agent.taskResponsibilities.some(
-        (resp) => resp.task && resp.task.status === 'IN_PROGRESS',
-      );
-      if (hasActiveTask) return false;
+      if (isOccupiedBy(agent.taskResponsibilities, options?.requireIdle === true)) return false;
       return true;
     });
 
@@ -393,13 +430,23 @@ export class CoordinatorService {
       return a.agent.id.localeCompare(b.agent.id);
     });
 
-    const winner = scoredCandidates[0];
+    // Only agents that scored equal best are actually interchangeable, so a
+    // random tie-break chooses among those and never lowers the match quality.
+    const topScore = scoredCandidates[0].score;
+    const tied = scoredCandidates.filter((c) => c.score === topScore);
+    const winner =
+      options?.tieBreak === 'random' && tied.length > 1
+        ? tied[Math.floor(Math.random() * tied.length)]
+        : scoredCandidates[0];
 
     const explanation: AssignmentExplanation = {
       matchedCapabilities: winner.matchedCapabilities,
       unmatchedCapabilities: winner.unmatchedCapabilities,
       categoryScores: winner.categoryScores,
-      reason: `Assigned via capability match (score: ${winner.score}%)`,
+      reason:
+        options?.tieBreak === 'random' && tied.length > 1
+          ? `Assigned via capability match (score: ${winner.score}%), chosen at random among ${tied.length} equally free agents`
+          : `Assigned via capability match (score: ${winner.score}%)`,
     };
 
     return await this.commitAssignmentTransaction(

@@ -208,6 +208,33 @@ export class AgentMeshClient {
       return;
     }
 
+    // The open-offer listing, like agent.prompt.accepted above, is a CLI
+    // convenience outside the versioned protocol, so it is handled before
+    // strict parsing rather than being dropped by it.
+    if (
+      typeof parsedRaw === 'object' &&
+      parsedRaw !== null &&
+      (parsedRaw as { type?: string }).type === 'task.offers'
+    ) {
+      const payload = (parsedRaw as { payload?: { offers?: Array<Record<string, unknown>> } }).payload;
+      const offers = payload?.offers ?? [];
+      if (offers.length === 0) {
+        console.log('\n[board] Nothing is open right now.\n');
+      } else {
+        console.log('\n[board] Open to any agent:');
+        for (const offer of offers) {
+          const left = typeof offer.offerExpiresAt === 'string'
+            ? Math.max(0, Math.round((new Date(offer.offerExpiresAt).getTime() - Date.now()) / 1000))
+            : null;
+          console.log(
+            `  ${offer.taskId}  ${offer.title}${left === null ? '' : `  (${left}s left)`}`,
+          );
+        }
+        console.log('  Take one with /claim <id>\n');
+      }
+      return;
+    }
+
     let message: AgentMeshMessage;
     try {
       message = parseAgentMeshMessage(parsedRaw);
@@ -231,6 +258,16 @@ export class AgentMeshClient {
       // this is how one agent learns another picked up or finished work.
       case AgentMeshMessageType.ACTIVITY_CREATED: {
         const p = message.payload;
+        // An open offer is addressed to every agent including whoever posted
+        // it, and it is actionable, so it gets its own line with the id needed
+        // to claim it rather than scrolling past as ordinary team chatter.
+        if (p.type === 'task.offered') {
+          console.log(
+            `\n[board] ${p.message ?? 'A task is open to any agent'}` +
+              `${p.taskId ? `\n        take it with: /claim ${p.taskId}` : ''}\n`,
+          );
+          break;
+        }
         if (p.actorId === this.agentId) break; // own actions already printed
         if (p.message) {
           // Name the actor unless the server sentence already opens with it,
@@ -496,6 +533,42 @@ export class AgentMeshClient {
     });
     this.sendJson(msg);
     return true;
+  }
+
+  /**
+   * Takes an open offer off the shared task board for this agent.
+   *
+   * The server derives the agent from this authenticated connection, so the
+   * task id is all it needs; an agent can never claim on another's behalf.
+   * Success arrives as the ordinary task.assigned / task.request flow, and a
+   * failure (someone else got there first) arrives as a normal error frame.
+   */
+  public claimOffer(taskId: string): void {
+    const trimmed = taskId.trim();
+    if (!trimmed || !this.isConnected()) return;
+    this.sendJson({
+      id: randomUUID(),
+      protocolVersion: PROTOCOL_VERSION,
+      projectId: this.workspaceId,
+      senderId: this.agentId,
+      timestamp: new Date().toISOString(),
+      type: 'task.claim',
+      payload: { taskId: trimmed },
+    });
+  }
+
+  /** Asks for the offers currently open to any agent in this project. */
+  public requestOffers(): void {
+    if (!this.isConnected()) return;
+    this.sendJson({
+      id: randomUUID(),
+      protocolVersion: PROTOCOL_VERSION,
+      projectId: this.workspaceId,
+      senderId: this.agentId,
+      timestamp: new Date().toISOString(),
+      type: 'task.offers',
+      payload: {},
+    });
   }
 
   public sendPrompt(body: string): void {

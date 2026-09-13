@@ -9,6 +9,9 @@ import {
   assignResponsibility,
   listResponsibilities,
   removeResponsibility,
+  createTaskOffer,
+  claimTaskOffer,
+  listOfferCandidates,
   addDependency,
   listDependencies,
   removeDependency,
@@ -21,9 +24,16 @@ const prefixes = ['/projects/:projectId/tasks', '/api/projects/:projectId/tasks'
 for (const prefix of prefixes) {
   router.post(prefix, requireAuth, createTask);
   router.get(prefix, requireAuth, listTasks);
+  // Open offers on the shared board, before the :taskId routes so that
+  // "offers" can never be matched as a task id.
+  router.post(`${prefix}/offers`, requireAuth, createTaskOffer);
+  router.get(`${prefix}/offers/candidates`, requireAuth, listOfferCandidates);
+
   router.get(`${prefix}/:taskId`, requireAuth, getTask);
   router.patch(`${prefix}/:taskId`, requireAuth, updateTask);
   router.delete(`${prefix}/:taskId`, requireAuth, deleteTask);
+
+  router.post(`${prefix}/:taskId/claim`, requireAuth, claimTaskOffer);
 
   router.post(`${prefix}/:taskId/responsibilities`, requireAuth, assignResponsibility);
   router.get(`${prefix}/:taskId/responsibilities`, requireAuth, listResponsibilities);

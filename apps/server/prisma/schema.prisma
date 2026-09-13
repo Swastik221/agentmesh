@@ -253,6 +253,12 @@ model Task {
   priority             TaskPriority @default(MEDIUM)
   filePaths            String[]     @default([])
   requiredCapabilities String[]     @default([])
+  /// Set when the task was posted to the shared board as an open offer that
+  /// any agent in the project may claim. Until this moment passes the task is
+  /// on the board unassigned; after it, the coordinator assigns it to a free
+  /// agent. Cleared once the task has an owner, so a claimed task is never
+  /// swept again.
+  offerExpiresAt       DateTime?
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
@@ -271,6 +277,8 @@ model Task {
   @@index([projectId, priority])
   @@index([creatorId])
   @@index([preferredAgentId])
+  /// The sweeper polls for offers that are due, so this is the index it rides.
+  @@index([offerExpiresAt])
   @@map("tasks")
 }
 

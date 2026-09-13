@@ -77,6 +77,18 @@ const AGENT_PROMPT_TYPE = 'agent.prompt';
  * other, since workspace deltas go only to browser clients.
  */
 const AGENT_ROSTER_TYPE = 'agent.roster';
+/**
+ * An agent taking an open offer off the shared task board for itself.
+ *
+ * The REST claim route is session-authenticated, which a CLI agent holding a
+ * connect token cannot satisfy. This is the same operation over the connection
+ * the agent already proved itself on: the agent id comes from the authenticated
+ * handshake, never from the message, so an agent can only ever claim for
+ * itself and only within the project it connected to.
+ */
+const AGENT_CLAIM_TYPE = 'task.claim';
+/** Open offers pushed to a connected agent so its CLI can list them. */
+const AGENT_OFFERS_TYPE = 'task.offers';
 const AGENT_PROMPT_MAX_TITLE_LENGTH = 120;
 const AGENT_PROMPT_MAX_BODY_LENGTH = 4000;
 
@@ -851,6 +863,77 @@ export class AgentMeshWebSocketServer {
     // agent.connected/agent.disconnected, so a log line survives in the
     // Activity feed and reaches every connected viewer as a live delta,
     // with no new persistence or broadcast logic of its own.
+    // An agent claiming an open board offer for itself. The agent id is taken
+    // from the authenticated connection, so this cannot be used to claim on
+    // another agent's behalf.
+    if (message.type === AGENT_CLAIM_TYPE) {
+      if (!metadata.authenticated || !metadata.agentId) {
+        this.sendError(metadata.socket, 'UNAUTHORIZED', 'Agent must be authenticated to claim a task');
+        return;
+      }
+
+      const payload = (message as { payload?: Record<string, unknown> }).payload;
+      const taskId = typeof payload?.taskId === 'string' ? payload.taskId.trim() : '';
+      if (!taskId) {
+        this.sendError(metadata.socket, 'INVALID_MESSAGE', 'taskId is required to claim a task');
+        return;
+      }
+
+      try {
+        const { taskOfferService } = await import('../services/task-offer.service.js');
+        await taskOfferService.claimOffer(metadata.projectId, taskId, metadata.agentId);
+      } catch (error) {
+        // The real reason (already taken, not found, no longer open) so the
+        // agent's terminal can say what happened rather than going quiet.
+        const reason = error instanceof Error ? error.message : 'Could not claim that task';
+        this.sendError(metadata.socket, 'CLAIM_FAILED', reason);
+      }
+      return;
+    }
+
+    // What is currently open to any agent, so a CLI can list offers on demand
+    // instead of relying on having been connected when one was posted.
+    if (message.type === AGENT_OFFERS_TYPE) {
+      if (!metadata.authenticated || !metadata.agentId) {
+        this.sendError(metadata.socket, 'UNAUTHORIZED', 'Agent must be authenticated to list offers');
+        return;
+      }
+
+      try {
+        const open = await prisma.task.findMany({
+          where: {
+            projectId: metadata.projectId,
+            offerExpiresAt: { not: null },
+            status: { notIn: ['COMPLETED', 'CANCELLED'] },
+            responsibilities: { none: {} },
+          },
+          select: { id: true, title: true, offerExpiresAt: true },
+          orderBy: { createdAt: 'asc' },
+          take: 25,
+        });
+
+        metadata.socket.send(
+          JSON.stringify({
+            type: AGENT_OFFERS_TYPE,
+            payload: {
+              offers: open.map((task) => ({
+                taskId: task.id,
+                title: task.title,
+                offerExpiresAt: task.offerExpiresAt?.toISOString() ?? null,
+              })),
+            },
+          }),
+        );
+      } catch (error) {
+        this.sendError(
+          metadata.socket,
+          'OFFERS_FAILED',
+          error instanceof Error ? error.message : 'Could not list open offers',
+        );
+      }
+      return;
+    }
+
     if (message.type === AGENT_LOG_TYPE) {
       if (!metadata.authenticated || !metadata.agentId) {
         this.sendError(metadata.socket, 'UNAUTHORIZED', 'Agent must be authenticated to post a log line');

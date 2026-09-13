@@ -46,8 +46,11 @@ export type LiveTaskStatus =
 /** Prisma `TaskPriority`. */
 export type LiveTaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
-/** How a responsibility was created (coordinator assignments only). */
-export type AssignmentSource = 'HUMAN_PREFERENCE' | 'CAPABILITY_MATCH';
+/**
+ * How a responsibility was created. The coordinator sets the first two;
+ * SELF_CLAIMED marks an agent that took an open board offer for itself.
+ */
+export type AssignmentSource = 'HUMAN_PREFERENCE' | 'CAPABILITY_MATCH' | 'SELF_CLAIMED';
 
 export interface TaskCreator {
   id: string;
@@ -95,9 +98,28 @@ export interface LiveTask {
   requiredCapabilities: string[];
   createdAt: string;
   updatedAt: string;
+  /**
+   * Set while the task is an open offer on the shared board that any agent may
+   * claim. Null once it has an owner, or if it was never offered.
+   */
+  offerExpiresAt?: string | null;
   creator?: TaskCreator;
   responsibilities?: TaskResponsibility[];
   dependencies?: TaskDependencyRow[];
+}
+
+/** An agent the board can offer work to, and whether it is free right now. */
+export interface OfferCandidate {
+  id: string;
+  name: string;
+  busy: boolean;
+}
+
+export interface CreateOfferInput {
+  title: string;
+  description?: string;
+  /** How long the offer stays open to any agent before it is auto assigned. */
+  offerSeconds?: number;
 }
 
 export interface TaskListResult {
@@ -178,6 +200,9 @@ export interface TaskAdapter {
   createTask(projectId: string, input: CreateTaskInput): Promise<LiveTask>;
   updateTaskStatus(projectId: string, taskId: string, status: LiveTaskStatus): Promise<LiveTask>;
   claimTask(projectId: string, taskId: string, input: AssignResponsibilityInput): Promise<TaskResponsibility>;
+  createOffer(projectId: string, input: CreateOfferInput): Promise<LiveTask>;
+  claimOffer(projectId: string, taskId: string, agentId: string): Promise<TaskResponsibility>;
+  listOfferCandidates(projectId: string): Promise<OfferCandidate[]>;
   listResponsibilities(projectId: string, taskId: string): Promise<TaskResponsibility[]>;
   listDependencies(projectId: string, taskId: string): Promise<TaskDependencyRow[]>;
   addDependency(projectId: string, taskId: string, input: CreateDependencyInput): Promise<TaskDependencyRow>;
@@ -229,6 +254,35 @@ export const liveTaskAdapter: TaskAdapter = {
     if (input.preferredAgentId !== undefined) body.preferredAgentId = input.preferredAgentId;
     if (input.requiredCapabilities !== undefined) body.requiredCapabilities = input.requiredCapabilities;
     return apiClient.post<LiveTask>(base(projectId), body);
+  },
+
+  /**
+   * Post work to the shared board without naming an agent. Every agent in the
+   * project is told it is open; if none claims it before offerSeconds elapse
+   * the coordinator assigns it to a free one.
+   */
+  async createOffer(projectId: string, input: CreateOfferInput): Promise<LiveTask> {
+    const body: CreateOfferInput = { title: input.title };
+    if (input.description !== undefined) body.description = input.description;
+    if (input.offerSeconds !== undefined) body.offerSeconds = input.offerSeconds;
+    return apiClient.post<LiveTask>(`${base(projectId)}/offers`, body);
+  },
+
+  /** Give an open offer to one agent now, instead of waiting for the timer. */
+  async claimOffer(
+    projectId: string,
+    taskId: string,
+    agentId: string,
+  ): Promise<TaskResponsibility> {
+    return apiClient.post<TaskResponsibility>(
+      `${base(projectId)}/${encodeURIComponent(taskId)}/claim`,
+      { agentId },
+    );
+  },
+
+  /** Which agents could take an offer right now, and which are busy. */
+  async listOfferCandidates(projectId: string): Promise<OfferCandidate[]> {
+    return apiClient.get<OfferCandidate[]>(`${base(projectId)}/offers/candidates`);
   },
 
   async updateTaskStatus(projectId: string, taskId: string, status: LiveTaskStatus): Promise<LiveTask> {
