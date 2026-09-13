@@ -44,6 +44,33 @@ export class ExecutionService {
         fields: { taskId, agentId, status },
       },
     ]);
+
+    // A delta only reaches browser clients. Terminal states are also recorded
+    // as activity, which does reach the other connected agents, so a teammate
+    // agent can tell when a piece of work actually finished or failed instead
+    // of only the humans seeing it. One hook here covers every transition path.
+    if (status === ExecutionStatus.COMPLETED || status === ExecutionStatus.FAILED) {
+      try {
+        const [agent, task] = await Promise.all([
+          prisma.agent.findUnique({ where: { id: agentId }, select: { name: true } }),
+          prisma.task.findUnique({ where: { id: taskId }, select: { title: true } }),
+        ]);
+        const { activityService } = await import('../services/activity.service.js');
+        await activityService.recordActivity(projectId, {
+          type: status === ExecutionStatus.COMPLETED ? 'execution.completed' : 'execution.failed',
+          actorType: 'agent',
+          actorId: agentId,
+          actorName: agent?.name,
+          taskId,
+          message: `${agent?.name ?? 'An agent'} ${
+            status === ExecutionStatus.COMPLETED ? 'completed' : 'failed'
+          }: ${task?.title ?? taskId}`,
+        });
+      } catch {
+        // The execution state is already committed and broadcast; a failed
+        // activity write must not surface as an error on the execution path.
+      }
+    }
   }
 
   private async verifyProjectMembership(projectId: string, userId: string): Promise<void> {

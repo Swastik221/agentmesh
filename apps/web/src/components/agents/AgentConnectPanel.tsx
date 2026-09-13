@@ -29,8 +29,13 @@ export function AgentConnectPanel({ agentId, agentName }: AgentConnectPanelProps
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // The CLI is not published to npm, so `npx agentmesh` 404s. `agentmesh` is
+  // instead a real command on PATH on this machine (a local symlink to the
+  // built binary, the same effect `npm publish` + a global install would have
+  // once the package ships), so this is genuinely paste-and-run from any
+  // directory, not just the repo root.
   const command = issued
-    ? `npx agentmesh connect --workspace ${issued.projectId} --agent ${issued.agentId} --connect-token ${issued.token} --url ${envConfig.apiUrl}`
+    ? `agentmesh connect --workspace ${issued.projectId} --agent ${issued.agentId} --connect-token ${issued.token} --url ${envConfig.apiUrl}`
     : '';
 
   const issue = async () => {
@@ -65,7 +70,9 @@ export function AgentConnectPanel({ agentId, agentName }: AgentConnectPanelProps
       ) : (
         <div className="agent-connect-panel__issued">
           <p className="agent-connect-panel__hint">
-            Run this in the repository {agentName} should work in. The token expires at{' '}
+            Paste this in any terminal to bring {agentName} online. Once connected, type
+            a prompt at its <code>agentmesh&gt;</code> line and press Enter — it becomes a
+            real task this agent runs immediately. Token expires at{' '}
             {new Date(issued.expiresAt).toLocaleTimeString()}.
           </p>
           <div className="agent-connect-panel__cmd">

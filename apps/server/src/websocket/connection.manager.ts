@@ -139,6 +139,29 @@ export class ConnectionManager {
     }
   }
 
+  /**
+   * Sends only to authenticated agent connections in a project. The mirror of
+   * broadcastToProjectUsers: used for things agents need and browsers do not,
+   * like the roster of who else is connected.
+   */
+  broadcastToProjectAgents(
+    projectId: string,
+    message: WebSocketMessage | string,
+    senderConnectionId?: string,
+  ): void {
+    const connections = this.getProjectConnections(projectId);
+    const dataToSend = typeof message === 'string' ? message : JSON.stringify(message);
+
+    for (const conn of connections) {
+      if (senderConnectionId && conn.connectionId === senderConnectionId) {
+        continue;
+      }
+      if (conn.agentId && conn.authenticated && conn.socket.readyState === conn.socket.OPEN) {
+        conn.socket.send(dataToSend);
+      }
+    }
+  }
+
   broadcastToProjectUsers(
     projectId: string,
     message: WebSocketMessage | string,

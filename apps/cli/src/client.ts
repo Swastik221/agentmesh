@@ -1,9 +1,11 @@
 import WebSocket from 'ws';
+import { randomUUID } from 'node:crypto';
 import {
   AgentMeshMessageType,
   createAgentMeshMessage,
   parseAgentMeshMessage,
   AgentMeshMessage,
+  PROTOCOL_VERSION,
 } from '@agentmesh/agent-protocol';
 import { AgentAdapter, TaskExecutionContext } from './adapter/agent-adapter.interface.js';
 
@@ -18,6 +20,15 @@ export interface ClientOptions {
   adapter?: AgentAdapter;
   reconnectIntervalMs?: number;
   maxReconnectAttempts?: number;
+}
+
+/** A teammate agent in the same project, as pushed by the server. */
+export interface RosterAgent {
+  agentId: string;
+  name: string;
+  online: boolean;
+  provider?: string;
+  status?: string;
 }
 
 export type ConnectionState =
@@ -44,6 +55,8 @@ export class AgentMeshClient {
   private reconnectTimer: NodeJS.Timeout | null = null;
   /** The server's own reason for rejecting the handshake, surfaced verbatim. */
   private lastRejection: string | null = null;
+  /** Teammate agents in this project, pushed by the server as they change. */
+  private roster: RosterAgent[] = [];
 
   constructor(options: ClientOptions) {
     this.serverUrl = options.serverUrl;
@@ -156,9 +169,47 @@ export class AgentMeshClient {
   }
 
   private async handleMessage(rawMessageText: string): Promise<void> {
+    let parsedRaw: unknown;
+    try {
+      parsedRaw = JSON.parse(rawMessageText);
+    } catch {
+      return;
+    }
+
+    // Roster push: who else is on this team right now. Ad-hoc wire type, so it
+    // is read before the strict protocol parse below would reject it.
+    if (
+      typeof parsedRaw === 'object' &&
+      parsedRaw !== null &&
+      (parsedRaw as { type?: string }).type === 'agent.roster'
+    ) {
+      const payload = (parsedRaw as { payload?: { agents?: RosterAgent[] } }).payload;
+      this.roster = (payload?.agents ?? []).filter((a) => a.agentId !== this.agentId);
+      return;
+    }
+
+    // Ad-hoc response to agent.prompt, not part of the versioned protocol
+    // package (it is a CLI<->server convenience, not an inter-agent or
+    // task-lifecycle contract type), so it is handled here before the strict
+    // schema parse below would otherwise reject and silently drop it.
+    if (
+      typeof parsedRaw === 'object' &&
+      parsedRaw !== null &&
+      (parsedRaw as { type?: string }).type === 'agent.prompt.accepted'
+    ) {
+      const payload = (parsedRaw as { payload?: Record<string, unknown> }).payload || {};
+      if (payload.approvalRequired) {
+        console.log(
+          `\n[prompt] Task created (${payload.taskId}). Execution needs human approval in the workspace before it can run.\n`,
+        );
+      } else {
+        console.log(`\n[prompt] Task created and queued for execution (${payload.taskId}).\n`);
+      }
+      return;
+    }
+
     let message: AgentMeshMessage;
     try {
-      const parsedRaw = JSON.parse(rawMessageText);
       message = parseAgentMeshMessage(parsedRaw);
     } catch {
       return;
@@ -167,6 +218,34 @@ export class AgentMeshClient {
     switch (message.type) {
       case AgentMeshMessageType.AGENT_HANDSHAKE_ACCEPTED: {
         this.state = 'REGISTERED';
+        break;
+      }
+
+      case AgentMeshMessageType.ERROR: {
+        console.error(`\n[error] ${message.payload.code}: ${message.payload.message}\n`);
+        break;
+      }
+
+      // What the rest of the team is doing. The server records these as real
+      // workspace activity and broadcasts them to every connected agent, so
+      // this is how one agent learns another picked up or finished work.
+      case AgentMeshMessageType.ACTIVITY_CREATED: {
+        const p = message.payload;
+        if (p.actorId === this.agentId) break; // own actions already printed
+        if (p.message) {
+          // Name the actor unless the server sentence already opens with it,
+          // so the feed always answers "who" without ever doubling it up.
+          const actor = p.actorName;
+          const named = actor && !p.message.startsWith(actor) ? `${actor}: ${p.message}` : p.message;
+          console.log(`\n[team] ${named}\n`);
+        }
+        break;
+      }
+
+      // A direct message from another agent in this project.
+      case AgentMeshMessageType.AGENT_MESSAGE: {
+        const from = this.roster.find((a) => a.agentId === message.senderId);
+        console.log(`\n[dm from ${from?.name ?? message.senderId}] ${message.payload.body}\n`);
         break;
       }
 
@@ -202,6 +281,42 @@ export class AgentMeshClient {
     requiredCapabilities?: string[];
     metadata?: Record<string, unknown>;
   }): Promise<void> {
+    console.log(`\n[task] Received: ${payload.title}`);
+
+    // Shared workspace context the server sends with every task: what the rest
+    // of the team is doing right now, what has already been produced, and the
+    // recorded decisions. Printed so the context is visible, and passed to the
+    // adapter below in metadata so an adapter can actually act on it.
+    const ctx = payload.metadata?.workspaceContext as
+      | {
+          activeWork?: Array<{ agent: string; task: string; status: string; filePaths?: string[] }>;
+          availableArtifacts?: Array<{ name: string; type: string; producedBy?: string }>;
+          decisions?: Array<{ type: string; title: string }>;
+        }
+      | undefined;
+
+    if (ctx) {
+      if (ctx.activeWork?.length) {
+        console.log('[context] Teammates currently working on:');
+        for (const w of ctx.activeWork) {
+          const files = w.filePaths?.length ? ` (${w.filePaths.join(', ')})` : '';
+          console.log(`  - ${w.agent}: ${w.task} [${w.status}]${files}`);
+        }
+      }
+      if (ctx.availableArtifacts?.length) {
+        console.log('[context] Artifacts already available:');
+        for (const a of ctx.availableArtifacts) {
+          console.log(`  - ${a.name} (${a.type})${a.producedBy ? ` by ${a.producedBy}` : ''}`);
+        }
+      }
+      if (ctx.decisions?.length) {
+        console.log('[context] Project decisions and constraints:');
+        for (const d of ctx.decisions) {
+          console.log(`  - [${d.type}] ${d.title}`);
+        }
+      }
+    }
+
     // 1. Send task.accepted / IN_PROGRESS
     const acceptMsg = createAgentMeshMessage({
       type: AgentMeshMessageType.TASK_ACCEPTED,
@@ -229,6 +344,7 @@ export class AgentMeshClient {
       metadata: payload.metadata,
       worktreePath,
       onProgress: (progress: number, message?: string) => {
+        console.log(`[task] ${progress}%${message ? ` — ${message}` : ''}`);
         const progressMsg = createAgentMeshMessage({
           type: AgentMeshMessageType.TASK_PROGRESS,
           projectId: this.workspaceId,
@@ -243,6 +359,7 @@ export class AgentMeshClient {
         this.sendJson(progressMsg);
       },
       publishArtifact: async (artifact) => {
+        console.log(`[task] Publishing artifact: ${artifact.name}`);
         const artifactMsg = createAgentMeshMessage({
           type: AgentMeshMessageType.ARTIFACT_CREATED,
           projectId: this.workspaceId,
@@ -281,8 +398,10 @@ export class AgentMeshClient {
         },
       });
       this.sendJson(completedMsg);
+      console.log(`[task] Completed: ${payload.title}\n`);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Execution failed';
+      console.error(`[task] Failed: ${errorMessage}\n`);
       const failedMsg = createAgentMeshMessage({
         type: AgentMeshMessageType.TASK_FAILED,
         projectId: this.workspaceId,
@@ -314,6 +433,83 @@ export class AgentMeshClient {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
     }
+  }
+
+  /**
+   * Posts a free-text line to the workspace, the way an interactive terminal
+   * session would. Real over the wire: the server persists it through the
+   * same activity pipeline as every other real event and broadcasts it live
+   * to connected browsers, which is what makes it show up on this agent's
+   * card. Not part of the versioned agent-protocol message set (agent.message
+   * there is strictly agent-to-agent and requires a recipient), so this is
+   * built by hand rather than through createAgentMeshMessage, mirroring how
+   * the web client already hand-builds workspace.resync.request.
+   */
+  public sendLog(body: string): void {
+    const trimmed = body.trim();
+    if (!trimmed || !this.isConnected()) return;
+    this.sendJson({
+      id: randomUUID(),
+      protocolVersion: PROTOCOL_VERSION,
+      projectId: this.workspaceId,
+      senderId: this.agentId,
+      timestamp: new Date().toISOString(),
+      type: 'agent.log',
+      payload: { body: trimmed },
+    });
+  }
+
+  /**
+   * Posts an interactive prompt: the same live display as sendLog, plus a
+   * real Task the server creates, assigns to this agent, and dispatches back
+   * over this same connection for real execution (see websocket.server.ts's
+   * agent.prompt handler). This is what turns typing in this terminal into
+   * actual work, the way running `claude` in a terminal does.
+   */
+  /** Teammate agents currently known to this connection. */
+  public getRoster(): RosterAgent[] {
+    return [...this.roster];
+  }
+
+  /**
+   * Sends a direct message to another agent in this project, by name or id.
+   * Uses the protocol's existing, already-validated agent.message path: the
+   * server checks the recipient exists, is in the same project, and is
+   * connected, and rejects the message otherwise.
+   */
+  public sendDirectMessage(target: string, body: string): boolean {
+    const trimmed = body.trim();
+    if (!trimmed || !this.isConnected()) return false;
+
+    const needle = target.trim().toLowerCase();
+    const match = this.roster.find(
+      (a) => a.name.toLowerCase() === needle || a.agentId === target.trim(),
+    );
+    if (!match) return false;
+
+    const msg = createAgentMeshMessage({
+      type: AgentMeshMessageType.AGENT_MESSAGE,
+      projectId: this.workspaceId,
+      senderId: this.agentId,
+      recipientId: match.agentId,
+      payload: { body: trimmed },
+    });
+    this.sendJson(msg);
+    return true;
+  }
+
+  public sendPrompt(body: string): void {
+    const trimmed = body.trim();
+    if (!trimmed || !this.isConnected()) return;
+    this.sendJson({
+      id: randomUUID(),
+      protocolVersion: PROTOCOL_VERSION,
+      projectId: this.workspaceId,
+      senderId: this.agentId,
+      timestamp: new Date().toISOString(),
+      type: 'agent.prompt',
+      payload: { body: trimmed },
+    });
   }
 
   public disconnect(): void {

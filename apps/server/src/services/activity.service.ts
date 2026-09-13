@@ -1,7 +1,8 @@
+import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { connectionManager } from '../websocket/connection.manager.js';
-import { AgentMeshMessageType } from '@agentmesh/agent-protocol';
+import { AgentMeshMessageType, PROTOCOL_VERSION } from '@agentmesh/agent-protocol';
 import { deltaSequencerService } from './delta-sequencer.service.js';
 import type { WebSocketMessage } from '../websocket/websocket.types.js';
 import { BadRequestError } from '../errors/app-error.js';
@@ -26,6 +27,16 @@ export interface RecordActivityInput {
  */
 export class ActivityService {
   async recordActivity(projectId: string, input: RecordActivityInput): Promise<void> {
+    // `message` has no dedicated column on ActivityEvent; fold it into the
+    // JSON payload so it is actually persisted and queryable, rather than
+    // existing only for the instant of the live broadcast below. Every
+    // existing call site either passes no payload or a small object with
+    // unrelated keys, so merging is additive and does not overwrite anything.
+    const persistedPayload =
+      input.message !== undefined || input.payload !== undefined
+        ? { ...(input.payload ?? {}), ...(input.message !== undefined && { message: input.message }) }
+        : undefined;
+
     const activity = await prisma.activityEvent.create({
       data: {
         projectId,
@@ -36,13 +47,25 @@ export class ActivityService {
         taskId: input.taskId ?? null,
         artifactId: input.artifactId ?? null,
         payload:
-          input.payload !== undefined
-            ? (input.payload as Prisma.InputJsonValue)
+          persistedPayload !== undefined
+            ? (persistedPayload as Prisma.InputJsonValue)
             : undefined,
       },
     });
 
+    // A complete protocol envelope. This previously sent only { type, payload },
+    // which does not satisfy activityCreatedMessageSchema (it extends
+    // baseEnvelopeSchema: id, protocolVersion, projectId, senderId, timestamp
+    // are all required), so any strict consumer that validates before handling
+    // silently dropped every activity event. Browsers never noticed because
+    // they ignore this message type; a connected CLI agent does not.
     connectionManager.broadcastToProject(projectId, {
+      id: crypto.randomUUID(),
+      protocolVersion: PROTOCOL_VERSION,
+      projectId,
+      senderId: 'server',
+      timestamp: activity.createdAt.toISOString(),
+      kind: 'event',
       type: AgentMeshMessageType.ACTIVITY_CREATED,
       payload: {
         activityId: activity.id,
@@ -67,6 +90,11 @@ export class ActivityService {
           fields: {
             type: activity.type,
             actorId: activity.actorId,
+            actorName: activity.actorName ?? undefined,
+            // Included so a live listener (e.g. an agent's terminal log on the
+            // canvas) can render the line the instant it arrives, without a
+            // round trip back to GET /projects/:id/activity for the text.
+            message: input.message,
             taskId: activity.taskId ?? undefined,
             artifactId: activity.artifactId ?? undefined,
           },

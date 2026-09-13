@@ -99,6 +99,63 @@ export class ConnectorService {
       ? await prisma.taskExecution.findUnique({ where: { id: executionId } })
       : null;
 
+    // Shared workspace context, so an agent starts a task already knowing what
+    // the rest of the team is doing instead of working blind. Deliberately
+    // bounded and task-shaped rather than "everything in the project": who is
+    // actively working on what (and on which files, so two agents do not
+    // collide), what has already been produced (so work is not redone), and
+    // the decisions and constraints the humans recorded.
+    const [activeResponsibilities, recentArtifacts, brainEntries] = await Promise.all([
+      prisma.taskResponsibility.findMany({
+        where: {
+          agentId: { not: agentId },
+          task: { projectId, status: { in: ['IN_PROGRESS', 'PENDING_APPROVAL'] } },
+        },
+        include: {
+          agent: { select: { name: true } },
+          task: { select: { title: true, status: true, filePaths: true } },
+        },
+        take: 20,
+      }),
+      prisma.artifact.findMany({
+        where: { projectId },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        include: {
+          agent: { select: { name: true } },
+          task: { select: { title: true } },
+        },
+      }),
+      prisma.projectBrainEntry.findMany({
+        where: { projectId },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { type: true, title: true, content: true },
+      }),
+    ]);
+
+    const workspaceContext = {
+      activeWork: activeResponsibilities.map((r) => ({
+        agent: r.agent.name,
+        task: r.task.title,
+        status: r.task.status,
+        filePaths: r.task.filePaths ?? [],
+      })),
+      availableArtifacts: recentArtifacts.map((a) => ({
+        name: a.name,
+        type: a.type,
+        version: a.version,
+        status: a.status,
+        producedBy: a.agent?.name,
+        fromTask: a.task?.title,
+      })),
+      decisions: brainEntries.map((e) => ({
+        type: e.type,
+        title: e.title,
+        content: e.content,
+      })),
+    };
+
     const taskRequestMsg = createAgentMeshMessage({
       type: AgentMeshMessageType.TASK_REQUEST,
       projectId,
@@ -116,6 +173,7 @@ export class ConnectorService {
           worktreePath: execContext?.workingDirectory,
           rootPath: execContext?.rootPath,
           dependencies: dependencyArtifacts,
+          workspaceContext,
           input: execRecord?.input || undefined,
         },
       },

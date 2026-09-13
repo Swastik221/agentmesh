@@ -15,6 +15,7 @@ import { messagingService } from '../messaging/index.js';
 import { sessionService } from '../auth/session.service.js';
 import { deltaSequencerService } from '../services/delta-sequencer.service.js';
 import { agentConnectTokenService } from '../services/agent-connect-token.service.js';
+import { TaskPriority } from '@prisma/client';
 
 function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
   const cookieHeader = req.headers.cookie;
@@ -49,6 +50,36 @@ function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
  * header and query name from the session so the two credentials can never be
  * confused for one another.
  */
+/**
+ * Wire type for a free-text line an agent process posts to its own workspace.
+ * Deliberately outside the versioned agent-protocol package: not part of the
+ * inter-agent or task-lifecycle contract, just a live terminal-style log line
+ * a connected CLI agent can post, mirrored into the real activity/delta
+ * pipeline below.
+ */
+const AGENT_LOG_TYPE = 'agent.log';
+const AGENT_LOG_ACTIVITY_TYPE = 'agent.log';
+const AGENT_LOG_MAX_LENGTH = 2000;
+/**
+ * An agent's own terminal posting a real, actionable line: unlike agent.log
+ * (display only), this creates a real Task in the agent's project, assigns
+ * it directly to that same agent (the agent asked for this work itself, so
+ * capability matching does not apply), and executes it through the exact
+ * same real pipeline the workspace UI's "New task" -> "Assign" -> "Start
+ * execution" buttons already use. No new execution logic: taskService,
+ * then a direct responsibility assignment, then executionService.
+ */
+const AGENT_PROMPT_TYPE = 'agent.prompt';
+/**
+ * Roster of the other agents in this project, pushed to connected agents so a
+ * CLI knows who its teammates are: who is online, and the id to address when
+ * sending a direct agent.message. Agents otherwise see nothing about each
+ * other, since workspace deltas go only to browser clients.
+ */
+const AGENT_ROSTER_TYPE = 'agent.roster';
+const AGENT_PROMPT_MAX_TITLE_LENGTH = 120;
+const AGENT_PROMPT_MAX_BODY_LENGTH = 4000;
+
 function extractConnectTokenFromReq(req: IncomingMessage): string | undefined {
   const header = req.headers['x-agent-connect-token'];
   if (typeof header === 'string' && header.trim() !== '') {
@@ -301,13 +332,19 @@ export class AgentMeshWebSocketServer {
         try {
           if (agentId) {
             const { activityService } = await import('../services/activity.service.js');
+            const goneAgent = await prisma.agent.findUnique({
+              where: { id: agentId },
+              select: { name: true },
+            });
             await activityService.recordActivity(projectId, {
               type: 'agent.disconnected',
               actorType: 'agent',
               actorId: agentId,
-              message: 'Agent disconnected',
+              actorName: goneAgent?.name,
+              message: `${goneAgent?.name ?? 'An agent'} disconnected`,
               payload: { connectionId: metadata.connectionId },
             });
+            await this.broadcastAgentRoster(projectId);
           }
         } catch {
           // Best-effort activity during teardown.
@@ -575,12 +612,19 @@ export class AgentMeshWebSocketServer {
           },
         ]);
         const { activityService } = await import('../services/activity.service.js');
+        const connectedAgent = await prisma.agent.findUnique({
+          where: { id: metadata.agentId },
+          select: { name: true },
+        });
         await activityService.recordActivity(metadata.projectId, {
           type: 'agent.connected',
           actorType: 'agent',
           actorId: metadata.agentId,
-          message: 'Agent connected',
+          actorName: connectedAgent?.name,
+          message: `${connectedAgent?.name ?? 'An agent'} connected`,
         });
+        // Everyone's view of who is on the team just changed.
+        await this.broadcastAgentRoster(metadata.projectId);
       }
       return;
     }
@@ -690,6 +734,165 @@ export class AgentMeshWebSocketServer {
       return;
     }
 
+    // Handle inbound agent.prompt: the interactive line a connected CLI agent
+    // types in its own terminal. Does two real things, both reusing existing,
+    // already-tested infrastructure: shows up live on the agent's canvas card
+    // (recordActivity, same as agent.log below) and becomes a real Task,
+    // assigned directly to this same agent, and executed through the same
+    // pipeline the workspace UI's task board already drives. The creator on
+    // record is whoever authorised this connection: the connect-token's
+    // issuing owner, or the session user for a browser-authenticated agent
+    // connection, both already resolved into metadata.userId at handshake
+    // time, so this can never create a task as a different user or in a
+    // different project than the one this connection was authorised for.
+    if (message.type === AGENT_PROMPT_TYPE) {
+      if (!metadata.authenticated || !metadata.agentId || !metadata.userId) {
+        this.sendError(metadata.socket, 'UNAUTHORIZED', 'Agent must be authenticated to submit a prompt');
+        return;
+      }
+
+      try {
+        const payload = (message as { payload?: Record<string, unknown> }).payload;
+        const rawBody = typeof payload?.body === 'string' ? payload.body.trim() : '';
+
+        if (!rawBody) {
+          this.sendError(metadata.socket, 'INVALID_MESSAGE', 'Prompt cannot be empty');
+          return;
+        }
+
+        const body =
+          rawBody.length > AGENT_PROMPT_MAX_BODY_LENGTH
+            ? rawBody.slice(0, AGENT_PROMPT_MAX_BODY_LENGTH)
+            : rawBody;
+        const title =
+          body.length > AGENT_PROMPT_MAX_TITLE_LENGTH
+            ? `${body.slice(0, AGENT_PROMPT_MAX_TITLE_LENGTH - 1)}…`
+            : body;
+
+        const agent = await prisma.agent.findUnique({
+          where: { id: metadata.agentId },
+          select: { id: true, name: true, projectId: true },
+        });
+
+        if (!agent || agent.projectId !== metadata.projectId) {
+          this.sendError(metadata.socket, 'AGENT_NOT_FOUND', 'Agent not found in this project');
+          return;
+        }
+
+        // Live display, same real path as agent.log.
+        const { activityService } = await import('../services/activity.service.js');
+        await activityService.recordActivity(metadata.projectId, {
+          type: AGENT_LOG_ACTIVITY_TYPE,
+          actorType: 'agent',
+          actorId: metadata.agentId,
+          actorName: agent.name,
+          message: body,
+        });
+
+        // Real task, created, self-assigned, and executed through the exact
+        // pipeline the UI uses.
+        const { taskService } = await import('../tasks/task.service.js');
+        const { executionService } = await import('../execution/execution.service.js');
+        const { ApprovalRequiredError } = await import('../errors/app-error.js');
+
+        const task = await taskService.createTask(metadata.projectId, metadata.userId, {
+          title,
+          description: body,
+          priority: TaskPriority.MEDIUM,
+          filePaths: [],
+        });
+
+        await taskService.assignResponsibility(metadata.projectId, task.id, metadata.userId, {
+          agentId: metadata.agentId,
+          role: 'Requested by agent from its own terminal',
+        });
+
+        try {
+          const execution = await executionService.createExecution(
+            metadata.projectId,
+            task.id,
+            metadata.userId,
+            { agentId: metadata.agentId },
+          );
+          this.sendJson(metadata.socket, {
+            type: 'agent.prompt.accepted',
+            payload: { taskId: task.id, executionId: execution.id },
+          } as unknown as WebSocketMessage);
+        } catch (execErr: unknown) {
+          if (execErr instanceof ApprovalRequiredError) {
+            // Real policy gate did its job: the task exists, but a human
+            // must approve execution in the workspace before it runs.
+            this.sendJson(metadata.socket, {
+              type: 'agent.prompt.accepted',
+              payload: {
+                taskId: task.id,
+                approvalRequired: true,
+                approvalRequestId: execErr.approvalRequestId,
+              },
+            } as unknown as WebSocketMessage);
+          } else {
+            throw execErr;
+          }
+        }
+      } catch (err: unknown) {
+        const error = err as Error;
+        this.sendError(metadata.socket, 'AGENT_PROMPT_FAILED', error?.message || 'Failed to process prompt');
+      }
+      return;
+    }
+
+    // Handle inbound agent.log: a free-text line an agent process posts to its
+    // own workspace, distinct from agent.message (which is agent-to-agent and
+    // requires a recipient). Not part of the versioned agent-protocol package;
+    // built and read as a plain envelope on the wire, the same way
+    // useWorkspaceRealtime already hand-builds workspace.resync.request
+    // client-side. Delivery reuses activityService.recordActivity verbatim:
+    // the same real persistence + broadcast path already proven for
+    // agent.connected/agent.disconnected, so a log line survives in the
+    // Activity feed and reaches every connected viewer as a live delta,
+    // with no new persistence or broadcast logic of its own.
+    if (message.type === AGENT_LOG_TYPE) {
+      if (!metadata.authenticated || !metadata.agentId) {
+        this.sendError(metadata.socket, 'UNAUTHORIZED', 'Agent must be authenticated to post a log line');
+        return;
+      }
+
+      try {
+        const payload = (message as { payload?: Record<string, unknown> }).payload;
+        const rawBody = typeof payload?.body === 'string' ? payload.body.trim() : '';
+
+        if (!rawBody) {
+          this.sendError(metadata.socket, 'INVALID_MESSAGE', 'Log body cannot be empty');
+          return;
+        }
+
+        const body = rawBody.length > AGENT_LOG_MAX_LENGTH ? rawBody.slice(0, AGENT_LOG_MAX_LENGTH) : rawBody;
+
+        const agent = await prisma.agent.findUnique({
+          where: { id: metadata.agentId },
+          select: { id: true, name: true, projectId: true },
+        });
+
+        if (!agent || agent.projectId !== metadata.projectId) {
+          this.sendError(metadata.socket, 'AGENT_NOT_FOUND', 'Agent not found in this project');
+          return;
+        }
+
+        const { activityService } = await import('../services/activity.service.js');
+        await activityService.recordActivity(metadata.projectId, {
+          type: AGENT_LOG_ACTIVITY_TYPE,
+          actorType: 'agent',
+          actorId: metadata.agentId,
+          actorName: agent.name,
+          message: body,
+        });
+      } catch (err: unknown) {
+        const error = err as Error;
+        this.sendError(metadata.socket, 'AGENT_LOG_FAILED', error?.message || 'Failed to post log line');
+      }
+      return;
+    }
+
     // Handle connector task messages
     if (
       message.type === AgentMeshMessageType.TASK_ACCEPTED ||
@@ -730,6 +933,36 @@ export class AgentMeshWebSocketServer {
       );
       this.sendJson(metadata.socket, rejection as unknown as WebSocketMessage);
       return;
+    }
+  }
+
+  /**
+   * Rebuilds the agent roster from the database plus live connection state and
+   * pushes it to every connected agent in the project. Called whenever that
+   * picture changes: a handshake, or an agent dropping off.
+   */
+  private async broadcastAgentRoster(projectId: string): Promise<void> {
+    try {
+      const agents = await prisma.agent.findMany({
+        where: { projectId },
+        select: { id: true, name: true, provider: true, status: true },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const roster = agents.map((a) => ({
+        agentId: a.id,
+        name: a.name,
+        provider: a.provider,
+        online: connectionManager.isAgentConnected(projectId, a.id),
+        status: a.status,
+      }));
+
+      connectionManager.broadcastToProjectAgents(projectId, {
+        type: AGENT_ROSTER_TYPE,
+        payload: { projectId, agents: roster },
+      } as unknown as WebSocketMessage);
+    } catch (err) {
+      logger.error('[WebSocket] Failed to broadcast agent roster:', err);
     }
   }
 

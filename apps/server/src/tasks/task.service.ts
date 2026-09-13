@@ -398,6 +398,23 @@ export class TaskService {
       },
     ]);
 
+    // Deltas only reach browser clients. Recording this as activity is what
+    // makes it reach the other connected agents too, so a teammate agent can
+    // see who picked up which piece of work rather than being blind to it.
+    try {
+      const { activityService } = await import('../services/activity.service.js');
+      await activityService.recordActivity(projectId, {
+        type: 'task.assigned',
+        actorType: 'agent',
+        actorId: data.agentId,
+        actorName: responsibility.agent?.name,
+        taskId,
+        message: `${responsibility.agent?.name ?? 'An agent'} was assigned: ${task.title}`,
+      });
+    } catch {
+      // Assignment already committed; a failed activity write must not undo it.
+    }
+
     return responsibility;
   }
 
