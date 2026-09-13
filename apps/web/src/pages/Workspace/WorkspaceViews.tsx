@@ -2,11 +2,15 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowRight,
   Bot,
+  Check,
   CheckCircle2,
   Clock3,
+  Copy,
   FileJson2,
   FolderGit2,
+  KeyRound,
   Radio,
+  RotateCcw,
   ShieldCheck,
   Sparkles,
   TerminalSquare,
@@ -17,6 +21,8 @@ import { currentProjectId } from '../../utils/currentProjectId';
 import { useAgents } from '../../hooks/useAgents';
 import { AgentConnectPanel } from '../../components/agents/AgentConnectPanel';
 import { authSessionService } from '../../services/auth-session';
+import { listActivity } from '../../adapters/live/activity.adapter';
+import { getProjectJoinCode, rotateProjectJoinCode } from '../../adapters/live/project.adapter';
 import { PaidCapabilityCard } from '../../components/agents/PaidCapabilityCard';
 import { useTasks } from '../../hooks/useTasks';
 import { useExecutions } from '../../hooks/useExecutions';
@@ -1143,29 +1149,73 @@ export function FilesView(props: WorkspaceViewProps) {
 
 const eventGroups: Array<{ label: string; types: string[] }> = [
   { label: 'All events', types: [] },
-  { label: 'Tasks', types: ['task', 'taskResponsibility'] },
-  { label: 'Artifacts', types: ['artifact', 'dependency'] },
-  { label: 'Approvals', types: ['approval'] },
+  { label: 'Agents', types: ['agent.connected', 'agent.disconnected', 'agent.log'] },
+  { label: 'Tasks', types: ['task.created', 'task.assigned', 'task.completed'] },
+  { label: 'Executions', types: ['execution.completed', 'execution.failed'] },
+  { label: 'Artifacts', types: ['artifact.created'] },
 ];
+
+interface ActivityRow {
+  id: string;
+  /** The real activity type, e.g. 'task.assigned'. */
+  type: string;
+  /** The human sentence the server recorded for this event. */
+  payload: string;
+  time: string;
+}
 
 export function ActivityView({ onOpenCanvas }: WorkspaceViewProps) {
   const projectId = currentProjectId();
-  const [events, setEvents] = useState<Array<{ id: string; type: string; payload: string; time: string }>>([]);
+  const [events, setEvents] = useState<ActivityRow[]>([]);
   const [group, setGroup] = useState(0);
+
+  // Seed from the persisted feed so the view is not empty on load: these
+  // events are real rows in activity_events, not only whatever happens to
+  // arrive while this tab is open.
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await listActivity(projectId, 50);
+        if (cancelled) return;
+        setEvents(
+          rows.map((r) => ({
+            id: r.id,
+            type: r.type,
+            payload: r.payload?.message || `${r.type} by ${r.actorName ?? r.actorId}`,
+            time: new Date(r.createdAt).toLocaleTimeString(),
+          })),
+        );
+      } catch {
+        // An empty feed is the honest fallback; the realtime stream below
+        // still fills in anything that happens from now on.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   useWorkspaceRealtime(
     projectId,
     useMemo(
       () => ({
         onDelta: (event: RealtimeDeltaEvent) => {
+          // Only activity deltas carry a human sentence; the rest are entity
+          // change notices the other views already react to.
+          if (event.entity !== 'activity') return;
+          const message = event.fields?.message as string | undefined;
+          const type = (event.fields?.type as string | undefined) ?? 'activity';
+          const actorName = event.fields?.actorName as string | undefined;
           setEvents((prev) => [
             {
-              id: `${event.entity}-${event.entityId}-${Date.now()}`,
-              type: event.entity.toUpperCase(),
-              payload: `${event.operation} ${event.entity} ${event.entityId.slice(0, 8)}`,
+              id: `${event.entityId}`,
+              type,
+              payload: message || `${type}${actorName ? ` by ${actorName}` : ''}`,
               time: new Date().toLocaleTimeString(),
             },
-            ...prev,
+            ...prev.filter((p) => p.id !== event.entityId),
           ]);
         },
       }),
@@ -1221,6 +1271,73 @@ export function ActivityView({ onOpenCanvas }: WorkspaceViewProps) {
           )}
         </div>
       </div>
+    </section>
+  );
+}
+
+/**
+ * This workspace's shareable invite code. Owner only: the server refuses to
+ * return it to anyone else, and that refusal is surfaced as-is rather than
+ * hidden behind an empty panel.
+ */
+function WorkspaceInviteCode({ projectId }: { projectId: string | null }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const load = async (rotate = false) => {
+    if (!projectId) return;
+    setBusy(true);
+    setError('');
+    try {
+      setCode(rotate ? await rotateProjectJoinCode(projectId) : await getProjectJoinCode(projectId));
+      setCopied(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not load the invite code.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="workspace-invite">
+      <div className="workspace-invite__head">
+        <div>
+          <h2>Workspace invite code</h2>
+          <p>Anyone signed in who enters this code joins this workspace as a member.</p>
+        </div>
+        {!code && (
+          <button type="button" className="demo-primary" disabled={busy} onClick={() => void load()}>
+            <KeyRound size={14} /> {busy ? 'Loading…' : 'Show code'}
+          </button>
+        )}
+      </div>
+
+      {code && (
+        <div className="workspace-invite__code">
+          <code>{code}</code>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(code).then(
+                () => {
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 2000);
+                },
+                () => setError('Clipboard unavailable. Select the code and copy it manually.'),
+              );
+            }}
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copied' : 'Copy'}
+          </button>
+          <button type="button" disabled={busy} onClick={() => void load(true)}>
+            <RotateCcw size={13} /> New code
+          </button>
+        </div>
+      )}
+
+      {error && <p role="alert" className="workspace-invite__error">{error}</p>}
     </section>
   );
 }
@@ -1289,6 +1406,8 @@ export function TeamView({ onOpenCanvas }: WorkspaceViewProps) {
       />
 
       <div className="activity-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <WorkspaceInviteCode projectId={projectId} />
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>Team Members ({members.length})</h2>

@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import {
   Check,
+  Copy,
   Hexagon,
   Home,
+  KeyRound,
   Maximize2,
   PanelsTopLeft,
   RefreshCw,
+  RotateCcw,
   Settings,
   Share2,
   UserPlus,
@@ -13,12 +16,24 @@ import {
 } from 'lucide-react';
 import { navigate } from '../../routes/AppRouter';
 import { WalletAuthButton } from '../auth/WalletAuthButton';
+import { currentProjectId } from '../../utils/currentProjectId';
+import {
+  getProjectJoinCode,
+  joinProjectByCode,
+  rotateProjectJoinCode,
+} from '../../adapters/live/project.adapter';
 
 export function Header() {
   const [copied, setCopied] = useState<'invite' | 'share' | null>(null);
   const [joinModalOpen, setJoinModalOpen] = useState(false);
   const [ideMode, setIdeMode] = useState(false);
   const [inviteCodeInput, setInviteCodeInput] = useState('');
+  const [joinBusy, setJoinBusy] = useState(false);
+  const [joinError, setJoinError] = useState('');
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteError, setInviteError] = useState('');
 
   const copy = async (value: string, kind: 'invite' | 'share') => {
     await navigator.clipboard?.writeText(value);
@@ -26,15 +41,63 @@ export function Header() {
     window.setTimeout(() => setCopied(null), 1400);
   };
 
-  const handleJoin = (e: React.FormEvent) => {
+  /**
+   * Really joins the workspace the code belongs to. This used to close the
+   * modal and fire a "Joined project with code: X" toast without calling
+   * anything, so it reported success for a join that never happened.
+   */
+  const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (inviteCodeInput.trim()) {
+    const code = inviteCodeInput.trim();
+    if (!code) return;
+    setJoinBusy(true);
+    setJoinError('');
+    try {
+      const project = await joinProjectByCode(code);
       setJoinModalOpen(false);
-      window.dispatchEvent(
-        new CustomEvent('agentmesh:toast', {
-          detail: `Joined project with code: ${inviteCodeInput.trim().toUpperCase()}`,
-        })
+      setInviteCodeInput('');
+      navigate(`/workspace/${project.id}`);
+    } catch (reason) {
+      // The server's real message, e.g. "That join code does not match any
+      // workspace", instead of a success that did not happen.
+      setJoinError(reason instanceof Error ? reason.message : 'Could not join that workspace.');
+    } finally {
+      setJoinBusy(false);
+    }
+  };
+
+  /** Shows this workspace's invite code. Owner only, enforced server-side. */
+  const openInvite = async () => {
+    const projectId = currentProjectId();
+    if (!projectId) return;
+    setInviteModalOpen(true);
+    setInviteBusy(true);
+    setInviteError('');
+    try {
+      setInviteCode(await getProjectJoinCode(projectId));
+    } catch (reason) {
+      setInviteCode(null);
+      setInviteError(
+        reason instanceof Error ? reason.message : 'Could not load the invite code.',
       );
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
+  const rotateInvite = async () => {
+    const projectId = currentProjectId();
+    if (!projectId) return;
+    setInviteBusy(true);
+    setInviteError('');
+    try {
+      setInviteCode(await rotateProjectJoinCode(projectId));
+    } catch (reason) {
+      setInviteError(
+        reason instanceof Error ? reason.message : 'Could not rotate the invite code.',
+      );
+    } finally {
+      setInviteBusy(false);
     }
   };
 
@@ -65,7 +128,11 @@ export function Header() {
 
       <div className="app-header__identity">
         <div className="app-header__actions">
-          <button type="button" title="Join project with invite code" onClick={() => setJoinModalOpen(true)}>
+          <button type="button" title="Show this workspace's invite code" onClick={() => void openInvite()}>
+            <KeyRound size={15} strokeWidth={1.75} />
+            Invite
+          </button>
+          <button type="button" title="Join another workspace with an invite code" onClick={() => setJoinModalOpen(true)}>
             <UserPlus size={15} strokeWidth={1.75} />
             Join
           </button>
@@ -155,11 +222,16 @@ export function Header() {
                   fontSize: 13,
                   marginBottom: 14,
                 }}
-                placeholder="MESH-2026"
+                placeholder="MESH-XXXXXXXX"
                 value={inviteCodeInput}
                 onChange={(e) => setInviteCodeInput(e.target.value)}
                 autoFocus
               />
+              {joinError && (
+                <p role="alert" style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--mesh-error-red, #c94f4f)' }}>
+                  {joinError}
+                </p>
+              )}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                 <button
                   type="button"
@@ -176,6 +248,7 @@ export function Header() {
                 </button>
                 <button
                   type="submit"
+                  disabled={joinBusy}
                   style={{
                     padding: '6px 14px',
                     borderRadius: 6,
@@ -186,10 +259,86 @@ export function Header() {
                     cursor: 'pointer',
                   }}
                 >
-                  Join
+                  {joinBusy ? 'Joining…' : 'Join'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {inviteModalOpen && (
+        <div
+          className="workspace-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setInviteModalOpen(false)}
+        >
+          <div
+            className="workspace-modal"
+            style={{ maxWidth: 400 }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <header>
+              <div>
+                <span>WORKSPACE INVITE</span>
+                <h2>Invite code</h2>
+              </div>
+            </header>
+            <p style={{ fontSize: 12, color: 'var(--mesh-text-muted)', margin: '12px 0' }}>
+              Share this code. Anyone signed in who enters it joins this workspace as a member.
+            </p>
+
+            {inviteBusy && !inviteCode ? (
+              <p style={{ fontSize: 13 }}>Loading…</p>
+            ) : inviteError ? (
+              <p role="alert" style={{ fontSize: 12, color: 'var(--mesh-error-red, #c94f4f)' }}>
+                {inviteError}
+              </p>
+            ) : inviteCode ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  border: '1px solid var(--mesh-border-strong)',
+                  background: 'var(--mesh-bg-secondary, rgba(0,0,0,0.04))',
+                }}
+              >
+                <code style={{ flex: 1, fontFamily: 'var(--mesh-font-mono)', fontSize: 15, fontWeight: 600 }}>
+                  {inviteCode}
+                </code>
+                <button
+                  type="button"
+                  title="Copy invite code"
+                  onClick={() => void copy(inviteCode, 'invite')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--mesh-border-subtle)', background: 'transparent', cursor: 'pointer' }}
+                >
+                  {copied === 'invite' ? <Check size={13} /> : <Copy size={13} />}
+                  {copied === 'invite' ? 'Copied' : 'Copy'}
+                </button>
+                <button
+                  type="button"
+                  title="Replace this code, invalidating the old one"
+                  disabled={inviteBusy}
+                  onClick={() => void rotateInvite()}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--mesh-border-subtle)', background: 'transparent', cursor: 'pointer' }}
+                >
+                  <RotateCcw size={13} /> New
+                </button>
+              </div>
+            ) : null}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={() => setInviteModalOpen(false)}
+                style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--mesh-border-subtle)', background: 'transparent', cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

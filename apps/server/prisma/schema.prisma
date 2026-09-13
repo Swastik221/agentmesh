@@ -57,6 +57,10 @@ model Project {
   name         String
   description  String?
   ownerId      String
+  /// Shareable code the owner hands out so a teammate can join this exact
+  /// workspace. Nullable because it is minted on first use rather than
+  /// backfilled, and unique so a code can only ever resolve to one project.
+  joinCode     String?             @unique
   lastSequence Int                 @default(0)
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt

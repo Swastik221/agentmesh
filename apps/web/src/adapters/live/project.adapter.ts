@@ -74,3 +74,30 @@ export const liveProjectAdapter: ProjectAdapter = {
     return apiClient.post<Project>('/projects', body);
   },
 };
+
+/**
+ * Shareable workspace join code. The owner reads (or rotates) it and hands it
+ * to a teammate, who redeems it to become a member of that same workspace.
+ * The server keeps the code owner-only and strips it from every other project
+ * payload, so this is the one place it is ever returned.
+ */
+export async function getProjectJoinCode(projectId: string): Promise<string> {
+  const res = await apiClient.get<{ joinCode: string }>(
+    `/projects/${encodeURIComponent(projectId)}/join-code`,
+  );
+  return res.joinCode;
+}
+
+export async function rotateProjectJoinCode(projectId: string): Promise<string> {
+  const res = await apiClient.post<{ joinCode: string }>(
+    `/projects/${encodeURIComponent(projectId)}/join-code/rotate`,
+    {},
+  );
+  return res.joinCode;
+}
+
+/** Redeems a code handed out by a workspace owner. Grants MEMBER, never OWNER. */
+export async function joinProjectByCode(code: string): Promise<Project> {
+  const res = await apiClient.post<{ project: Project }>('/projects/join', { code });
+  return res.project;
+}
