@@ -4,6 +4,10 @@ import {
   type CreateProjectInput,
   type Project,
 } from '../adapters/live/project.adapter';
+import { currentProjectId } from '../utils/currentProjectId';
+import { resolveProjectSelection } from '../utils/projectSelection';
+import { authSessionService } from '../services/auth-session';
+import { navigate } from '../routes/AppRouter';
 
 export interface UseProjectsResult {
   projects: Project[];
@@ -16,14 +20,10 @@ export interface UseProjectsResult {
 /**
  * Loads and manages the authenticated user's real projects from the backend.
  *
- * Loading, error, and empty are kept as distinct states: a failed request sets
- * `error` and leaves the previous list untouched (a 500 is never flattened into
- * "no projects"), while a successful empty response is an empty list with no
- * error. `createProject` refetches on success so the new project shows up, and
- * lets the underlying error propagate so callers can surface the real server
- * validation message.
- *
- * This hook fetches real backend projects for the authenticated user.
+ * Automatically resolves and validates candidate project selection:
+ * - If a candidate project ID (from URL or storage) is stale/nonexistent,
+ *   clears it and selects a valid project or redirects away.
+ * - Keeps valid project persistence per authenticated user.
  */
 export function useProjects(): UseProjectsResult {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -36,6 +36,18 @@ export function useProjects(): UseProjectsResult {
     try {
       const list = await liveProjectAdapter.listProjects();
       setProjects(list);
+
+      const userId = authSessionService.getCurrentUser()?.id ?? null;
+      const candidateId = currentProjectId();
+      const resolution = resolveProjectSelection(list, candidateId, userId);
+
+      if (resolution.shouldNavigate) {
+        if (resolution.selectedProjectId) {
+          navigate(`/workspace/${resolution.selectedProjectId}`);
+        } else if (typeof window !== 'undefined' && window.location.pathname.startsWith('/workspace/')) {
+          navigate('/workspaces');
+        }
+      }
     } catch (err) {
       // Surface a real error state; do not collapse it into an empty list.
       setError(err instanceof Error ? err.message : 'Failed to load projects');

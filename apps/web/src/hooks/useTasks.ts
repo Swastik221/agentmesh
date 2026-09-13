@@ -11,6 +11,8 @@ import {
   type TaskDependencyRow,
   type TaskResponsibility,
 } from '../adapters/live/task.adapter';
+import { ApiError } from '../services/api-client';
+import { recoverFromStaleProject } from '../utils/projectSelection';
 
 export interface UseTasksQuery {
   status?: LiveTaskStatus;
@@ -33,24 +35,6 @@ export interface UseTasksResult {
   updateStatus: (taskId: string, status: LiveTaskStatus) => Promise<LiveTask>;
 }
 
-/**
- * `GET /projects/:id/tasks` embeds each task's dependencies via a bare Prisma
- * relation include: the raw columns only, with no `available` flag and no
- * `dependsOnTask`/`artifact`. Only the dedicated
- * `GET .../tasks/:taskId/dependencies` endpoint computes those (real value,
- * not a default): confirmed directly against the running server, where the
- * list endpoint's row for a satisfied dependency still carried no `available`
- * field at all, while the dedicated endpoint reported `available: true` for
- * the identical row once its upstream task completed. Left alone, every task
- * with a dependency would read as permanently blocked, even after the
- * coordinator itself had already assigned it.
- *
- * So for every task the list returned with at least one dependency, re-fetch
- * that task's dependencies from the dedicated endpoint and use the computed
- * rows instead. A task with no dependencies never makes the extra call. If a
- * single task's fetch fails, that task keeps its raw (always-looks-blocked)
- * rows rather than failing the whole board load.
- */
 async function withResolvedDependencies(projectId: string, tasks: LiveTask[]): Promise<LiveTask[]> {
   const needsResolution = tasks.filter((task) => (task.dependencies?.length ?? 0) > 0);
   if (needsResolution.length === 0) return tasks;
@@ -72,29 +56,7 @@ async function withResolvedDependencies(projectId: string, tasks: LiveTask[]): P
 /**
  * Loads and manages the real tasks on a project's shared board.
  *
- * Loading, error, and empty stay distinct: a failed load sets `error` and keeps
- * the previous list (a 500 is never flattened into "no tasks"); a successful
- * empty response is an empty list with no error. `createTask` and `claimTask`
- * refetch on success and let the real server error propagate so callers can
- * surface the exact message (already-assigned, file conflict, validation).
- *
- * `autoAssign` also refetches, but its `{ assigned: false }` outcome is a real
- * coordinator result, not an error, so it resolves normally; callers inspect
- * `result.assigned` and only a transport/auth failure rejects.
- *
- * `addDependency` and `updateStatus` refetch on success too, same as
- * `createTask`/`claimTask`: a declared dependency or a status change (e.g.
- * marking a task COMPLETED) can change what the coordinator will do with
- * other tasks on the board, so the list needs to reflect that immediately.
- *
- * Pass `null` for `projectId` when no project is selected: the hook then holds
- * an empty, non-loading, error-free state and makes no request. Live Mode only.
- *
- * Always loads the complete set of tasks matching `status`/`priority`, not
- * just one server page: the board has no paging UI of its own, so a caller
- * has no way to ask for "the rest" of a project past the server's default
- * (20) or even max (100) page size. `listAllTasks` on the adapter is what
- * actually walks every page; this hook never talks to `listTasks` directly.
+ * Automatically triggers project recovery on 404 Project Not Found errors.
  */
 export function useTasks(projectId: string | null, query: UseTasksQuery = {}): UseTasksResult {
   const [tasks, setTasks] = useState<LiveTask[]>([]);
@@ -117,6 +79,9 @@ export function useTasks(projectId: string | null, query: UseTasksQuery = {}): U
       setTasks(await withResolvedDependencies(projectId, items));
     } catch (err) {
       setError(taskErrorMessage(err));
+      if (err instanceof ApiError && err.status === 404 && projectId) {
+        void recoverFromStaleProject(projectId);
+      }
     } finally {
       setLoading(false);
     }

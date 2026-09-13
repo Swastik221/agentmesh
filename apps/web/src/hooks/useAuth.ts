@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { SiweMessage } from 'siwe';
 import { getAddress } from 'viem';
 import { authSessionService } from '../services/auth-session';
+import { resetInvalidatedProjects } from '../utils/projectSelection';
 
 export interface AuthUser {
   id: string;
@@ -298,6 +299,7 @@ export function useAuth() {
       setConnectedAddress(null);
       setStatus('disconnected');
       setError(null);
+      resetInvalidatedProjects();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Logout failed';
       setError(`LOGOUT_FAILED: ${msg}`);
