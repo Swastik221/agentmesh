@@ -270,6 +270,9 @@ importers:
       siwe:
         specifier: ^3.0.0
         version: 3.0.0(ethers@6.17.0)
+      viem:
+        specifier: ^2.56.3
+        version: 2.56.3
     devDependencies:
       '@agentmesh/config':
         specifier: workspace:*

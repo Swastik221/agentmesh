@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { SiweMessage } from 'siwe';
+import { getAddress } from 'viem';
 import { authSessionService } from '../services/auth-session';
 
 export interface AuthUser {
@@ -35,13 +36,14 @@ export function useAuth() {
       try {
         const session = await authSessionService.fetchSession();
         if (session.authenticated && session.user) {
+          const checksummedWallet = session.user.walletAddress ? getAddress(session.user.walletAddress) : null;
           setUser({
             id: session.user.id,
-            walletAddress: session.user.walletAddress || null,
+            walletAddress: checksummedWallet,
             displayName: session.user.displayName || null,
           });
-          if (session.user.walletAddress) {
-            setConnectedAddress(session.user.walletAddress);
+          if (checksummedWallet) {
+            setConnectedAddress(checksummedWallet);
           }
           setStatus('authenticated');
         } else if (session.status === 'error') {
@@ -75,7 +77,7 @@ export function useAuth() {
         setStatus('disconnected');
         authSessionService.setWalletIdentity(null);
       } else {
-        const newAddress = accList[0];
+        const newAddress = getAddress(accList[0]);
         setConnectedAddress(newAddress);
         // If current authenticated user address doesn't match new wallet address, invalidate session state
         if (user && user.walletAddress && user.walletAddress.toLowerCase() !== newAddress.toLowerCase()) {
@@ -134,7 +136,7 @@ export function useAuth() {
         throw new Error('WALLET_NO_ACCOUNT: Wallet connected but returned no accounts.');
       }
 
-      const address = accounts[0];
+      const address = getAddress(accounts[0]);
 
       let chainIdNum: number;
       try {
@@ -178,13 +180,14 @@ export function useAuth() {
     setError(null);
     setStatus('authenticating');
     try {
-      let addr = connectedAddress;
-      if (!addr) {
-        addr = await connectWallet();
+      let rawAddr = connectedAddress;
+      if (!rawAddr) {
+        rawAddr = await connectWallet();
       }
-      if (!addr) {
+      if (!rawAddr) {
         throw new Error('WALLET_NOT_CONNECTED: Wallet not connected');
       }
+      const addr = getAddress(rawAddr);
 
       if (!chainId) {
         throw new Error('CHAIN_ID_MISSING: Wallet chain ID is not available for SIWE.');
@@ -234,9 +237,10 @@ export function useAuth() {
       let authedUser;
       try {
         const u = await authSessionService.verifySiwe(message, signature);
+        const checksummedAuthedAddress = u.walletAddress ? getAddress(u.walletAddress) : addr;
         authedUser = {
           id: u.id,
-          walletAddress: u.walletAddress || addr,
+          walletAddress: checksummedAuthedAddress,
           displayName: u.displayName || null,
         };
       } catch (err: unknown) {

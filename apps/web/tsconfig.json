@@ -5,7 +5,7 @@
     "jsx": "react-jsx",
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "module": "ESNext",
-    "moduleResolution": "Bundler"
+    "moduleResolution": "bundler"
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/__tests__/**"]

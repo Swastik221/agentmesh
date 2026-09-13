@@ -20,7 +20,8 @@
     "lucide-react": "^1.41.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "siwe": "^3.0.0"
+    "siwe": "^3.0.0",
+    "viem": "^2.56.3"
   },
   "devDependencies": {
     "@agentmesh/config": "workspace:*",
