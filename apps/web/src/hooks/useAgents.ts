@@ -4,6 +4,8 @@ import {
   type CreateAgentInput,
   type LiveAgent,
 } from '../adapters/live/agent.adapter';
+import { ApiError } from '../services/api-client';
+import { recoverFromStaleProject } from '../utils/projectSelection';
 
 export interface UseAgentsResult {
   agents: LiveAgent[];
@@ -43,7 +45,11 @@ export function useAgents(projectId: string | null): UseAgentsResult {
       const list = await liveAgentAdapter.listAgents(projectId);
       setAgents(list);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load agents');
+      const msg = err instanceof Error ? err.message : 'Failed to load agents';
+      setError(msg);
+      if (err instanceof ApiError && err.status === 404 && projectId) {
+        void recoverFromStaleProject(projectId);
+      }
     } finally {
       setLoading(false);
     }
