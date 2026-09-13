@@ -20,10 +20,21 @@ export const config = {
 
 export const validateProductionConfig = (envRecord: Record<string, string | undefined> = process.env): void => {
   if (envRecord.NODE_ENV === 'production') {
-    const requiredVars = ['DATABASE_URL', 'SIWE_DOMAIN', 'SIWE_URI'];
+    const requiredVars = [
+      'DATABASE_URL',
+      'SIWE_DOMAIN',
+      'SIWE_URI',
+      'HEDERA_NETWORK',
+      'HEDERA_PAYMENT_RECEIVER',
+      'X402_FACILITATOR_URL',
+    ];
     const missing = requiredVars.filter((key) => !envRecord[key] || envRecord[key]?.trim() === '');
     if (missing.length > 0) {
-      throw new Error(`[ProductionConfigError] Missing required production environment variables: ${missing.join(', ')}`);
+      throw new Error(`[ProductionConfigError] Production configuration error: Missing required production environment variables: ${missing.join(', ')}`);
+    }
+
+    if (envRecord.HEDERA_NETWORK && envRecord.HEDERA_NETWORK !== 'hedera:testnet') {
+      throw new Error(`[ProductionConfigError] Production configuration error: HEDERA_NETWORK '${envRecord.HEDERA_NETWORK}' is invalid. Supported network is 'hedera:testnet'.`);
     }
   }
 };

@@ -31,10 +31,10 @@ SIWE_DOMAIN=app.agentmesh.io
 SIWE_URI=https://app.agentmesh.io
 SIWE_CHAIN_ID=1
 
-# Hedera x402 Architecture Configuration
-HEDERA_NETWORK=hedera:mainnet
-HEDERA_PAYMENT_RECEIVER=0.0.1234567
-X402_FACILITATOR_URL=https://facilitator.x402.org
+# Hedera x402 Architecture Configuration (Current Supported Deployment: Hedera Testnet + USDC + Official x402 Facilitator)
+HEDERA_NETWORK=hedera:testnet
+HEDERA_PAYMENT_RECEIVER=0.0.500123
+X402_FACILITATOR_URL=https://x402.org/facilitator
 ```
 
 ### Mandatory Frontend Build Variables (Vite)
@@ -133,4 +133,4 @@ Perform the following manual acceptance checklist in modern Web3 browsers (e.g. 
 - [ ] Verify single authoritative execution result.
 
 > [!NOTE]
-> **MANUAL ENVIRONMENT BLOCKED**: Phase D live Hedera mainnet payment signing requires live funded Hedera account credentials on the target deployment environment.
+> **ENVIRONMENT DEPLOYMENT**: Phase D live Hedera testnet payment signing requires funded Hedera testnet account credentials on the target deployment environment.
