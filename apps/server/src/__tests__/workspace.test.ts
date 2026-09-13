@@ -507,8 +507,10 @@ describe('Shared Development Environment (PRD #14)', () => {
         .send({ agentId: agentA.id })
         .expect(201);
 
-      // Wait briefly for background execution pipeline to run
-      await new Promise((r) => setTimeout(r, 100));
+      // Wait for background execution pipeline to run
+      for (let i = 0; i < 40 && !capturedRequest; i++) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
 
       expect(capturedRequest).toBeDefined();
       expect(capturedRequest?.executionId).toBe(execRes.body.id);
