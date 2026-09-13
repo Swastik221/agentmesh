@@ -11,6 +11,8 @@ export interface User {
   email?: string;
   displayName: string;
   walletAddress?: string;
+  /** Verified primary ENS name for walletAddress, or null when there is none. */
+  ensName?: string | null;
   avatarUrl?: string;
   createdAt: string;
 }

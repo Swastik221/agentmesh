@@ -46,7 +46,25 @@ export const config = {
    * processes whose CWD is not the server's.
    */
   workspaceRoot: path.resolve(process.env.WORKSPACE_ROOT || path.join(process.cwd(), 'workspaces')),
-  ensRpcUrl: process.env.ENS_RPC_URL || 'https://eth.llamarpc.com',
+  /**
+   * RPC endpoint used for ENS resolution, on the chain named by ensChainId.
+   * The previous default (eth.llamarpc.com) answers every request with an HTTP
+   * 525 handshake failure, which surfaced as "provider unavailable" and made
+   * every ENS lookup in the product fail. Point at one that actually serves.
+   */
+  ensRpcUrl: process.env.ENS_RPC_URL || 'https://ethereum-rpc.publicnode.com',
+  /**
+   * Which chain ENS names are resolved on. Mainnet is the real registry and
+   * stays the default.
+   *
+   * It is configurable because the rest of the product signs in on Sepolia:
+   * with ENS pinned to mainnet, attaching a name to an agent requires owning a
+   * mainnet name, which cannot be obtained on a testnet. Pointing this and
+   * ENS_RPC_URL at Sepolia resolves against the Sepolia ENS deployment
+   * instead. Only the registry being read changes; ownership is still proven
+   * by forward resolution against the authenticated wallet.
+   */
+  ensChainId: parseInt(process.env.ENS_CHAIN_ID || '1', 10),
   ensTimeoutMs: parseInt(process.env.ENS_TIMEOUT_MS || '8000', 10),
 };
 

@@ -53,19 +53,26 @@ export const getMe = async (
       throw new UnauthorizedError('Unauthorized');
     }
 
-    const user = await prisma.user.findUnique({
+    const found = await prisma.user.findUnique({
       where: { id: req.auth.userId },
     });
 
-    if (!user) {
+    if (!found) {
       throw new UnauthorizedError('User not found');
     }
+
+    // Also refresh here, not only on sign-in: a session lasts a day, and if the
+    // lookup at sign-in ran out of its budget this is what picks the name up
+    // instead of leaving it missing until the next sign-in. Rate-limited by the
+    // same ensCheckedAt cache, so this is a database read in the common case.
+    const user = await authService.refreshEnsName(found);
 
     res.status(200).json({
       user: {
         id: user.id,
         walletAddress: user.walletAddress,
         displayName: user.displayName,
+        ensName: user.ensName,
       },
     });
   } catch (error) {

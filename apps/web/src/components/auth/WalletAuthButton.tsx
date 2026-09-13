@@ -11,7 +11,16 @@ export function WalletAuthButton() {
         <Pill tone="success" dot>
           SIWE Verified
         </Pill>
-        <TruncatedAddress address={user.walletAddress} className="app-header__wallet" />
+        {/* The ENS name, when the wallet has a verified one, is the more
+            useful identity to show; the address stays available on hover so
+            nothing is hidden behind a name. */}
+        {user.ensName ? (
+          <span className="app-header__wallet" title={user.walletAddress}>
+            {user.ensName}
+          </span>
+        ) : (
+          <TruncatedAddress address={user.walletAddress} className="app-header__wallet" />
+        )}
         <button
           onClick={logout}
           title="Sign out"

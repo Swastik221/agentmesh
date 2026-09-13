@@ -157,6 +157,85 @@ describe('PRD-34 ENS Service Unit Tests', () => {
       svc.verifyNameOwnership('unresolved.eth', '0xabc0000000000000000000000000000000000001'),
     ).rejects.toThrow(NotFoundError);
   });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // resolveVerifiedPrimaryName: a reverse record only counts once the forward
+  // resolution agrees, because anyone can point a reverse record anywhere.
+  // ────────────────────────────────────────────────────────────────────────
+
+  const HOLDER = '0xabc0000000000000000000000000000000000001';
+
+  it('resolveVerifiedPrimaryName: returns the name when the round trip agrees', async () => {
+    mockGetEnsName.mockResolvedValueOnce('alice.eth');
+    mockGetEnsAddress.mockResolvedValueOnce(HOLDER);
+
+    await expect(svc.resolveVerifiedPrimaryName(HOLDER)).resolves.toBe('alice.eth');
+  });
+
+  it('resolveVerifiedPrimaryName: rejects a reverse record that forward-resolves elsewhere', async () => {
+    // The impersonation case: this address claims vitalik.eth, but the name
+    // itself points at someone else.
+    mockGetEnsName.mockResolvedValueOnce('vitalik.eth');
+    mockGetEnsAddress.mockResolvedValueOnce('0xabc0000000000000000000000000000000000002');
+
+    await expect(svc.resolveVerifiedPrimaryName(HOLDER)).resolves.toBeNull();
+  });
+
+  it('resolveVerifiedPrimaryName: rejects a reverse record whose name does not forward-resolve', async () => {
+    mockGetEnsName.mockResolvedValueOnce('dangling.eth');
+    mockGetEnsAddress.mockResolvedValueOnce(null);
+
+    await expect(svc.resolveVerifiedPrimaryName(HOLDER)).resolves.toBeNull();
+  });
+
+  it('resolveVerifiedPrimaryName: no primary name → null, without a forward lookup', async () => {
+    mockGetEnsName.mockResolvedValueOnce(null);
+
+    await expect(svc.resolveVerifiedPrimaryName(HOLDER)).resolves.toBeNull();
+    expect(mockGetEnsAddress).not.toHaveBeenCalled();
+  });
+
+  it('resolveVerifiedPrimaryName: provider failure degrades to null rather than throwing', async () => {
+    // Sign-in depends on this: an ENS outage must cost the name, not the login.
+    mockGetEnsName.mockRejectedValueOnce(new Error('network timeout'));
+
+    await expect(svc.resolveVerifiedPrimaryName(HOLDER)).resolves.toBeNull();
+  });
+
+  it('resolveVerifiedPrimaryName: a failure on the forward leg also degrades to null', async () => {
+    mockGetEnsName.mockResolvedValueOnce('alice.eth');
+    mockGetEnsAddress.mockRejectedValueOnce(new Error('network timeout'));
+
+    await expect(svc.resolveVerifiedPrimaryName(HOLDER)).resolves.toBeNull();
+  });
+
+  it('resolveVerifiedPrimaryName: malformed address throws rather than resolving', async () => {
+    await expect(svc.resolveVerifiedPrimaryName('not-an-address')).rejects.toThrow(BadRequestError);
+  });
+
+  it('RPC failure message names the endpoint and the underlying reason', async () => {
+    // The blanket "provider unavailable" text is what hid a completely dead
+    // default endpoint, so the reason has to survive into the message.
+    mockGetEnsAddress.mockRejectedValueOnce(new Error('connection refused'));
+
+    await expect(svc.resolveName('alice.eth')).rejects.toMatchObject({
+      message: expect.stringContaining('connection refused'),
+      code: 'ENS_UNAVAILABLE',
+    });
+  });
+
+  it('RPC failure message collapses an HTML error page to its title', async () => {
+    mockGetEnsAddress.mockRejectedValueOnce(
+      new Error('<html><head><title>525: SSL handshake failed</title></head><body>…</body></html>'),
+    );
+
+    const message = await svc.resolveName('alice.eth').then(
+      () => '',
+      (err: Error) => err.message,
+    );
+    expect(message).toContain('525: SSL handshake failed');
+    expect(message).not.toContain('<html>');
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

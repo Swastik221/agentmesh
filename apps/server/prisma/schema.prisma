@@ -31,6 +31,13 @@ model User {
   id            String              @id @default(cuid())
   walletAddress String?             @unique
   displayName   String?
+  /// Primary ENS name for walletAddress, cached after a verified round trip
+  /// (reverse record confirmed by forward resolution). Null means the wallet
+  /// has no primary name, or the last lookup could not confirm one.
+  ensName       String?
+  /// When ensName was last refreshed from the chain. Used to avoid an RPC call
+  /// on every sign-in; null means it has never been looked up.
+  ensCheckedAt  DateTime?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 

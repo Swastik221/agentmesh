@@ -8,6 +8,11 @@ export interface AuthUser {
   id: string;
   walletAddress: string | null;
   displayName: string | null;
+  /**
+   * The wallet's primary ENS name, verified server-side by a full round trip.
+   * Null when the wallet has no primary name or it could not be confirmed.
+   */
+  ensName: string | null;
 }
 
 export type AuthStatus =
@@ -83,6 +88,7 @@ export function useAuth() {
             id: session.user.id,
             walletAddress: checksummedWallet,
             displayName: session.user.displayName || null,
+            ensName: session.user.ensName ?? null,
           });
           if (checksummedWallet) {
             setConnectedAddress(checksummedWallet);
@@ -280,6 +286,7 @@ export function useAuth() {
           id: u.id,
           walletAddress: checksummedAuthedAddress,
           displayName: u.displayName || null,
+          ensName: u.ensName ?? null,
         };
       } catch (err: unknown) {
         throw new Error(`SIWE_VERIFICATION_FAILED: ${err instanceof Error ? err.message : 'SIWE verification failed'}`);
