@@ -240,7 +240,12 @@ export function useAuth() {
         throw new Error(`SIWE_NONCE_FAILED: ${err instanceof Error ? err.message : 'Failed to retrieve nonce'}`);
       }
 
-      const domain = (typeof window !== 'undefined' && window.location.hostname) || 'localhost';
+      // EIP-4361 domain is the requesting host, i.e. hostname plus port. Use
+      // window.location.host, not hostname: a spec-strict wallet (Phantom)
+      // rejects the request if the message domain does not match the page
+      // origin, and the server derives its expected domain from WEB_ORIGIN's
+      // host to match.
+      const domain = (typeof window !== 'undefined' && window.location.host) || 'localhost:5173';
       const origin = (typeof window !== 'undefined' && window.location.origin) || 'http://localhost:5173';
       const issuedAt = new Date().toISOString();
 
