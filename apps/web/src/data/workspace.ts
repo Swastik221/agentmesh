@@ -21,8 +21,6 @@ export const navItems: NavItem[] = [
   { id: 'files', label: 'Files' },
   { id: 'activity', label: 'Activity' },
   { id: 'team', label: 'Team' },
-  { id: 'terminal', label: 'Terminal' },
-  { id: 'browser', label: 'Browser' },
   { id: 'notes', label: 'Notes' },
 ];
 

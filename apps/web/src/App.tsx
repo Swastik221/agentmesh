@@ -16,12 +16,11 @@ import './pages/Workspace/workspace-views.css';
 export function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [focusView, setFocusView] = useState(false);
   const activeLabel = navItems.find((item) => item.id === activeSection)?.label ?? 'Overview';
 
   return (
     <div
-      className={`app-shell${sidebarCollapsed ? ' is-sidebar-collapsed' : ' is-sidebar-expanded'}${focusView ? ' is-focus-view' : ''}`}
+      className={`app-shell${sidebarCollapsed ? ' is-sidebar-collapsed' : ' is-sidebar-expanded'}`}
     >
       <Header />
 
@@ -44,7 +43,7 @@ export function App() {
           <WorkspaceScenery />
           <main className="app-main">
             {activeSection === 'overview' ? (
-              <OverviewPage focusView={focusView} onFocusViewChange={setFocusView} />
+              <OverviewPage />
             ) : activeSection === 'agents' ? (
               <AgentsView onOpenCanvas={() => setActiveSection('overview')} />
             ) : activeSection === 'tasks' ? (

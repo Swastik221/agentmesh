@@ -166,26 +166,6 @@ body .app-shell.is-sidebar-collapsed .app-sidebar__toggle {
   padding-inline: 0;
 }
 
-body .app-shell.is-focus-view {
-  grid-template-rows: minmax(0, 1fr);
-}
-
-body .app-shell.is-focus-view > .app-header,
-body .app-shell.is-focus-view > .app-status,
-body .app-shell.is-focus-view > .demo-toolbar,
-body .app-shell.is-focus-view > .app-body > .app-sidebar,
-body .app-shell.is-focus-view .demo-panel {
-  display: none;
-}
-
-body .app-shell.is-focus-view > .app-body {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-body .app-shell.is-focus-view .app-workspace-stack {
-  grid-template-rows: minmax(0, 1fr);
-}
-
 body .app-shell .app-main,
 body .app-shell .overview,
 body .app-shell .overview__canvas {

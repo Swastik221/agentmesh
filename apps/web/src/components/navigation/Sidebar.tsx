@@ -3,12 +3,10 @@ import {
   Activity,
   Bot,
   FolderTree,
-  Globe,
   LayoutDashboard,
   ListChecks,
   PanelLeftClose,
   PanelLeftOpen,
-  Terminal,
   StickyNote,
   Users,
 } from 'lucide-react';
@@ -23,8 +21,6 @@ const SECTION_ICONS: Record<SectionId, ComponentType<NavItemIconProps>> = {
   files: FolderTree,
   activity: Activity,
   team: Users,
-  terminal: Terminal,
-  browser: Globe,
   notes: StickyNote,
 };
 

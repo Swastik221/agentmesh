@@ -1,16 +1,7 @@
 import type { DragEvent } from 'react';
-import {
-  Bot,
-  Globe,
-  StickyNote,
-  FileText,
-  ListChecks,
-  ShieldCheck,
-} from 'lucide-react';
+import { StickyNote, FileText, ListChecks, ShieldCheck } from 'lucide-react';
 
 export type DockToolType =
-  | 'terminal'
-  | 'browser'
   | 'note'
   | 'file'
   | 'taskboard'
@@ -21,8 +12,7 @@ export type DockToolType =
 interface DockToolItem {
   id: DockToolType;
   label: string;
-  icon?: typeof Bot;
-  isTerminalText?: boolean;
+  icon: typeof StickyNote;
   colorClass: string;
 }
 
@@ -30,9 +20,12 @@ interface DockToolItem {
 // then connects over the protocol. Dock entries that dropped a named agent onto
 // the canvas created nothing server-side, so they were removed rather than left
 // looking like they worked.
+//
+// Terminal and Browser went the same way. Both dropped a card holding a canned
+// string ("$ agentmesh status", "https://localhost:3001") that ran nothing and
+// loaded nothing. An agent's real terminal is its CLI, whose output already
+// streams onto that agent's card on this canvas.
 export const DOCK_TOOLS: DockToolItem[] = [
-  { id: 'terminal', label: 'Terminal', isTerminalText: true, colorClass: '' },
-  { id: 'browser', label: 'Browser', icon: Globe, colorClass: '' },
   { id: 'note', label: 'Note', icon: StickyNote, colorClass: '' },
   { id: 'file', label: 'File', icon: FileText, colorClass: '' },
   { id: 'taskboard', label: 'Task board', icon: ListChecks, colorClass: '' },
@@ -51,7 +44,7 @@ export function ToolDock({ onAddTool }: ToolDockProps) {
 
   return (
       <nav className="mesh-tool-dock" aria-label="AgentMesh Tool Dock">
-        {DOCK_TOOLS.map(({ id, label, icon: Icon, isTerminalText, colorClass }) => (
+        {DOCK_TOOLS.map(({ id, label, icon: Icon, colorClass }) => (
           <button
             key={id}
             type="button"
@@ -63,20 +56,7 @@ export function ToolDock({ onAddTool }: ToolDockProps) {
             onDragStart={(e) => handleDragStart(e, id)}
             onClick={() => onAddTool(id)}
           >
-            {isTerminalText ? (
-              <span
-                style={{
-                  fontFamily: 'var(--mesh-font-mono)',
-                  fontWeight: 700,
-                  fontSize: 14,
-                  display: 'inline-block',
-                }}
-              >
-                &gt;_
-              </span>
-            ) : Icon ? (
-              <Icon size={19} strokeWidth={1.75} />
-            ) : null}
+            <Icon size={19} strokeWidth={1.75} />
             <span style={{ display: 'none' }}>{label}</span>
           </button>
         ))}

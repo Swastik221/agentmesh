@@ -198,11 +198,6 @@ body .app-shell .app-header__actions button:nth-child(3):focus-visible {
   border-color: transparent;
 }
 
-body .app-shell .chrome-hbtn--on {
-  background: var(--chrome-active);
-  color: var(--chrome-text);
-}
-
 /* The avatar chip closes the bar. */
 body .app-shell .chrome-avatar {
   display: inline-flex;

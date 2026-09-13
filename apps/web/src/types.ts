@@ -1,8 +1,14 @@
 import type { Node } from '@xyflow/react';
 
-/** Sections in the left rail. Terminal and Browser are reserved for a later pass. */
+/**
+ * Sections in the left rail.
+ *
+ * Terminal and Browser were listed here but had nothing behind them: selecting
+ * either opened an empty placeholder. An agent's real terminal is its CLI,
+ * whose output already streams onto that agent's card on the canvas.
+ */
 export type SectionId =
-  'overview' | 'agents' | 'tasks' | 'files' | 'activity' | 'team' | 'terminal' | 'browser' | 'notes';
+  'overview' | 'agents' | 'tasks' | 'files' | 'activity' | 'team' | 'notes';
 
 export interface NavItem {
   id: SectionId;

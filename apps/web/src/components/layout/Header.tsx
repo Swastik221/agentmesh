@@ -6,7 +6,6 @@ import {
   Home,
   KeyRound,
   Maximize2,
-  PanelsTopLeft,
   RefreshCw,
   RotateCcw,
   Settings,
@@ -26,7 +25,6 @@ import {
 export function Header() {
   const [copied, setCopied] = useState<'invite' | 'share' | null>(null);
   const [joinModalOpen, setJoinModalOpen] = useState(false);
-  const [ideMode, setIdeMode] = useState(false);
   const [inviteCodeInput, setInviteCodeInput] = useState('');
   const [joinBusy, setJoinBusy] = useState(false);
   const [joinError, setJoinError] = useState('');
@@ -149,16 +147,9 @@ export function Header() {
 
         <span className="app-header__divider" aria-hidden="true" />
 
-        <button
-          type="button"
-          className={`chrome-hbtn${ideMode ? ' chrome-hbtn--on' : ''}`}
-          title="Toggle IDE mode"
-          aria-pressed={ideMode}
-          onClick={() => setIdeMode((on) => !on)}
-        >
-          <PanelsTopLeft size={15} strokeWidth={1.75} />
-          IDE Mode
-        </button>
+        {/* The IDE Mode toggle was removed: it flipped a piece of state that
+            nothing else in the app ever read, so pressing it changed only the
+            button's own appearance. */}
         <button
           type="button"
           className="chrome-hbtn chrome-hbtn--icon"

@@ -5,14 +5,7 @@ import {
   useState,
   useRef,
 } from 'react';
-import {
-  Activity,
-  LocateFixed,
-  Maximize2,
-  Minimize2,
-  PanelRightOpen,
-  X,
-} from 'lucide-react';
+import { LocateFixed } from 'lucide-react';
 import {
   addEdge,
   Background,
@@ -66,12 +59,7 @@ const edgeBase = {
   style: { stroke: '#177E89', strokeWidth: 1.8 },
 };
 
-interface WorkspaceCanvasInnerProps {
-  focusView: boolean;
-  onFocusViewChange: (focused: boolean) => void;
-}
-
-function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasInnerProps) {
+function WorkspaceCanvasInner() {
   const projectId = currentProjectId();
   const { agents: liveAgents, refetch: refetchAgents } = useAgents(projectId);
   const {
@@ -244,9 +232,6 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
   const edgesRef = useRef<Edge[]>(edges);
   edgesRef.current = edges;
 
-  const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [activityOpen, setActivityOpen] = useState(false);
-
   const { fitView } = useReactFlow();
 
   const onConnect = useCallback(
@@ -259,22 +244,8 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
   const handleToolAdd = useCallback(
     (toolType: DockToolType) => {
       const id = `${toolType}-${Date.now()}`;
-      const title =
-        toolType === 'note'
-          ? 'Project Note'
-          : toolType === 'file'
-            ? 'Project File'
-            : toolType === 'browser'
-              ? 'Browser Preview'
-              : 'Terminal Node';
-      const text =
-        toolType === 'note'
-          ? 'Add your project notes here...'
-          : toolType === 'file'
-            ? '// Workspace file'
-            : toolType === 'browser'
-              ? 'https://localhost:3001'
-              : '$ agentmesh status';
+      const title = toolType === 'file' ? 'Project File' : 'Project Note';
+      const text = toolType === 'file' ? '// Workspace file' : 'Add your project notes here...';
 
       const newNode: Node = {
         id,
@@ -297,41 +268,22 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
   );
 
   return (
-    <div className={`workspace-canvas-container${focusView ? ' is-focus-view' : ''}`}>
+    <div className="workspace-canvas-container">
       <div className="workspace-canvas">
         <div className="canvas-header-bar">
           <div className="canvas-header-bar__meta">
             <span className="canvas-header-bar__badge">REALTIME PROTOCOL</span>
             <h2>{projectId ? `Project Canvas (${projectId.slice(0, 8)}…)` : 'Project Canvas'}</h2>
           </div>
+          {/* Inspector, Activity and Focus used to sit here. Inspector and
+              Activity toggled state that nothing rendered, and Focus only
+              added a CSS class, so all three were controls that appeared to do
+              something and did not. Reset view is kept because it really does
+              recentre the graph. */}
           <div className="canvas-header-bar__actions">
-            <button
-              type="button"
-              title={focusView ? 'Exit focus view' : 'Focus canvas'}
-              onClick={() => onFocusViewChange(!focusView)}
-            >
-              {focusView ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-              {focusView ? 'Exit focus' : 'Focus'}
-            </button>
             <button type="button" title="Center graph" onClick={() => fitView({ duration: 400 })}>
               <LocateFixed size={13} />
               Reset view
-            </button>
-            <button
-              type="button"
-              aria-pressed={inspectorOpen}
-              onClick={() => setInspectorOpen(!inspectorOpen)}
-            >
-              {inspectorOpen ? <X size={13} /> : <PanelRightOpen size={13} />}
-              Inspector
-            </button>
-            <button
-              type="button"
-              aria-pressed={activityOpen}
-              onClick={() => setActivityOpen(!activityOpen)}
-            >
-              {activityOpen ? <X size={13} /> : <Activity size={13} />}
-              Activity <b>{liveTasks.length}</b>
             </button>
           </div>
         </div>
@@ -360,10 +312,10 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
   );
 }
 
-export function WorkspaceCanvas(props: WorkspaceCanvasInnerProps) {
+export function WorkspaceCanvas() {
   return (
     <ReactFlowProvider>
-      <WorkspaceCanvasInner {...props} />
+      <WorkspaceCanvasInner />
     </ReactFlowProvider>
   );
 }
