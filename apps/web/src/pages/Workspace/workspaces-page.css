@@ -1,0 +1,426 @@
+/* ==========================================================================
+   Workspace picker (/workspaces).
+
+   Every class this page used (`demo-*`, `workspace-list`, `workspace-open`,
+   `pending-invitations-banner`, ...) was defined in the demo stylesheets that
+   PRD-57a deleted along with demo mode, so the page rendered as raw unstyled
+   HTML. These are the real replacements, built on the project's own tokens in
+   theme.css rather than a new palette: the dark ink surface the sign-in page
+   and landing already use, since this page is the same pre-workspace chrome.
+
+   Everything is scoped under .demo-page so the shared class names cannot
+   collide with the light "paper" treatment the in-workspace views give the
+   same names in workspace-views.css.
+   ========================================================================== */
+
+.demo-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--am-ink-950);
+  color: var(--am-text-on-dark);
+}
+
+/* ---- header ------------------------------------------------------------ */
+
+.demo-page .demo-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  height: 56px;
+  border-bottom: 1px solid var(--am-border-dark);
+  background: var(--am-ink-900);
+}
+
+.demo-page .demo-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--am-text-on-dark);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.demo-page .demo-brand svg {
+  width: 18px;
+  height: 18px;
+  color: var(--am-green);
+}
+
+.demo-page .demo-header__line {
+  width: 1px;
+  height: 18px;
+  background: var(--am-border-dark);
+}
+
+.demo-page .demo-header > span:last-child {
+  color: var(--am-text-secondary);
+  font-size: 12px;
+}
+
+/* ---- page body --------------------------------------------------------- */
+
+.demo-page .workspaces {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+.demo-page .workspaces > header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+.demo-page .workspaces > header span {
+  display: block;
+  color: var(--am-technical-label);
+  font: 600 10px var(--am-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  letter-spacing: 0.12em;
+}
+
+.demo-page .workspaces > header h1 {
+  margin: 6px 0 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ---- buttons ----------------------------------------------------------- */
+
+.demo-page .demo-primary,
+.demo-page .demo-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.demo-page .demo-primary {
+  border: 1px solid var(--am-green);
+  background: var(--am-green);
+  color: #06231a;
+}
+
+.demo-page .demo-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.demo-page .demo-secondary {
+  border: 1px solid var(--am-border-dark);
+  background: var(--am-ink-800);
+  color: var(--am-text-on-dark);
+}
+
+.demo-page .demo-secondary:hover:not(:disabled) {
+  border-color: var(--am-green);
+}
+
+.demo-page .demo-primary:disabled,
+.demo-page .demo-secondary:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.demo-page .demo-primary svg,
+.demo-page .demo-secondary svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ---- inline create / join forms ---------------------------------------- */
+
+.demo-page .workspace-inline-form {
+  margin-bottom: 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--am-border-dark);
+  border-radius: 12px;
+  background: var(--am-ink-900);
+}
+
+.demo-page .workspace-inline-form form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.demo-page .workspace-inline-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1 1 260px;
+  color: var(--am-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.demo-page .workspace-inline-form input {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--am-border-dark);
+  border-radius: 8px;
+  background: var(--am-ink-950);
+  color: var(--am-text-on-dark);
+  font-size: 13px;
+  outline: 0;
+}
+
+.demo-page .workspace-inline-form input::placeholder {
+  color: var(--am-text-muted);
+}
+
+.demo-page .workspace-inline-form input:focus {
+  border-color: var(--am-green);
+}
+
+.demo-page .workspace-inline-form [role='alert'] {
+  margin: 10px 0 0;
+  color: var(--am-red);
+  font-size: 12px;
+}
+
+/* ---- workspace list ---------------------------------------------------- */
+
+.demo-page .workspace-list__label {
+  margin-bottom: 12px;
+  color: var(--am-technical-label);
+  font: 600 10px var(--am-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  letter-spacing: 0.12em;
+}
+
+.demo-page .workspace-list > article {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--am-border-dark);
+  border-radius: 12px;
+  background: var(--am-ink-900);
+}
+
+.demo-page .workspace-list > article:hover {
+  border-color: var(--am-green);
+}
+
+.demo-page .workspace-symbol {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--am-border-dark);
+  background: var(--am-ink-800);
+}
+
+.demo-page .workspace-symbol svg {
+  width: 18px;
+  height: 18px;
+  color: var(--am-green);
+}
+
+.demo-page .workspace-list > article > div:nth-child(2) span {
+  color: var(--am-technical-label);
+  font: 600 9px var(--am-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  letter-spacing: 0.1em;
+}
+
+.demo-page .workspace-list > article h2 {
+  margin: 3px 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.demo-page .workspace-list > article p {
+  margin: 0;
+  color: var(--am-text-secondary);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.demo-page .workspace-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--am-border-dark);
+  border-radius: 8px;
+  background: var(--am-ink-800);
+  color: var(--am-text-on-dark);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.demo-page .workspace-open:hover {
+  border-color: var(--am-green);
+  color: var(--am-green);
+}
+
+.demo-page .workspace-open svg {
+  width: 15px;
+  height: 15px;
+}
+
+.demo-page .workspace-empty {
+  margin: 0;
+  padding: 28px 20px;
+  border: 1px dashed var(--am-border-dark);
+  border-radius: 12px;
+  color: var(--am-text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.demo-page .workspace-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+  border: 1px solid var(--am-red);
+  border-radius: 12px;
+  background: rgb(217 98 98 / 10%);
+}
+
+.demo-page .workspace-error p {
+  margin: 0;
+  color: var(--am-red);
+  font-size: 13px;
+}
+
+.demo-page .workspace-list > p[role='status'] {
+  margin: 0;
+  color: var(--am-text-secondary);
+  font-size: 13px;
+}
+
+/* ---- pending invitations ----------------------------------------------- */
+
+.demo-page .pending-invitations-banner {
+  margin-bottom: 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--am-amber);
+  border-radius: 12px;
+  background: rgb(217 154 50 / 9%);
+}
+
+.demo-page .invite-banner__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  color: var(--am-amber);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.demo-page .invite-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--am-border-dark);
+  border-radius: 10px;
+  background: var(--am-ink-900);
+}
+
+.demo-page .invite-card + .invite-card {
+  margin-top: 10px;
+}
+
+.demo-page .invite-card__role {
+  color: var(--am-technical-label);
+  font: 600 9px var(--am-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  letter-spacing: 0.1em;
+}
+
+.demo-page .invite-card h3 {
+  margin: 3px 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.demo-page .invite-card p {
+  margin: 0;
+  color: var(--am-text-secondary);
+  font-size: 12px;
+}
+
+.demo-page .invite-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---- join code --------------------------------------------------------- */
+
+.demo-page .join-code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--am-border-dark);
+  border-radius: 8px;
+  background: var(--am-ink-950);
+}
+
+.demo-page .join-code code {
+  flex: 1;
+  color: var(--am-green);
+  font: 600 13px var(--am-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  letter-spacing: 0.06em;
+}
+
+.demo-page .join-code button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--am-border-dark);
+  border-radius: 6px;
+  background: var(--am-ink-800);
+  color: var(--am-text-on-dark);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.demo-page .join-code button:hover {
+  border-color: var(--am-green);
+}
+
+.demo-page .join-code svg {
+  width: 13px;
+  height: 13px;
+}
+
+@media (max-width: 620px) {
+  .demo-page .workspace-list > article {
+    grid-template-columns: auto 1fr;
+  }
+  .demo-page .workspace-open {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+}

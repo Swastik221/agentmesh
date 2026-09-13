@@ -3,7 +3,6 @@ import { Network, Sparkles } from 'lucide-react';
 
 export interface CoordinatorNodeData {
   activity: string;
-  onOpenPrd?: () => void;
 }
 
 export function CoordinatorNode({ data, selected }: NodeProps) {
@@ -37,16 +36,8 @@ export function CoordinatorNode({ data, selected }: NodeProps) {
 
       <div className="product-coordinator__status">
         <Sparkles size={14} color="#6F9E18" style={{ flexShrink: 0 }} />
-        <span>{nodeData.activity || 'Splitting PRD into tasks'}</span>
+        <span>{nodeData.activity || 'Matching tasks to agents by capability'}</span>
       </div>
-
-      <button
-        type="button"
-        className="product-coordinator__btn nodrag nopan"
-        onClick={() => nodeData.onOpenPrd?.()}
-      >
-        Submit / Edit PRD Prompt
-      </button>
     </article>
   );
 }

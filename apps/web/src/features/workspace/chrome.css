@@ -757,3 +757,102 @@ body .app-shell .mesh-canvas-controls small {
     overflow-x: auto;
   }
 }
+
+/* ==========================================================================
+   Canvas header bar.
+
+   Was completely unstyled, so its badge, title and Focus/Reset/Inspector/
+   Activity buttons rendered as raw text piled in the top-left corner, on top
+   of the agent nodes. Dress it as a floating pill bar on the node layer (the
+   same cream card stock as the composer and dock) that spans the top of the
+   board, title on the left, controls on the right.
+   ========================================================================== */
+.canvas-header-bar {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: var(--chrome-raised, rgb(255 253 247 / 92%));
+  border: 1px solid var(--mesh-border-subtle, #e2e5d8);
+  box-shadow: var(--mesh-shadow-float, 0 8px 24px rgb(31 41 20 / 12%));
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.canvas-header-bar__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.canvas-header-bar__badge {
+  font-family: var(--mesh-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--mesh-primary-green, #2f7d5c);
+  white-space: nowrap;
+}
+
+.canvas-header-bar__meta h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mesh-text-main, #24301c);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.canvas-header-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.canvas-header-bar__actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--mesh-border-subtle, #e2e5d8);
+  background: transparent;
+  color: var(--mesh-text-main, #24301c);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.canvas-header-bar__actions button:hover {
+  background: var(--chrome-hover, #e3e8db);
+}
+
+.canvas-header-bar__actions button[aria-pressed='true'] {
+  background: var(--mesh-soft-mint, #eaf7ef);
+  border-color: var(--mesh-primary-green, #2f7d5c);
+  color: var(--mesh-primary-green, #2f7d5c);
+}
+
+.canvas-header-bar__actions button b {
+  font-weight: 700;
+}
+
+/* On a phone the controls wrap under the title rather than overflowing. */
+@media (max-width: 640px) {
+  .canvas-header-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

@@ -40,7 +40,6 @@ import { workspaceNodeTypes } from './nodes';
 import { toCanvasAgent } from './nodes/AgentNode';
 import { ProtocolEdge } from './ProtocolEdge';
 import { ToolDock, type DockToolType } from './ToolDock';
-import { CommandComposer } from './CommandComposer';
 import { MultiplayerCursors } from './MultiplayerCursors';
 
 import { currentProjectId } from '../../utils/currentProjectId';
@@ -80,6 +79,14 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
   const refetchTasksRef = useRef(refetchTasks);
   refetchTasksRef.current = refetchTasks;
 
+  // Rolling per-agent terminal lines, fed by real `agent.log` activity deltas
+  // (see activity.service.ts / websocket.server.ts). The rolling window here
+  // is local-only and resets on reload; the lines themselves are genuinely
+  // persisted (ActivityEvent.payload.message), so a fresh GET on
+  // /projects/:id/activity still has them even after this resets.
+  const [agentLogs, setAgentLogs] = useState<Record<string, string[]>>({});
+  const MAX_AGENT_LOG_LINES = 20;
+
   useWorkspaceRealtime(
     projectId,
     useMemo(
@@ -89,6 +96,16 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
             void refetchAgentsRef.current();
           } else if (event.entity === 'task' || event.entity === 'taskResponsibility') {
             void refetchTasksRef.current();
+          }
+          if (event.entity === 'activity' && event.fields?.type === 'agent.log') {
+            const actorId = event.fields.actorId as string | undefined;
+            const message = event.fields.message as string | undefined;
+            if (actorId && message) {
+              setAgentLogs((prev) => ({
+                ...prev,
+                [actorId]: [...(prev[actorId] ?? []), message].slice(-MAX_AGENT_LOG_LINES),
+              }));
+            }
           }
         },
         onResync: () => {
@@ -105,12 +122,16 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
   const viewerUserId = authSessionService.getCurrentUser()?.id ?? null;
 
   const initialNodes = useMemo<Node[]>(() => {
+    const onlineAgents = liveAgents.filter(
+      (a) => a.status === 'ONLINE' || a.status === 'BUSY',
+    ).length;
     const coordinatorNode: Node = {
       id: 'coordinator',
       type: 'coordinator',
       position: { x: 420, y: 30 },
       data: {
-        activity: 'coordinating real project work',
+        // Real, live summary rather than a canned string.
+        activity: `${onlineAgents} agent${onlineAgents === 1 ? '' : 's'} online · ${liveTasks.length} task${liveTasks.length === 1 ? '' : 's'}`,
       },
     };
 
@@ -137,11 +158,13 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
       id: agent.id,
       type: 'productAgent',
       position: { x: 30 + index * 320, y: 380 },
-      data: { agent: toCanvasAgent(agent, viewerUserId) },
+      data: {
+        agent: { ...toCanvasAgent(agent, viewerUserId), logs: agentLogs[agent.id] ?? [] },
+      },
     }));
 
     return [coordinatorNode, tasksNode, ...agentNodes];
-  }, [liveAgents, liveTasks, claimTask, viewerUserId]);
+  }, [liveAgents, liveTasks, claimTask, viewerUserId, agentLogs]);
 
   const initialEdges = useMemo<Edge[]>(() => {
     const edges: Edge[] = [
@@ -288,6 +311,7 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
           onConnect={onConnect}
           connectionMode={ConnectionMode.Loose}
           fitView
+          fitViewOptions={{ padding: 0.3 }}
         >
           <Background color="var(--mesh-border-subtle)" gap={24} size={1} />
           <Controls showInteractive={false} />
@@ -296,10 +320,6 @@ function WorkspaceCanvasInner({ focusView, onFocusViewChange }: WorkspaceCanvasI
         </ReactFlow>
 
         <ToolDock onAddTool={handleToolAdd} />
-        <CommandComposer
-          onAddTool={handleToolAdd}
-          onRunNaturalCommand={(cmd) => `Executed command: ${cmd}`}
-        />
       </div>
     </div>
   );

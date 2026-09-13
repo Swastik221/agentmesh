@@ -129,15 +129,15 @@
 .workspace-list-tools { display: grid; grid-template-columns:minmax(240px, 1fr) auto auto; align-items: center; gap: 12px; margin-bottom: 16px; }
 .workspace-list-tools > label { position: relative; display: flex; align-items: center; }
 .workspace-list-tools > label svg { position: absolute; left: 13px; width: 15px; color: var(--canvas-dim); }
-.workspace-list-tools input { width: 100%; height: 42px; padding: 0 14px 0 40px; border: 1px solid var(--canvas-line-strong); border-radius: 9px; outline: 0; color: var(--canvas-copy); background: rgb(12 25 43 / 86%); font: 12px var(--am-font-sans); }
+.workspace-list-tools input { width: 100%; height: 42px; padding: 0 14px 0 40px; border: 1px solid var(--canvas-line-strong); border-radius: 9px; outline: 0; color: var(--canvas-copy); background: #fff; font: 12px var(--am-font-sans); }
 .workspace-list-tools input:focus { border-color: var(--canvas-cyan); }
 .workspace-list-tools > div { display: flex; align-items: center; gap: 5px; }
 .workspace-list-tools > div > svg { width: 14px; color: var(--canvas-dim); }
 .workspace-list-tools button { min-height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 999px; color: var(--canvas-muted); background: transparent; font: 10px var(--am-font-sans); cursor: pointer; }
-.workspace-list-tools button.is-active { color: var(--canvas-copy); border-color: var(--canvas-line-strong); background: rgb(28 46 70 / 82%); }
+.workspace-list-tools button.is-active { color: var(--canvas-copy); border-color: var(--canvas-line-strong); background: #eef1e8; }
 .workspace-list-tools .workspace-list-tools__primary { height: 42px; padding-inline: 15px; color: #061714; border-color: var(--canvas-green); background: var(--canvas-green); font-weight: 700; }
 
-.task-table { overflow: hidden; border: 1px solid var(--canvas-line-strong); border-radius: 13px; background: rgb(10 22 39 / 84%); backdrop-filter: blur(18px); }
+.task-table { overflow: hidden; border: 1px solid var(--canvas-line-strong); border-radius: 13px; background: rgb(246 244 236 / 96%); }
 .task-table__head,
 .task-table article { display: grid; grid-template-columns: minmax(280px, 1.6fr) .7fr .85fr .7fr 95px; align-items: center; gap: 20px; padding: 15px 18px; }
 .task-table__head { color: var(--canvas-dim); border-bottom: 1px solid var(--canvas-line); background: rgb(18 33 54 / 76%); font: 9px var(--am-font-mono); letter-spacing: .1em; text-transform: uppercase; }
@@ -360,7 +360,7 @@
 
 /* ---- Live task board (Live Mode) --------------------------------------- */
 .live-task-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
-.live-task-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid var(--canvas-line-strong); border-radius: 14px; background: rgb(10 22 39 / 84%); box-shadow: var(--canvas-shadow); backdrop-filter: blur(18px); }
+.live-task-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid var(--canvas-line-strong); border-radius: 14px; background: rgb(246 244 236 / 96%); box-shadow: var(--canvas-shadow); }
 .live-task-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .live-task-card__head code { color: var(--canvas-dim); font: 10px var(--am-font-mono); }
 .live-task-card__head h2 { margin: 4px 0 0; color: var(--canvas-copy); font: 600 16px var(--am-font-sans); }
@@ -376,11 +376,11 @@
 .live-task-card__actions--dep { padding-top: 10px; border-top: 1px solid var(--canvas-line); }
 .live-task-card__picker { flex: 1 1 150px; }
 .live-task-card__picker select,
-.workspace-inline-form select { width: 100%; height: 40px; padding: 0 10px; border: 1px solid var(--canvas-line-strong); border-radius: 8px; color: var(--canvas-copy); background: rgb(12 25 43 / 86%); font: 12px var(--am-font-sans); outline: 0; }
+.workspace-inline-form select { width: 100%; height: 40px; padding: 0 10px; border: 1px solid var(--canvas-line-strong); border-radius: 8px; color: var(--canvas-copy); background: #fff; font: 12px var(--am-font-sans); outline: 0; }
 .live-task-card__picker select:focus,
 .workspace-inline-form select:focus { border-color: var(--canvas-cyan); }
 .live-task-card__actions button { min-height: 40px; padding: 0 14px; border: 1px solid var(--canvas-green); border-radius: 999px; color: #061714; background: var(--canvas-green); font: 700 12px var(--am-font-sans); cursor: pointer; }
-.live-task-card__actions button.is-secondary { color: var(--canvas-copy); border-color: var(--canvas-line-strong); background: rgb(28 46 70 / 82%); }
+.live-task-card__actions button.is-secondary { color: var(--canvas-copy); border-color: var(--canvas-line-strong); background: #eef1e8; }
 .live-task-card__actions button:disabled { opacity: .6; cursor: wait; }
 .live-task-card__msg { margin: 0; padding: 8px 10px; border-radius: 8px; font: 11px var(--am-font-mono); }
 .live-task-card__msg--error { color: #f19a9a; border: 1px solid #d96262; background: rgb(217 98 98 / 10%); }
@@ -400,7 +400,7 @@
 .live-task-card__executions-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .live-task-card__executions-head span { color: var(--canvas-dim); font: 9px var(--am-font-mono); letter-spacing: .08em; text-transform: uppercase; }
 .live-task-card__executions-head button,
-.live-task-card__execution-list button { min-height: 32px; padding: 0 12px; border-radius: 999px; font: 700 11px var(--am-font-sans); cursor: pointer; color: var(--canvas-copy); border: 1px solid var(--canvas-line-strong); background: rgb(28 46 70 / 82%); }
+.live-task-card__execution-list button { min-height: 32px; padding: 0 12px; border-radius: 999px; font: 700 11px var(--am-font-sans); cursor: pointer; color: var(--canvas-copy); border: 1px solid var(--canvas-line-strong); background: #eef1e8; }
 .live-task-card__executions-head button:disabled,
 .live-task-card__execution-list button:disabled { opacity: .6; cursor: wait; }
 .live-task-card__executions-empty { margin: 0; color: var(--canvas-muted); font: 11px var(--am-font-mono); }
@@ -502,4 +502,163 @@
   cursor: pointer;
   font-weight: 600;
   opacity: 0.8;
+}
+
+/* ---- Inline forms (Register agent / New task) -------------------------- *
+ * Only had a rule for the <select> inside; the form container, its labels,
+ * text inputs, and submit button had no layout or visual styling at all, so
+ * everything rendered as raw stacked browser defaults on one line with no
+ * borders, spacing, or readable contrast. This gives it the same light
+ * "paper card" treatment as the rest of the workspace views in this file.
+ * -------------------------------------------------------------------------*/
+.workspace-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 560px;
+  padding: 20px 22px;
+  border: 1px solid var(--canvas-line-strong);
+  border-radius: 14px;
+  background: rgb(246 244 236 / 96%);
+  box-shadow: var(--canvas-shadow);
+}
+
+.workspace-inline-form > label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--canvas-muted);
+  font: 600 12px var(--am-font-sans);
+}
+
+.workspace-inline-form > label > span {
+  font-weight: 400;
+  color: var(--canvas-dim);
+}
+
+.workspace-inline-form input,
+.workspace-inline-form select {
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--canvas-line-strong);
+  border-radius: 9px;
+  color: var(--canvas-copy);
+  background: #fff;
+  font: 13px var(--am-font-sans);
+  outline: 0;
+}
+
+.workspace-inline-form input::placeholder {
+  color: var(--canvas-dim);
+  opacity: 1;
+}
+
+.workspace-inline-form input:focus,
+.workspace-inline-form select:focus {
+  border-color: var(--canvas-cyan);
+}
+
+.workspace-inline-form button[type='submit'] {
+  align-self: flex-start;
+  height: 42px;
+  padding-inline: 20px;
+  margin-top: 2px;
+  border: 1px solid var(--canvas-green);
+  border-radius: 999px;
+  color: #f4fff9 !important;
+  background: var(--canvas-green);
+  font: 700 13px var(--am-font-sans);
+  cursor: pointer;
+}
+
+.workspace-inline-form button[type='submit']:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.workspace-inline-form [role='alert'] {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--canvas-red);
+  border-radius: 8px;
+  color: var(--canvas-red);
+  background: rgb(201 79 79 / 8%);
+  font: 12px var(--am-font-sans);
+}
+
+/* ---- Workspace invite code (Team view) --------------------------------- */
+.workspace-invite {
+  padding: 18px 20px;
+  border: 1px solid var(--canvas-line-strong);
+  border-radius: 14px;
+  background: rgb(246 244 236 / 96%);
+  box-shadow: var(--canvas-shadow);
+}
+
+.workspace-invite__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.workspace-invite__head h2 {
+  margin: 0;
+  font: 600 16px var(--am-font-sans);
+  color: var(--canvas-copy);
+}
+
+.workspace-invite__head p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--canvas-muted);
+}
+
+.workspace-invite__code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--canvas-line-strong);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.workspace-invite__code code {
+  flex: 1 1 200px;
+  font: 700 16px var(--am-font-mono);
+  letter-spacing: 0.08em;
+  color: var(--canvas-green);
+}
+
+.workspace-invite__code button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--canvas-line-strong);
+  border-radius: 8px;
+  background: #eef1e8;
+  color: var(--canvas-copy);
+  font: 600 12px var(--am-font-sans);
+  cursor: pointer;
+}
+
+.workspace-invite__code button:hover:not(:disabled) {
+  border-color: var(--canvas-green);
+  color: var(--canvas-green);
+}
+
+.workspace-invite__code button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.workspace-invite__error {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--canvas-red);
 }
