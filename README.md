@@ -108,6 +108,7 @@ Server environment variables, read in `apps/server/src/config/index.ts` and `pay
 | `PORT` | `3001` | HTTP and WS port |
 | `WEB_ORIGIN` | `http://localhost:5173` | CORS origin, credentials enabled |
 | `DATABASE_URL` | none | PostgreSQL connection string |
+| `TEST_DATABASE_URL` | `DATABASE_URL` + `_test` | Database the server tests use, see [Testing](#testing) |
 | `SIWE_DOMAIN` / `SIWE_URI` / `SIWE_CHAIN_ID` | `localhost` / `http://localhost:5173` / `11155111` | Checked against the signed SIWE message |
 | `SESSION_MAX_AGE_MS` | `86400000` | Session lifetime |
 | `MAX_ARTIFACT_PAYLOAD_BYTES` | `524288` | 512 KB artifact payload cap |
@@ -450,6 +451,8 @@ pnpm demo:e2e   # mocked end-to-end flow test, no keys needed
 ```
 
 828 tests total, 580 server, 170 web, 69 protocol, 9 CLI. The server suite needs a live PostgreSQL database with migrations applied, it is integration heavy by design, real HTTP servers on ephemeral ports, real WebSocket clients, real git fixtures in temp directories.
+
+The server tests never touch your dev database. They delete every row in the tables they use, so they run against their own database: `TEST_DATABASE_URL` if set, otherwise `DATABASE_URL` with `_test` appended to the database name (`agentmesh` becomes `agentmesh_test`). Before each run, `prisma migrate deploy` is applied to it, creating the database if it does not exist. The run refuses to start if the resolved database name does not end in `_test`; a CI setup that cannot name its database that way can opt out with `AGENTMESH_TEST_ALLOW_NON_TEST_DATABASE=true`. The wiring is in `apps/server/vitest.config.ts`, `vitest.global-setup.ts`, and `src/test-support/test-database.ts`.
 
 CI spins up Postgres, generates the Prisma client, runs migrations, then lint, typecheck, test, and build on every push and every pull request.
 
