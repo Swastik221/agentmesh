@@ -1,6 +1,7 @@
 import { runConnect } from './connect.js';
 import { runTerminal } from './terminal.js';
 import { runContext } from './context.js';
+import { runMcp } from './mcp.js';
 
 export interface ParsedArgs {
   options: Record<string, string>;
@@ -60,6 +61,11 @@ Usage:
       Print what other agents are doing, where, and what overlaps your work.
       --tail <terminal-id> prints a shared terminal's recent output instead.
 
+  agentmesh mcp      --workspace <id> --agent <id> --connect-token <token>
+      Run an MCP server (stdio) so a coding agent can use AgentMesh as tools:
+      workspace context, other agents' work, conflicts, messages and handoffs.
+      See docs/MCP_INTEGRATION.md for Claude Code and Codex setup.
+
 Options:
   -w, --workspace <id>     Project to join            (or AGENTMESH_WORKSPACE)
   -a, --agent <id>         Agent to act as            (or AGENTMESH_AGENT)
@@ -85,6 +91,9 @@ async function main() {
     } else if (command === 'terminal') {
       await runTerminal({ ...options, share: options.share === 'true', command: rest });
       process.exit(process.exitCode ?? 0);
+    } else if (command === 'mcp') {
+      // Stays running: the MCP client (Claude Code, Codex, ...) talks to it over stdio.
+      await runMcp(options);
     } else if (command === 'context') {
       await runContext({ ...options, json: options.json === 'true' });
       process.exit(0);

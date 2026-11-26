@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useWorkspaceRealtime, type RealtimeFrame } from './useWorkspaceRealtime';
 import {
   liveApprovalAdapter,
   approvalErrorMessage,
@@ -69,6 +70,24 @@ export function useApprovals(projectId: string | null): UseApprovalsResult {
     setLoading(Boolean(projectId));
     void load();
   }, [load, projectId]);
+
+  // A request raised or resolved by anyone (a teammate, an agent's blocked
+  // action) arrives as approval.* on the shared workspace socket. Polling
+  // below only covered lists that were already non-empty.
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useWorkspaceRealtime(
+    projectId,
+    useMemo(
+      () => ({
+        onMessage: (frame: RealtimeFrame) => {
+          if (frame.type.startsWith('approval.')) void loadRef.current();
+        },
+        onResync: () => void loadRef.current(),
+      }),
+      [],
+    ),
+  );
 
   const hasPending = useMemo(() => approvals.length > 0, [approvals]);
 

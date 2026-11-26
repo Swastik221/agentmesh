@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useWorkspaceRealtime, type RealtimeDeltaEvent } from './useWorkspaceRealtime';
 import {
   liveExecutionAdapter,
   executionErrorMessage,
@@ -69,6 +70,24 @@ export function useExecutions(projectId: string | null, taskId: string | null): 
     setLoading(Boolean(projectId && taskId));
     void load();
   }, [load, projectId, taskId]);
+
+  // Executions started elsewhere (an agent's own prompt, a teammate, an
+  // approval resuming) arrive as `execution` deltas on the shared socket.
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useWorkspaceRealtime(
+    projectId,
+    useMemo(
+      () => ({
+        onDelta: (event: RealtimeDeltaEvent) => {
+          if (event.entity === 'execution' && (!taskId || event.fields?.taskId === undefined || event.fields.taskId === taskId)) {
+            void loadRef.current();
+          }
+        },
+      }),
+      [taskId],
+    ),
+  );
 
   const hasActiveExecution = useMemo(
     () => executions.some((e) => e.status === 'QUEUED' || e.status === 'RUNNING'),

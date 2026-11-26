@@ -28,6 +28,16 @@ const creatorSelect = {
   updatedAt: true,
 };
 
+/** Tells the assignee (and any agent whose files collide) without holding up the assignment. */
+async function notifyAssigned(projectId: string, taskId: string, agentId: string): Promise<void> {
+  try {
+    const { agentCoordinationService } = await import('../coordination/agent-coordination.service.js');
+    await agentCoordinationService.onTaskAssigned(projectId, taskId, agentId);
+  } catch {
+    // Notifications are best effort; the assignment itself is committed.
+  }
+}
+
 /**
  * Guards status changes made by hand through PATCH. Humans may move tasks
  * around a board freely, including marking work done, but not in ways that
@@ -461,6 +471,7 @@ export class TaskService {
       // Assignment already committed; a failed activity write must not undo it.
     }
 
+    void notifyAssigned(projectId, taskId, data.agentId);
     return responsibility;
   }
 
@@ -525,6 +536,7 @@ export class TaskService {
       },
     ]);
 
+    void notifyAssigned(projectId, taskId, agentId);
     return responsibility;
   }
 

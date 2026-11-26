@@ -8,6 +8,12 @@
 
 import { envConfig } from '../config/env';
 
+/**
+ * Fired on window when the signed-in session ends: an API call came back 401,
+ * the user signed out, or their wallet changed. The router handles it.
+ */
+export const SESSION_ENDED_EVENT = 'agentmesh:session-ended';
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -123,6 +129,12 @@ export class ApiClient {
           errorData = JSON.parse(rawBody) as unknown;
         } catch {
           // Not JSON (proxy HTML, empty body); keep the raw text on .data.
+        }
+
+        // A 401 anywhere but the auth endpoints themselves means the session
+        // expired or was ended elsewhere; the router sends the user to sign in.
+        if (response.status === 401 && !path.startsWith('/auth/') && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent(SESSION_ENDED_EVENT, { detail: { reason: 'expired' } }));
         }
 
         throw new ApiError(

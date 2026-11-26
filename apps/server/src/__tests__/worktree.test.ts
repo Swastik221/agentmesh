@@ -10,6 +10,7 @@ import { gitService } from '../git/git.service.js';
 import { worktreeService } from '../git/worktree.service.js';
 import { workspaceService } from '../workspace/workspace.service.js';
 import { GitRepositoryInvalidError, GitRepositoryNotFoundError } from '../git/git.errors.js';
+import { sessionService } from '../auth/session.service.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -77,18 +78,14 @@ describe('PRD #15 — Git / Worktree Integration', () => {
     const uA = await prisma.user.create({
       data: { walletAddress: '0x3333333333333333333333333333333333333333', displayName: 'User A' },
     });
-    const sA = await prisma.authSession.create({
-      data: { userId: uA.id, expiresAt: new Date(Date.now() + 86400000) },
-    });
+    const sA = await sessionService.createSession(uA.id);
     userA = { id: uA.id, cookie: `agentmesh_session=${sA.id}` };
 
     // Create User B
     const uB = await prisma.user.create({
       data: { walletAddress: '0x4444444444444444444444444444444444444444', displayName: 'User B' },
     });
-    const sB = await prisma.authSession.create({
-      data: { userId: uB.id, expiresAt: new Date(Date.now() + 86400000) },
-    });
+    const sB = await sessionService.createSession(uB.id);
     userB = { id: uB.id, cookie: `agentmesh_session=${sB.id}` };
 
     // Create Project A

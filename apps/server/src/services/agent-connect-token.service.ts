@@ -33,6 +33,16 @@ export const CONNECT_TOKEN_TTL_MS = 10 * 60 * 1000;
  */
 export const RESUME_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 
+/**
+ * Lifetime of a token minted for an MCP server (`agentmesh mcp`). A coding
+ * agent starts its MCP servers many times a day, so a ten-minute token is
+ * unusable there. It is still scoped to one agent in one project, re-checked
+ * against ownership and membership on every connection, and revocable.
+ */
+export const MCP_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export type ConnectTokenPurpose = 'connect' | 'mcp';
+
 const TOKEN_PREFIX = 'amct_';
 
 export interface IssuedConnectToken {
@@ -58,7 +68,7 @@ export class AgentConnectTokenService {
    * of the agent's project and owns the agent. Both checks are enforced here,
    * not by the caller.
    */
-  async issue(agentId: string, actorUserId: string): Promise<IssuedConnectToken> {
+  async issue(agentId: string, actorUserId: string, purpose: ConnectTokenPurpose = 'connect'): Promise<IssuedConnectToken> {
     const agent = await prisma.agent.findUnique({
       where: { id: agentId },
       include: { project: true },
@@ -86,7 +96,7 @@ export class AgentConnectTokenService {
     }
 
     const token = `${TOKEN_PREFIX}${crypto.randomBytes(32).toString('base64url')}`;
-    const expiresAt = new Date(Date.now() + CONNECT_TOKEN_TTL_MS);
+    const expiresAt = new Date(Date.now() + (purpose === 'mcp' ? MCP_TOKEN_TTL_MS : CONNECT_TOKEN_TTL_MS));
 
     await prisma.agentConnectToken.create({
       data: {
@@ -136,6 +146,26 @@ export class AgentConnectTokenService {
       projectId: record.projectId,
       issuedByUserId: record.issuedByUserId,
     };
+  }
+
+  /**
+   * Revokes every token for an agent (connect, MCP and resume tokens alike)
+   * and returns how many were live. The caller also drops the agent's open
+   * connections, so revocation takes effect immediately, not at expiry.
+   */
+  async revokeAll(agentId: string, actorUserId: string): Promise<number> {
+    const agent = await prisma.agent.findUnique({ where: { id: agentId }, include: { project: true } });
+    if (!agent) {
+      throw new NotFoundError(`Agent with ID '${agentId}' not found`);
+    }
+    if (agent.ownerId !== actorUserId && agent.project.ownerId !== actorUserId) {
+      throw new ForbiddenError("Only the agent's owner or the project owner can revoke its tokens");
+    }
+    const result = await prisma.agentConnectToken.updateMany({
+      where: { agentId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return result.count;
   }
 
   /** Best-effort cleanup of tokens that can no longer authorise anything. */

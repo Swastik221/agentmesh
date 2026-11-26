@@ -5,6 +5,7 @@ import { config } from './config/index.js';
 import { logger } from './lib/logger.js';
 import { startOfferSweeper } from './services/task-offer.service.js';
 import { terminalService } from './terminals/terminal.service.js';
+import { sessionService } from './auth/session.service.js';
 
 const app = createApp();
 const server = http.createServer(app);
@@ -23,6 +24,23 @@ void terminalService
   .then((count) => count > 0 && logger.info(`Marked ${count} terminal session(s) disconnected after restart`))
   .catch((err: unknown) => logger.error('Terminal reconciliation failed:', err));
 
+// An approved action that was mid-resume when the server stopped is marked
+// FAILED (retryable by a human), never re-run on its own.
+void import('./services/approval.service.js')
+  .then(({ approvalService }) => approvalService.reconcileOnStartup())
+  .then((count) => count > 0 && logger.info(`Marked ${count} interrupted approval resume(s) as failed`))
+  .catch((err: unknown) => logger.error('Approval reconciliation failed:', err));
+
+// Expired sessions, SIWE nonces and agent tokens can never authenticate
+// anything; delete them so the tables do not grow without bound.
+const purge = () =>
+  void sessionService
+    .purgeExpired()
+    .catch((err: unknown) => logger.error('Credential cleanup failed:', err));
+purge();
+const purgeTimer = setInterval(purge, 10 * 60 * 1000);
+purgeTimer.unref();
+
 server.listen(config.port, () => {
   logger.info(`AgentMesh server listening on port ${config.port}`);
 });
@@ -30,6 +48,7 @@ server.listen(config.port, () => {
 const gracefulShutdown = () => {
   logger.info('Shutting down AgentMesh server...');
   stopOfferSweeper();
+  clearInterval(purgeTimer);
   wsServer.close();
   server.close(() => {
     logger.info('Server closed cleanly');

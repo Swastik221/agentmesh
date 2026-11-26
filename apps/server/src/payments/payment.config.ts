@@ -23,4 +23,10 @@ export const PAYMENT_CONFIG = {
     return process.env.X402_FACILITATOR_URL || 'https://x402.org/facilitator';
   },
   SCHEME: 'exact',
+  /**
+   * How long a signed payment stays valid for settlement. The x402 Hedera
+   * facilitator requires the client's accepted requirement to carry exactly
+   * this value.
+   */
+  MAX_TIMEOUT_SECONDS: 120,
 };

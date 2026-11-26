@@ -8,6 +8,7 @@ import { validateFilePaths } from '../workspace/file-path.validator.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import { executionService } from '../execution/execution.service.js';
 import { AgentExecutor, AgentExecutionRequest, AgentExecutionResult } from '../execution/executors/agent-executor.js';
+import { sessionService } from '../auth/session.service.js';
 
 describe('Shared Development Environment (PRD #14)', () => {
   const app = createApp();
@@ -37,18 +38,14 @@ describe('Shared Development Environment (PRD #14)', () => {
     const uA = await prisma.user.create({
       data: { walletAddress: '0x1111111111111111111111111111111111111111', displayName: 'User A' },
     });
-    const sA = await prisma.authSession.create({
-      data: { userId: uA.id, expiresAt: new Date(Date.now() + 86400000) },
-    });
+    const sA = await sessionService.createSession(uA.id);
     userA = { id: uA.id, cookie: `agentmesh_session=${sA.id}` };
 
     // Create User B
     const uB = await prisma.user.create({
       data: { walletAddress: '0x2222222222222222222222222222222222222222', displayName: 'User B' },
     });
-    const sB = await prisma.authSession.create({
-      data: { userId: uB.id, expiresAt: new Date(Date.now() + 86400000) },
-    });
+    const sB = await sessionService.createSession(uB.id);
     userB = { id: uB.id, cookie: `agentmesh_session=${sB.id}` };
 
     // Create Project A owned by User A

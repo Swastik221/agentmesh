@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Check,
   Copy,
@@ -8,7 +8,6 @@ import {
   Maximize2,
   RefreshCw,
   RotateCcw,
-  Settings,
   Share2,
   UserPlus,
   Users,
@@ -16,6 +15,9 @@ import {
 import { navigate } from '../../routes/AppRouter';
 import { WalletAuthButton } from '../auth/WalletAuthButton';
 import { currentProjectId } from '../../utils/currentProjectId';
+import { authSessionService } from '../../services/auth-session';
+import { useWorkspaceRealtime } from '../../hooks/useWorkspaceRealtime';
+import { liveProjectAdapter, type Project } from '../../adapters/live/project.adapter';
 import {
   getProjectJoinCode,
   joinProjectByCode,
@@ -23,6 +25,25 @@ import {
 } from '../../adapters/live/project.adapter';
 
 export function Header() {
+  const projectId = currentProjectId();
+  const realtime = useWorkspaceRealtime(projectId);
+  const [project, setProject] = useState<Project | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setProject(null);
+    if (!projectId) return;
+    liveProjectAdapter
+      .getProject(projectId)
+      .then((p) => {
+        if (!cancelled) setProject(p);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+  // The invite (join) code is owner-only on the server; only the owner is offered it.
+  const isOwner = Boolean(project && project.ownerId === authSessionService.getCurrentUser()?.id);
   const [copied, setCopied] = useState<'invite' | 'share' | null>(null);
   const [joinModalOpen, setJoinModalOpen] = useState(false);
   const [inviteCodeInput, setInviteCodeInput] = useState('');
@@ -121,23 +142,31 @@ export function Header() {
           <span className="app-header__name">AgentMesh</span>
         </button>
         <span className="app-header__divider" aria-hidden="true" />
-        <span className="app-header__project">Agent Workspace</span>
+        <span className="app-header__project">{project?.name ?? 'Workspace'}</span>
       </div>
 
       <div className="app-header__identity">
         <div className="app-header__actions">
-          <button type="button" title="Show this workspace's invite code" onClick={() => void openInvite()}>
-            <KeyRound size={15} strokeWidth={1.75} />
-            Invite
-          </button>
+          {isOwner && (
+            <button type="button" title="Show this workspace's invite code" onClick={() => void openInvite()}>
+              <KeyRound size={15} strokeWidth={1.75} />
+              Invite
+            </button>
+          )}
           <button type="button" title="Join another workspace with an invite code" onClick={() => setJoinModalOpen(true)}>
             <UserPlus size={15} strokeWidth={1.75} />
             Join
           </button>
-          <button type="button" title="Realtime protocol state is synced">
-            <RefreshCw size={15} strokeWidth={1.75} />
-            Sync
-          </button>
+          {projectId && (
+            <span
+              className={`app-header__live app-header__live--${realtime.status}`}
+              title={`Realtime connection: ${realtime.status}`}
+              role="status"
+            >
+              <RefreshCw size={13} strokeWidth={1.75} />
+              {realtime.status === 'connected' ? 'Live' : realtime.status === 'revoked' ? 'No access' : realtime.status === 'disconnected' ? 'Offline' : 'Reconnecting…'}
+            </span>
+          )}
           <button type="button" title="Copy project link" onClick={() => void copy(location.href, 'share')}>
             {copied === 'share' ? <Check size={15} strokeWidth={1.75} /> : <Share2 size={15} strokeWidth={1.75} />}
             {copied === 'share' ? 'Copied' : 'Share'}
@@ -153,8 +182,8 @@ export function Header() {
         <button
           type="button"
           className="chrome-hbtn chrome-hbtn--icon"
-          title="Toggle presence panel"
-          onClick={() => window.dispatchEvent(new Event('agentmesh:toggle-presence'))}
+          title="Who's here: members and their presence"
+          onClick={() => window.dispatchEvent(new CustomEvent('agentmesh:open-section', { detail: 'team' }))}
         >
           <Users size={16} strokeWidth={1.75} />
           <span className="sr-only">Presence</span>
@@ -171,15 +200,7 @@ export function Header() {
           <Maximize2 size={15} strokeWidth={1.75} />
           <span className="sr-only">Full screen</span>
         </button>
-        <button
-          type="button"
-          className="chrome-hbtn chrome-hbtn--icon"
-          title="Project settings"
-          onClick={() => navigate('/workspaces')}
-        >
-          <Settings size={16} strokeWidth={1.75} />
-          <span className="sr-only">Settings</span>
-        </button>
+
       </div>
 
       {joinModalOpen && (

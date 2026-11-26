@@ -51,6 +51,8 @@ describe('agentmesh terminal / context CLI', () => {
       worktrees: [],
       terminals: [],
       decisions: [],
+      handoffs: [],
+      pendingMessages: 0,
       overlaps: [
         { kind: 'FILE', taskId: 't', taskTitle: 'Login UI', agentId: 'b', agentName: 'Codex', filePaths: ['web/login.tsx'], explanation: 'Codex is working on "Login UI"' },
       ],

@@ -20,7 +20,6 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
   let userA: any;
   let userB: any;
   let sessionA: any;
-  let sessionB: any;
   let projectA: any;
   let projectB: any;
   let agentA1: any;
@@ -58,7 +57,7 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
     });
 
     sessionA = await sessionService.createSession(userA.id);
-    sessionB = await sessionService.createSession(userB.id);
+    await sessionService.createSession(userB.id);
 
     projectA = await prisma.project.create({
       data: {
@@ -166,7 +165,7 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
       where: { id: { in: [projectA.id, projectB.id] } },
     });
     await prisma.authSession.deleteMany({
-      where: { id: { in: [sessionA.id, sessionB.id] } },
+      where: { userId: { in: [userA.id, userB.id] } },
     });
     await prisma.user.deleteMany({
       where: { id: { in: [userA.id, userB.id] } },
@@ -420,7 +419,7 @@ describe('PRD-14 Coordinator & Intelligent Task Assignment Tests', () => {
 
     expect(res.status).toBe(403);
 
-    await prisma.authSession.delete({ where: { id: nonMemberSession.id } });
+    await prisma.authSession.deleteMany({ where: { userId: nonMemberUser.id } });
     await prisma.user.delete({ where: { id: nonMemberUser.id } });
   });
 

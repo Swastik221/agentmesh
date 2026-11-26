@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { CheckCircle2, Clock, ListTodo, Plus, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, ListTodo, Plus, Users } from 'lucide-react';
 import type { LiveTask, OfferCandidate } from '../../../adapters/live/task.adapter';
+import { pathsOverlap } from '../../../utils/paths';
 
 /**
  * A task as the board draws it. Derived from the real LiveTask rather than
@@ -19,7 +20,23 @@ export interface BoardTask {
   /** True when the owner took it for itself rather than being assigned. */
   selfClaimed: boolean;
   status: string;
+  /** Unfinished upstream work this task is waiting on (titles). */
+  blockedBy: string[];
+  /** Other agents' active tasks touching the same files, as short sentences. */
+  overlaps: string[];
 }
+
+const ACTIVE = new Set(['TODO', 'IN_PROGRESS', 'PENDING_APPROVAL', 'BLOCKED']);
+
+const STATUS_LABEL: Record<string, string> = {
+  TODO: 'to do',
+  IN_PROGRESS: 'in progress',
+  PENDING_APPROVAL: 'awaiting approval',
+  BLOCKED: 'blocked',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+};
 
 export interface TaskBoardNodeData {
   tasks: BoardTask[];
@@ -38,10 +55,30 @@ const OFFER_WINDOWS = [15, 30, 60, 120];
  * Kept next to the component so the canvas does not have to duplicate the
  * rules about what counts as an open offer.
  */
-export function toBoardTask(task: LiveTask, now: number): BoardTask {
+export function toBoardTask(task: LiveTask, now: number, allTasks: LiveTask[] = []): BoardTask {
   const owner = task.responsibilities?.[0];
   const expiresAt = task.offerExpiresAt ? new Date(task.offerExpiresAt).getTime() : null;
   const open = !owner && expiresAt !== null;
+
+  const blockedBy = (task.dependencies ?? [])
+    .filter((d) => !d.available)
+    .map((d) => d.dependsOnTask?.title ?? d.artifact?.name ?? 'a dependency');
+
+  // Same rule as the server's overlap detection: another agent's active task
+  // declaring a file that is, or contains, one of this task's files.
+  const overlaps: string[] = [];
+  if (ACTIVE.has(task.status) && task.filePaths.length > 0) {
+    const mine = new Set((task.responsibilities ?? []).map((r) => r.agentId));
+    for (const other of allTasks) {
+      if (other.id === task.id || !ACTIVE.has(other.status)) continue;
+      const holder = (other.responsibilities ?? []).find((r) => !mine.has(r.agentId));
+      if (!holder) continue;
+      const shared = other.filePaths.filter((p) => task.filePaths.some((q) => pathsOverlap(p, q)));
+      if (shared.length) {
+        overlaps.push(`${holder.agent?.name ?? 'Another agent'}'s "${other.title}" also touches ${shared.join(', ')}`);
+      }
+    }
+  }
 
   return {
     id: task.id,
@@ -51,6 +88,8 @@ export function toBoardTask(task: LiveTask, now: number): BoardTask {
     ownerName: owner?.agent?.name ?? null,
     selfClaimed: owner?.assignmentSource === 'SELF_CLAIMED',
     status: task.status,
+    blockedBy,
+    overlaps,
   };
 }
 
@@ -173,14 +212,24 @@ export function TaskBoardNode({ data, selected }: NodeProps) {
               <span className="product-taskboard__id">{task.id.slice(-8)}</span>
               <span
                 className={`product-taskboard__status product-taskboard__status--${
-                  task.open ? 'open' : task.selfClaimed ? 'claimed' : 'assigned'
+                  task.open ? 'open' : task.status === 'BLOCKED' || task.blockedBy.length ? 'blocked' : task.selfClaimed ? 'claimed' : 'assigned'
                 }`}
               >
-                {task.open ? 'open to all' : task.selfClaimed ? 'claimed' : 'assigned'}
+                {task.open ? 'open to all' : STATUS_LABEL[task.status] ?? task.status.toLowerCase()}
               </span>
             </div>
 
             <div className="product-taskboard__item-title">{task.title}</div>
+            {task.blockedBy.length > 0 && (
+              <p className="product-taskboard__warn">
+                <AlertTriangle size={11} /> Waiting on {task.blockedBy.join(', ')}
+              </p>
+            )}
+            {task.overlaps.map((o) => (
+              <p key={o} className="product-taskboard__warn product-taskboard__warn--overlap">
+                <AlertTriangle size={11} /> {o}
+              </p>
+            ))}
 
             <div className="product-taskboard__item-footer">
               {task.open ? (

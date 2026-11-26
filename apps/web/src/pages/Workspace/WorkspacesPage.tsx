@@ -105,6 +105,7 @@ function JoinCodePanel({ projectId }: { projectId: string }) {
 }
 
 export function WorkspacesPage() {
+  const accessRemoved = new URLSearchParams(location.search).get('notice') === 'access-removed';
   const { projects, loading, error, refetch, createProject } = useProjects();
   const { invitations, acceptInvitation, declineInvitation } = usePendingInvitations();
 
@@ -184,6 +185,11 @@ export function WorkspacesPage() {
           <div>
             <span>YOUR PROJECTS</span>
             <h1>Choose where your agents coordinate.</h1>
+            {accessRemoved && (
+              <p role="alert" className="workspaces-notice">
+                Your access to that workspace was removed, so you were signed out of it.
+              </p>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button

@@ -26,41 +26,58 @@ A demo tells you a workflow looks right. AgentMesh tells you which real backend 
 
 ## Deployment status
 
-The web app has a Vercel deployment, but its production build currently has no `VITE_API_URL`, so it calls `http://localhost:3001` and sign in does not work for visitors. The server (Express, WebSocket, PostgreSQL) is not deployed anywhere yet. See [docs/ENGINEERING_AUDIT.md](docs/ENGINEERING_AUDIT.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+The server is not deployed yet, and the existing Vercel web deployment was built without `VITE_API_URL`. Deployment builds now refuse to run without the API URLs, and a misconfigured bundle shows a clear "not connected to a server" screen instead of calling localhost. Steps: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Try it locally: two developers, two agents
 
-1. Start PostgreSQL, then `pnpm install`, `cp .env.example .env`, apply migrations (see Getting started) and `pnpm dev`.
+1. Start PostgreSQL, then `pnpm install`, `cp .env.example .env`, `pnpm db:generate`, `pnpm --filter @agentmesh/server db:deploy` and `pnpm dev`.
 2. Sign in at `http://localhost:5173/signin` with a wallet, create a project, and share its invite code with a teammate, who joins from **Workspaces → Join**.
-3. Each developer registers their own agent under **Agents** and chooses **Connect this agent** to get a short-lived connect token.
+3. Each developer registers their own agent under **Agents** and chooses **Connect this agent** to get a connect token.
 4. Each runs their agent from their own machine:
 
    ```bash
+   pnpm --filter @agentmesh/cli build     # then use apps/cli/bin/agentmesh.js, or put it on PATH as `agentmesh`
    # receive and run tasks assigned to this agent
    agentmesh connect  --workspace <project> --agent <agent> --connect-token <token> --url http://localhost:3001
-   # or: run your own agent CLI in a terminal connected to the workspace (private unless --share)
+   # or run your own agent CLI in a terminal connected to the workspace (private unless --share)
    agentmesh terminal --workspace <project> --agent <agent> --connect-token <token> --url http://localhost:3001 --share -- claude
    ```
 
-5. Before starting work, an agent (or you) runs `agentmesh context --workspace <project> --agent <agent> --connect-token <token> --files api/auth` to see who else is working on what, on which files, and what overlaps.
-6. In the browser, **Terminals** shows your own terminals and teammates' shared ones (read-only), and **Awareness** shows exactly what an agent sees.
+5. Give the coding agent itself access through MCP: `agentmesh mcp` ([docs/MCP_INTEGRATION.md](docs/MCP_INTEGRATION.md)). It can then see other agents' work and overlaps, ask them questions, and publish handoff notes. Without MCP, `agentmesh context --files api/auth` prints the same picture.
+6. In the browser, the canvas shows the live task board (with blockers and overlaps), agents and connected terminals. **Terminals** lets you watch shared terminals read-only, and **Awareness** shows exactly what an agent sees.
 
 ## Status
 
-This is a working monorepo, not a finished product. See [docs/ENGINEERING_AUDIT.md](docs/ENGINEERING_AUDIT.md) for the detailed audit and [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for what is next.
+See [docs/FINAL_SPRINT_STATUS.md](docs/FINAL_SPRINT_STATUS.md) for verification evidence, [docs/ENGINEERING_AUDIT.md](docs/ENGINEERING_AUDIT.md) for findings, and [docs/SECURITY.md](docs/SECURITY.md) for the security model.
 
-| Area | State |
+### Implemented and verified
+
+| Area | What works |
 | --- | --- |
-| Server (Express + Prisma + `ws`) | Real backend APIs and WebSocket hub. Project roles (OWNER / ADMIN / MEMBER / VIEWER) enforced on member, policy and approval changes. |
-| Protocol package | Real, Zod validated. Core task/agent messages plus terminal and workspace-context messages. |
-| CLI | `connect` (run tasks), `terminal` (connect a local terminal), `context` (workspace awareness). Reconnects with a rotating resume token. |
-| Connected terminals | Private by default, read-only sharing enforced server-side, no remote input, output never persisted (bounded in-memory buffer), best-effort secret redaction. |
-| Agent awareness | Structured, queryable context: agents, owners, capabilities, tasks, dependencies, artifacts, worktrees, shared terminals and file/task overlaps. |
-| Web app | Real REST + WS. Task board, agents, terminals (xterm.js, read-only), awareness, files, activity, team. |
-| SIWE wallet auth | Real (`siwe` v3, httpOnly cookie sessions). |
-| ENS identity | Real forward/reverse resolution via `viem`; reverse records are forward-verified. Display identity, plus invite-by-ENS. |
-| x402 / Hedera payments | 402 challenge, server-side pricing and testnet guard are real. Settlement through the official facilitator is **not working as written** (fee payer), and the web UI cannot sign a payment. See the audit. |
-| Git worktree isolation | Real `git worktree` per execution, with symlink escape guards. |
+| Workspaces and roles | SIWE sign-in (hashed session tokens, rate-limited), projects, invites, join codes, OWNER / ADMIN / MEMBER / VIEWER enforced server-side; removing a member cuts their live connections |
+| Task coordination | Tasks, dependencies, capability-based assignment, offers and claims, executions in per-execution git worktrees, artifacts with review, policy and human approval (approval and resumed action recorded together, explicit retry) |
+| Connected terminals | `agentmesh terminal`: real PTY on your machine, private by default, read-only sharing enforced server-side, no remote input, output never persisted, best-effort redaction, resume after disconnect |
+| Agent awareness | Structured context: agents, owners, capabilities, current work and files, dependencies, artifacts, worktrees, shared terminals, handoff notes, and overlap warnings |
+| Agent coordination | Structured messages (ASK / ANSWER / PROPOSE / ACKNOWLEDGE / HANDOFF / BLOCKED / CONFLICT) stored with delivery state, queued for offline agents, deduplicated, recorded as activity; handoff notes as policy-gated artifacts; targeted context-change notifications |
+| MCP | `agentmesh mcp`: 23 tools for Claude Code, Codex and other MCP clients over the official SDK |
+| Realtime | One shared WebSocket per workspace in the web app, sequenced deltas with gap detection and resync, access-loss handling |
+| Web canvas | Live board with real statuses, blockers and overlaps; edges only from real assignments; layout and private notes kept per device; terminals node |
+
+### Partially implemented
+
+| Area | What is missing |
+| --- | --- |
+| Hedera x402 payments | Requirement now matches the official facilitator contract (verified against its code), only issued references settle, availability is checked before charging, and one transaction cannot pay twice. **Not yet done:** a live testnet settlement (needs a funded testnet payer), mirror-node confirmation, browser-side payment signing, automatic refunds. |
+| ENS | Resolution and reverse verification work; invite-by-ENS trusts a single RPC |
+| Deployment | Documented and guarded; no Dockerfile, single-instance only (in-memory realtime fan-out and rate limits) |
+
+### Planned
+
+Assigning tasks to humans, Windows terminal support, an MCP push channel (today MCP clients poll the inbox), mirror-node payment verification, shared pub/sub for multiple server instances. See [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md).
+
+### Required configuration
+
+See `.env.example` (local) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (production). Production needs an https `WEB_ORIGIN`, `SIWE_DOMAIN`/`SIWE_URI`, `DATABASE_URL`, `HEDERA_PAYMENT_RECEIVER`, and a web build with `VITE_API_URL`/`VITE_WS_URL`.
 
 ## Repo layout
 
@@ -405,7 +422,9 @@ The guardrails are the interesting part:
 - **No fabricated success.** Settlement counts only if the facilitator returns a real transaction reference. A facilitator error is a controlled failure, never a fake settled state.
 - **No baked in account.** The payment receiver has no fallback, missing config throws at startup.
 
-Known gaps, verified in the audit: the requirement names the payment receiver as the fee payer, which the official Hedera facilitator rejects, so a standard x402 client cannot complete settlement; the web UI stops at the wallet-signing step; and there is no refund path if the agent is offline after payment. Tests mock the facilitator. Nothing in the product fabricates a settled payment.
+The requirement follows the official Hedera facilitator's contract: `payTo`, `maxTimeoutSeconds`, an exact amount, and the fee payer the facilitator advertises at `/supported`. A contract test runs the installed facilitator's own validation against it. Settlement accepts only references this server issued (same project, requester and agent, unexpired), checks that the agent is connected before quoting and settling, records the settlement evidence, and a transaction can pay only once. If the work fails after a real settlement, the payment is flagged `refundDue` for a human to refund from the receiver account.
+
+Not yet verified: a live testnet settlement (it needs a funded testnet payer), and the browser cannot sign a payment yet. Tests mock only the facilitator's verify/settle network calls. Nothing in the product fabricates a settled payment.
 
 ## Execution isolation
 
@@ -420,13 +439,14 @@ pnpm --filter @agentmesh/cli build
 agentmesh connect  -w <projectId> -a <agentId> --connect-token <token>             # run tasks for this agent
 agentmesh terminal -w <projectId> -a <agentId> --connect-token <token> [--share] -- claude
 agentmesh context  -w <projectId> -a <agentId> --connect-token <token> [--files a,b] [--json] [--tail <terminal-id>]
+agentmesh mcp      -w <projectId> -a <agentId> --connect-token <token>            # MCP server for Claude Code / Codex
 ```
 
 Credentials can also come from `AGENTMESH_WORKSPACE`, `AGENTMESH_AGENT`, `AGENTMESH_CONNECT_TOKEN` and `AGENTMESH_URL`.
 
 Every connection declares a role in its handshake: `executor` (the default, receives tasks), `terminal` or `observer`. Only executors receive tasks or make the agent count as online, so a terminal and a `context` query can run next to a working agent. The connect token from the UI lives ten minutes; each accepted handshake returns a rotating resume token so long sessions reconnect after a drop or a server restart.
 
-`connect` runs the task loop: receive a task request (with workspace context and dependency artifacts), send accepted, run the adapter, stream progress, publish artifacts, send completed or failed. Its prompt also offers `/who`, `/offers`, `/claim`, `/context`, `/tail` and `@agent` direct messages.
+`connect` runs the task loop: receive a task request (with workspace context and dependency artifacts), send accepted, run the adapter, stream progress, publish artifacts, send completed or failed. Its prompt also offers `/who`, `/offers`, `/claim`, `/context`, `/tail`, `/inbox`, `/reply` and `@agent` direct messages.
 
 `terminal` runs your command in a real pseudo-terminal (via the system `script(1)`, no native dependency) in your own terminal. Your keyboard goes only to your process; output is mirrored to the workspace after best-effort secret redaction. Private unless `--share`; the owner can share, unshare or disconnect it from the web UI.
 

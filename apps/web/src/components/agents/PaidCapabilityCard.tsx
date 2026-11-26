@@ -19,7 +19,31 @@ export type PaymentState =
   | 'SUBMITTING'
   | 'VERIFYING'
   | 'SETTLED'
+  | 'COMPLETED_WITHOUT_PAYMENT'
   | 'FAILED';
+
+interface WireRequirement {
+  scheme?: string;
+  network?: string;
+  asset?: string;
+  amount?: string;
+  payTo?: string;
+  maxTimeoutSeconds?: number;
+  extra?: { feePayer?: string; paymentReference?: string };
+}
+
+/** Decodes an x402 base64 JSON header. Returns null if it is not one. */
+export function decodePaymentRequired(header: string): { accepts?: WireRequirement[] } | null {
+  try {
+    const bytes = Uint8Array.from(atob(header), (c) => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes)) as { accepts?: WireRequirement[] };
+  } catch {
+    return null;
+  }
+}
+
+/** USDC has 6 decimals on Hedera. */
+const formatUsdc = (atomic?: string) => (atomic && /^\d+$/.test(atomic) ? `${(Number(atomic) / 1e6).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} USDC` : atomic ?? '—');
 
 export function PaidCapabilityCard({
   agentId,
@@ -34,7 +58,8 @@ export function PaidCapabilityCard({
   const [txRef, setTxRef] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resultData, setResultData] = useState<unknown | null>(null);
-  const [requirementObj, setRequirementObj] = useState<unknown | null>(null);
+  const [requirementObj, setRequirementObj] = useState<WireRequirement | null>(null);
+  const [paymentReference, setPaymentReference] = useState<string | null>(null);
 
   const handleExecute = async () => {
     try {
@@ -59,16 +84,19 @@ export function PaidCapabilityCard({
       );
 
       if (initialRes.status === 402) {
-        const reqHeader = initialRes.headers.get('X-Payment-Requirement');
-        const reqData = reqHeader ? JSON.parse(reqHeader) : await initialRes.json();
-        const requirement = reqData.paymentRequirement || reqData;
-
-        setRequirementObj(requirement);
-        // Standard real behavior: Require authentic wallet signature / x402 client
+        // The x402 header is base64-encoded JSON (PAYMENT-REQUIRED in x402 v2;
+        // X-Payment-Requirement is the legacy name). The JSON body carries the
+        // same requirement as a fallback.
+        const body = await initialRes.json().catch(() => ({}));
+        const header = initialRes.headers.get('PAYMENT-REQUIRED') ?? initialRes.headers.get('X-Payment-Requirement');
+        const decoded = header ? decodePaymentRequired(header) : null;
+        setRequirementObj(decoded?.accepts?.[0] ?? body.paymentRequirement ?? null);
+        setPaymentReference(body.paymentRequirement?.paymentReference ?? decoded?.accepts?.[0]?.extra?.paymentReference ?? null);
         setPaymentState('WALLET_SIGNING_REQUIRED');
       } else if (initialRes.ok) {
         const data = await initialRes.json();
-        setPaymentState('SETTLED');
+        // Only a payment the server reports as SETTLED counts as paid.
+        setPaymentState(data.payment?.status === 'SETTLED' ? 'SETTLED' : 'COMPLETED_WITHOUT_PAYMENT');
         setResultData(data.result);
         if (data.payment?.transactionReference) {
           setTxRef(data.payment.transactionReference);
@@ -111,16 +139,30 @@ export function PaidCapabilityCard({
         <div className="mb-3 p-3 rounded bg-amber-950/40 border border-amber-800/60 text-xs text-amber-300">
           <div className="flex items-center gap-1.5 font-medium mb-1">
             <Key className="w-4 h-4 text-amber-400" />
-            <span>HTTP 402: Hedera Wallet Signing Required</span>
+            <span>Payment required (HTTP 402). Nothing has been charged.</span>
           </div>
-          <p className="text-[11px] text-amber-400/80 mb-2">
-            Real x402 payment payload must be signed by an active Hedera Testnet wallet signer.
-          </p>
-          {Boolean(requirementObj) && (
-            <div className="font-mono text-[10px] bg-black/40 p-2 rounded overflow-auto max-h-24">
-              <pre>{JSON.stringify(requirementObj, null, 2)}</pre>
-            </div>
+          {requirementObj ? (
+            <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 font-mono text-[10px] mb-2">
+              <dt>Amount</dt><dd>{formatUsdc(requirementObj.amount)}</dd>
+              <dt>Network</dt><dd>{requirementObj.network}</dd>
+              <dt>Pay to</dt><dd>{requirementObj.payTo}</dd>
+              <dt>Fee payer</dt><dd>{requirementObj.extra?.feePayer ?? '—'}</dd>
+              <dt>Valid for</dt><dd>{requirementObj.maxTimeoutSeconds ?? '—'}s</dd>
+              {paymentReference && (<><dt>Reference</dt><dd className="break-all">{paymentReference}</dd></>)}
+            </dl>
+          ) : (
+            <p className="text-[11px] mb-2">The server asked for payment but its requirement could not be read.</p>
           )}
+          <p className="text-[11px] text-amber-400/80">
+            Paying needs a Hedera wallet that signs an x402 payment for exactly these terms, sent back with this reference.
+            Signing inside this page is not available yet; use an x402-capable Hedera client.
+          </p>
+        </div>
+      )}
+
+      {paymentState === 'COMPLETED_WITHOUT_PAYMENT' && (
+        <div className="mb-3 p-2.5 rounded bg-emerald-950/40 border border-emerald-800/60 text-xs text-emerald-300">
+          <CheckCircle2 className="w-4 h-4 inline mr-1" /> Completed. No payment was taken.
         </div>
       )}
 

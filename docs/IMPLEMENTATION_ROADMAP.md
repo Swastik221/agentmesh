@@ -26,14 +26,14 @@ Status: ✅ done and verified · 🟡 partly done · ⬜ not started.
 - ✅ Handshake race that could hang the CLI (F-04).
 - ✅ Task board / agent list unmount on refetch (F-12).
 - ✅ Stale README and dead `demo:e2e:live` script (F-28).
-- ⬜ Rate limiting, hashed session tokens, nonce cleanup (F-16, F-17).
-- ⬜ Separate test database from the dev database (F-27). **Until then, running `pnpm test` empties the database in `.env`.**
+- ✅ Rate limiting, hashed session tokens, credential cleanup (F-16, F-17). *(final sprint)*
+- ✅ Test database isolated from the dev database (F-27, PR #78).
 
 ### Phase 2: canvas foundation 🟡
 
 - ✅ Workspace sections for Terminals and Awareness, sharing the existing realtime socket via a new `onMessage`/`send` on `useWorkspaceRealtime`.
-- ⬜ One realtime socket per workspace instead of per view (F-23).
-- ⬜ Canvas nodes for terminals and the task board backed by live data; remove fake edges and unrenderable dock nodes (F-21).
+- ✅ One shared realtime socket per workspace, lingering across view switches (F-23). *(final sprint)*
+- ✅ Canvas: terminals node, board with real status/blockers/overlaps, edges only from real assignments, positions and private notes kept, no unrenderable nodes (F-21). *(final sprint)*
 
 ### Phase 3: local terminal connection ✅
 
@@ -48,29 +48,30 @@ Status: ✅ done and verified · 🟡 partly done · ⬜ not started.
 ### Phase 4: shared task board 🟡
 
 - ✅ Board backed by real tasks, assignment, dependencies, offers and executions (pre-existing), with the unmount fix.
-- ⬜ Live approvals and executions started by others (F-19).
+- ✅ Live approvals and executions started by others (F-19). *(final sprint)*
 - ⬜ Assign to a human developer, not only to an agent.
-- ⬜ Show blocked/overlap state from the context service on board cards.
+- ✅ Blocked and overlap warnings on board cards. *(final sprint)*
 
 ### Phase 5: agent awareness ✅
 
 - ✅ `workspace.context` over the protocol, REST for humans, `agentmesh context` (text and `--json`), Awareness view.
 - ✅ Overlap detection: shared files (with directory containment), same task held by another agent, unfinished upstream work.
-- ⬜ An MCP server wrapping `agentmesh context` so Claude Code / Codex can call it as a tool rather than a shell command.
-- ⬜ Push context changes to connected agents (today agents pull, and get it with each task).
+- ✅ `agentmesh mcp`: 23 tools over the official MCP SDK, verified with a real SDK client (docs/MCP_INTEGRATION.md). *(final sprint)*
+- ✅ Targeted `workspace.context.changed` notifications (assignment, blocked, artifact, handoff, disconnect, conflict). *(final sprint)*
+- ⬜ MCP clients still poll (`check_inbox`); a push channel to the coding agent is next.
 
-### Phase 6: coordination and handoffs ⬜
+### Phase 6: coordination and handoffs ✅
 
-- Structured handoff notes attached to artifacts (API contract, assumptions, open questions) and surfaced in the consumer's context.
-- Agent-to-agent requests over `agent.message` with typed intents (ask, propose contract, ack), recorded as activity.
-- Atomic approve-and-resume (F-18).
+- ✅ Structured messages with intents, delivery state, offline queueing, dedup and activity records. *(final sprint)*
+- ✅ Handoff notes as policy-gated `handoff` artifacts, surfaced in dependent agents' context. *(final sprint)*
+- ✅ Atomic approve-and-resume with explicit retry (F-18). *(final sprint)*
 
 ### Phase 7: integration and hardening 🟡
 
 - ✅ Two-developer, two-agent integration tests (`apps/server/src/__tests__/shared-canvas.test.ts`) and CLI end-to-end run.
-- ⬜ Payments: fix the facilitator integration (F-05), take payment only when the agent can run (F-06), unique transaction references (F-25), UI signing (F-11).
-- ⬜ Deploy the server; configure the web build (F-10).
-- ⬜ Logout/401 handling, role-aware controls (F-20, F-22).
+- 🟡 Payments: facilitator contract fixed and tested (F-05), availability before charging (F-06), unique transactions (F-25). Still open: a live testnet settlement, mirror-node confirmation, UI signing (F-11).
+- 🟡 Deployment guide and build guards done (docs/DEPLOYMENT.md); the server is not deployed (needs operator access).
+- ✅ Logout, 401 and wallet-change handling (F-20); 🟡 role-aware controls partly done (F-22).
 
 ## Dependencies between the remaining work
 
@@ -82,8 +83,10 @@ F-05 facilitator fix ──► F-06 pay-after-availability ──► F-11 UI sig
 Context push (Phase 5) ──► handoff notes in context (Phase 6)
 ```
 
-## Next three pieces of work, in order
+## Next pieces of work, in order
 
-1. Isolate the test database (small, protects developers' data).
-2. Fix x402 settlement and the pay-before-availability ordering, with a test against the real facilitator interface.
-3. One realtime socket per workspace, then put live terminals and the board on the canvas.
+1. Run one real Hedera testnet payment end to end with a funded payer and a facilitator that supports Hedera testnet; add mirror-node confirmation.
+2. Deploy the server (single instance) and the web app per docs/DEPLOYMENT.md.
+3. Assign tasks to humans as well as agents.
+4. MCP push (resource subscriptions or notifications) so coding agents need not poll `check_inbox`.
+5. Shared store for realtime fan-out and rate limits before running more than one server instance.

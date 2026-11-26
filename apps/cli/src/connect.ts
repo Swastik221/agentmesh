@@ -63,6 +63,9 @@ export async function runConnect(options: ConnectOptions): Promise<AgentMeshClie
     ? new MockAgentAdapter({ agentId, name: 'BYOA Local Agent', capabilities: [] })
     : new RealAgentAdapter({ agentId, name: 'BYOA Local Agent', capabilities: [] });
 
+  /** Who sent each message we have seen, so /reply knows where to send. */
+  const replyTargets = new Map<string, string>();
+
   const client = new AgentMeshClient({
     serverUrl,
     workspaceId,
@@ -76,6 +79,27 @@ export async function runConnect(options: ConnectOptions): Promise<AgentMeshClie
       if (frame.type === CoordinationMessageType.WORKSPACE_CONTEXT) {
         const parsed = workspaceContextSchema.safeParse(payload.context);
         console.log(parsed.success ? `\n${formatContext(parsed.data)}\n` : '\n[context] unreadable reply\n');
+        return true;
+      }
+      if (frame.type === CoordinationMessageType.AGENT_COORDINATE_DELIVERY) {
+        const m = payload as { messageId: string; intent: string; from: { agentId: string; name: string }; subject: string; body: string };
+        replyTargets.set(m.messageId, m.from.agentId);
+        console.log(`\n[${m.intent} from ${m.from.name}] ${m.subject}${m.body ? `\n  ${m.body}` : ''}\n  reply with: /reply ${m.messageId} <answer>\n`);
+        return true;
+      }
+      if (frame.type === CoordinationMessageType.WORKSPACE_CONTEXT_CHANGED) {
+        console.log(`\n[context] ${String(payload.summary)}\n`);
+        return true;
+      }
+      if (frame.type === CoordinationMessageType.AGENT_INBOX) {
+        const messages = (payload.messages ?? []) as Array<{ messageId: string; intent: string; from: { agentId: string; name: string }; subject: string }>;
+        for (const m of messages) replyTargets.set(m.messageId, m.from.agentId);
+        console.log(messages.length === 0 ? '\n[inbox] Nothing waiting.\n' : `\n[inbox]\n${messages.map((m) => `  ${m.messageId}  [${m.intent}] ${m.from.name}: ${m.subject}`).join('\n')}\n`);
+        return true;
+      }
+      if (frame.type === CoordinationMessageType.AGENT_COORDINATE_ACCEPTED) {
+        const r = payload as { delivered: number; queued: number };
+        console.log(`[sent] delivered ${r.delivered}, queued ${r.queued}`);
         return true;
       }
       if (frame.type === CoordinationMessageType.TERMINAL_TAIL) {
@@ -97,6 +121,8 @@ export async function runConnect(options: ConnectOptions): Promise<AgentMeshClie
   console.log(`  /claim <task-id>  take an open task for this agent`);
   console.log(`  /context [files]  what other agents are doing, and what overlaps these files`);
   console.log(`  /tail <terminal>  recent output of a terminal shared with you`);
+  console.log(`  /inbox            structured messages other agents sent you`);
+  console.log(`  /reply <id> <txt> answer one of them`);
   console.log(`  @<agent> <text>   send that agent a direct message`);
   console.log(`Ctrl+C to disconnect.\n`);
 
@@ -163,6 +189,34 @@ export async function runConnect(options: ConnectOptions): Promise<AgentMeshClie
         CoordinationMessageType.WORKSPACE_CONTEXT_REQUEST,
         files.length ? { focus: { filePaths: files } } : {},
       );
+      rl.prompt();
+      return;
+    }
+
+    if (trimmed === '/inbox') {
+      client.sendFrame(CoordinationMessageType.AGENT_INBOX_REQUEST, {});
+      rl.prompt();
+      return;
+    }
+
+    if (trimmed.startsWith('/reply')) {
+      const [, messageId, ...rest] = trimmed.split(/\s+/);
+      const answer = rest.join(' ').trim();
+      const recipientAgentId = messageId ? replyTargets.get(messageId) : undefined;
+      if (!messageId || !answer) {
+        console.log('\n[usage] /reply <message-id> <answer>   (see /inbox)\n');
+      } else if (!recipientAgentId) {
+        console.log(`\n[reply] Unknown message ${messageId}. Run /inbox first.\n`);
+      } else {
+        // Answers go back to the agent that sent the message.
+        client.sendFrame(CoordinationMessageType.AGENT_COORDINATE, {
+          recipientAgentId,
+          intent: 'ANSWER',
+          subject: 'Re: your question',
+          body: answer,
+          inReplyTo: messageId,
+        });
+      }
       rl.prompt();
       return;
     }

@@ -130,6 +130,18 @@ export const executePaidCapability = async (
       return;
     }
 
+    // STEP 3b: Never take payment for an agent that cannot run the work. Checked
+    // before quoting and again before settling.
+    const { connectorService } = await import('../connector/connector.service.js');
+    if (!connectorService.isAgentConnected(agentId)) {
+      res.status(409).json({
+        success: false,
+        error: 'AGENT_UNAVAILABLE',
+        message: `${agent.name} is not connected, so it cannot run '${capability}' now. You have not been charged.`,
+      });
+      return;
+    }
+
     // STEP 4: Payment Gate (Section 7)
     const authHeader = req.headers['authorization'];
     const paymentHeader = (
@@ -153,7 +165,13 @@ export const executePaidCapability = async (
         network: PAYMENT_CONFIG.NETWORK,
       });
 
-      const encodedHeader = x402Service.encodeRequirementHeader(requirement);
+      const encodedHeader = x402Service.encodeRequirementHeader(
+        requirement,
+        req.originalUrl,
+        `AgentMesh paid capability '${capability}' on agent '${agent.name}'`,
+      );
+      // x402 v2 standard header, plus the legacy name earlier clients read.
+      res.setHeader('PAYMENT-REQUIRED', encodedHeader);
       res.setHeader('X-Payment-Requirement', encodedHeader);
       res.status(402).json({
         success: false,
@@ -165,20 +183,13 @@ export const executePaidCapability = async (
       return;
     }
 
-    // STEP 5: Process & Settle Payment (Section 8)
-    const requirement = x402Service.generateRequirement({
-      paymentReference: reqHeaderPaymentRef,
-      amount: PAYMENT_CONFIG.DEFAULT_ATOMIC_AMOUNT,
-      asset: PAYMENT_CONFIG.USDC_TOKEN_ID,
-      network: PAYMENT_CONFIG.NETWORK,
-      receiver: PAYMENT_CONFIG.RECEIVER_ADDRESS,
-    });
-
+    // STEP 5: Verify & settle against the requirement this server issued for
+    // that reference (price, receiver and fee payer are never the client's).
     const settledPayment = await paymentService.processPaymentHeader(
       agent.projectId,
       actorUserId,
       paymentHeader,
-      requirement,
+      reqHeaderPaymentRef,
       agentId,
     );
 
@@ -339,6 +350,30 @@ export const executePaidCapability = async (
       await new Promise((r) => setTimeout(r, 100));
       existingExec = await prisma.taskExecution.findUnique({ where: { id: executionId } });
       execAttempts++;
+    }
+
+    // Paid, but the work failed after settlement: flag the payment for a
+    // refund and record it where humans see it. A Hedera refund is a new
+    // transfer the receiver account must sign, which this server deliberately
+    // cannot do on its own.
+    if (existingExec && (existingExec.status === 'FAILED' || existingExec.status === 'CANCELLED')) {
+      const meta = ((await prisma.payment.findUnique({ where: { id: settledPayment.id }, select: { metadata: true } }))?.metadata ?? {}) as Record<string, unknown>;
+      if (!meta.refundDue) {
+        await prisma.payment.update({
+          where: { id: settledPayment.id },
+          data: { metadata: { ...meta, refundDue: true, refundReason: `Execution ${existingExec.status.toLowerCase()} after settlement` } },
+        });
+        const { activityService } = await import('../services/activity.service.js');
+        await activityService
+          .recordActivity(agent.projectId, {
+            type: 'payment.refund_due',
+            actorType: 'system',
+            actorId: 'server',
+            message: `A settled payment (${settledPayment.transactionReference ?? settledPayment.id}) bought work that ${existingExec.status.toLowerCase()}; it needs a refund from the receiver account.`,
+            payload: { paymentId: settledPayment.id, executionId: existingExec.id },
+          })
+          .catch(() => {});
+      }
     }
 
     if (existingExec) {

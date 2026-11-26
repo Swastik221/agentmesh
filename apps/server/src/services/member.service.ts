@@ -227,6 +227,13 @@ export class MemberService {
       });
 
       return { message: 'Member removed successfully' };
+    }).then(async (result) => {
+      // Access ends now, not at their next reconnect: close their browser
+      // tabs (and with them any terminal subscriptions) and the connections
+      // of agents they run in this project.
+      const { connectionManager } = await import('../websocket/connection.manager.js');
+      connectionManager.closeUserProjectConnections(projectId, userId, 4003, 'Removed from workspace');
+      return result;
     });
   }
 }

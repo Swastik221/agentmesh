@@ -4,12 +4,11 @@ import {
   decodePaymentSignatureHeader,
   HTTPFacilitatorClient,
 } from '@x402/core/http';
-import { x402ResourceServer } from '@x402/core/server';
-import { ExactHederaScheme } from '@x402/hedera/exact/server';
 import {
   HEDERA_TESTNET_CAIP2,
   HEDERA_TESTNET_USDC,
 } from '@x402/hedera';
+import { AppError } from '../errors/app-error.js';
 import { PAYMENT_CONFIG } from './payment.config.js';
 import {
   X402PaymentRequirement,
@@ -17,19 +16,47 @@ import {
   X402VerificationResult,
 } from './payment.types.js';
 
-export class X402Service {
-  private resourceServer: x402ResourceServer;
-  private facilitatorClient: HTTPFacilitatorClient;
+/** How long the facilitator's advertised fee payer is cached. */
+const FEE_PAYER_CACHE_MS = 10 * 60 * 1000;
 
-  constructor() {
-    this.facilitatorClient = new HTTPFacilitatorClient({
-      url: PAYMENT_CONFIG.FACILITATOR_URL,
-    });
-    this.resourceServer = new x402ResourceServer(this.facilitatorClient);
-    this.resourceServer.register(
-      (PAYMENT_CONFIG.NETWORK || HEDERA_TESTNET_CAIP2) as `${string}:${string}`,
-      new ExactHederaScheme(),
+export class X402Service {
+  private feePayerCache: { network: string; feePayer: string; at: number } | null = null;
+
+  /**
+   * The fee payer the facilitator manages for this network, from its
+   * /supported endpoint. A requirement naming any other account (the payment
+   * receiver, as this service used to) is rejected by the official Hedera
+   * facilitator with `fee_payer_not_managed_by_facilitator`, so settlement
+   * could never succeed.
+   */
+  async getFacilitatorFeePayer(network: string): Promise<string> {
+    const cached = this.feePayerCache;
+    if (cached && cached.network === network && Date.now() - cached.at < FEE_PAYER_CACHE_MS) {
+      return cached.feePayer;
+    }
+    let supported: { kinds?: Array<{ scheme?: string; network?: string; extra?: Record<string, unknown> }> };
+    try {
+      supported = await this.getFacilitatorClient().getSupported();
+    } catch (err) {
+      throw new AppError(
+        `The payment facilitator is unavailable (${err instanceof Error ? err.message : 'unknown error'}). No payment was requested.`,
+        503,
+        'FACILITATOR_UNAVAILABLE',
+      );
+    }
+    const kind = supported.kinds?.find(
+      (k) => k.scheme === PAYMENT_CONFIG.SCHEME && k.network === network && typeof k.extra?.feePayer === 'string',
     );
+    if (!kind) {
+      throw new AppError(
+        `The payment facilitator does not support '${PAYMENT_CONFIG.SCHEME}' payments on '${network}'. No payment was requested.`,
+        503,
+        'FACILITATOR_UNSUPPORTED',
+      );
+    }
+    const feePayer = kind.extra!.feePayer as string;
+    this.feePayerCache = { network, feePayer, at: Date.now() };
+    return feePayer;
   }
 
   /**
@@ -41,6 +68,8 @@ export class X402Service {
     network?: string;
     receiver?: string;
     paymentReference?: string;
+    feePayer?: string;
+    maxTimeoutSeconds?: number;
   }): X402PaymentRequirement {
     const paymentReference = options?.paymentReference || `x402_${randomUUID().replace(/-/g, '')}`;
     const amount = options?.amount || PAYMENT_CONFIG.DEFAULT_ATOMIC_AMOUNT;
@@ -55,27 +84,39 @@ export class X402Service {
       amount,
       receiver,
       paymentReference,
+      maxTimeoutSeconds: options?.maxTimeoutSeconds ?? PAYMENT_CONFIG.MAX_TIMEOUT_SECONDS,
+      ...(options?.feePayer && { feePayer: options.feePayer }),
+    };
+  }
+
+  /**
+   * The requirement in the x402 v2 wire shape the facilitator checks:
+   * `payTo`, `maxTimeoutSeconds` and `extra.feePayer` must equal what the
+   * client signed against, field for field.
+   */
+  toWireRequirement(requirement: X402PaymentRequirement) {
+    return {
+      scheme: requirement.scheme,
+      network: requirement.network as `${string}:${string}`,
+      asset: requirement.asset,
+      amount: requirement.amount,
+      payTo: requirement.receiver,
+      maxTimeoutSeconds: requirement.maxTimeoutSeconds,
+      extra: {
+        ...(requirement.feePayer && { feePayer: requirement.feePayer }),
+        paymentReference: requirement.paymentReference,
+      },
     };
   }
 
   /**
    * Encodes standard x402 HTTP 402 header requirement.
    */
-  encodeRequirementHeader(requirement: X402PaymentRequirement): string {
+  encodeRequirementHeader(requirement: X402PaymentRequirement, resourceUrl = '', description = ''): string {
     return encodePaymentRequiredHeader({
       x402Version: 2,
-      accepts: [
-        {
-          scheme: requirement.scheme,
-          network: requirement.network as `${string}:${string}`,
-          asset: requirement.asset,
-          amount: requirement.amount,
-          receiverAddress: requirement.receiver,
-          extra: {
-            paymentReference: requirement.paymentReference,
-          },
-        },
-      ],
+      resource: { url: resourceUrl, description, mimeType: 'application/json' },
+      accepts: [this.toWireRequirement(requirement)],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
   }
@@ -146,7 +187,7 @@ export class X402Service {
     }
 
     // 3. Receiver Address Validation (Server-controlled receiver protection)
-    const payloadReceiver = accepted.receiverAddress || accepted.payee || accepted.payTo;
+    const payloadReceiver = accepted.payTo || accepted.receiverAddress || accepted.payee;
     if (payloadReceiver && payloadReceiver !== requirement.receiver) {
       return {
         valid: false,
@@ -154,12 +195,30 @@ export class X402Service {
       };
     }
 
-    // 4. Amount Validation
-    if (accepted.amount && BigInt(accepted.amount) < BigInt(requirement.amount)) {
-      return {
-        valid: false,
-        error: `Insufficient payment amount '${accepted.amount}'. Required minimum: '${requirement.amount}'`,
-      };
+    // 4. Amount Validation: the facilitator requires an exact match.
+    if (accepted.amount !== undefined) {
+      let ok = false;
+      try {
+        ok = BigInt(String(accepted.amount)) === BigInt(requirement.amount);
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        return {
+          valid: false,
+          error: `Invalid payment amount '${String(accepted.amount)}'. Required: '${requirement.amount}'`,
+        };
+      }
+    }
+
+    // 5a. The facilitator settles only with a fee payer it manages, and only
+    // when the client signed against exactly that one.
+    if (!requirement.feePayer) {
+      return { valid: false, error: 'Payment requirement has no facilitator fee payer; request a new payment' };
+    }
+    const acceptedFeePayer = (accepted.extra as Record<string, unknown> | undefined)?.feePayer;
+    if (acceptedFeePayer !== undefined && acceptedFeePayer !== requirement.feePayer) {
+      return { valid: false, error: 'Payment was signed for a different fee payer than this server requested' };
     }
 
     // 5. Real network safety guard: refuse to ever execute a real facilitator
@@ -181,19 +240,7 @@ export class X402Service {
     try {
       const client = this.getFacilitatorClient();
 
-      const reqForFacilitator = {
-        scheme: requirement.scheme,
-        network: requirement.network,
-        asset: requirement.asset,
-        amount: requirement.amount,
-        payTo: requirement.receiver,
-        payee: requirement.receiver,
-        receiverAddress: requirement.receiver,
-        extra: {
-          feePayer: requirement.receiver,
-          paymentReference: requirement.paymentReference,
-        },
-      };
+      const reqForFacilitator = this.toWireRequirement(requirement);
 
       const verifyRes = await client.verify(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

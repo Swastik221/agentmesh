@@ -1665,3 +1665,94 @@
     display: none;
   }
 }
+
+/* Board warnings: unfinished dependencies and other agents' overlapping files. */
+.product-taskboard__warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 4px 0 0;
+  color: #9a5b00;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.product-taskboard__warn--overlap { color: #b3261e; }
+.product-taskboard__status--blocked { background: #fde8e6; color: #b3261e; }
+
+/* Connected terminals node. */
+.product-terminals-node {
+  width: 300px;
+  padding: 12px 14px;
+}
+.product-terminals-node__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.product-terminals-node__head span {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.product-terminals-node__empty {
+  font-size: 12px;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+.product-terminals-node__list {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  margin: 0 0 10px;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  font-size: 12px;
+}
+.product-terminals-node__list li {
+  display: grid;
+  grid-template-columns: 8px 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+}
+.product-terminals-node__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9aa4ae;
+}
+.product-terminals-node__dot.is-active { background: #2f7d5c; }
+.product-terminals-node__dot.is-disconnected { background: #c98a1a; }
+.product-terminals-node__name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.product-terminals-node__who { opacity: 0.7; white-space: nowrap; }
+.product-terminals-node__open {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* Header realtime indicator. */
+.app-header__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.app-header__live--connected { color: #2f7d5c; }
+.app-header__live--reconnecting,
+.app-header__live--connecting { color: #c98a1a; }
+.app-header__live--revoked,
+.app-header__live--disconnected { color: #b3261e; }
+
+.workspaces-notice {
+  margin: 8px 0 0;
+  color: #b3261e;
+  font-size: 14px;
+}

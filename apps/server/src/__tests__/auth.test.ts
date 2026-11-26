@@ -5,6 +5,7 @@ import { SiweMessage } from 'siwe';
 import { createApp } from '../app.js';
 import { prisma } from '../lib/prisma.js';
 import { config } from '../config/index.js';
+import { hashSessionToken } from '../auth/session.service.js';
 
 describe('PRD #8 Wallet Identity & SIWE Integration Tests', () => {
   const app = createApp();
@@ -375,8 +376,9 @@ describe('PRD #8 Wallet Identity & SIWE Integration Tests', () => {
       expect(logoutRes.status).toBe(204);
 
       // Verify session deleted from database
+      // Only the hash of the cookie token is stored.
       const dbSession = await prisma.authSession.findUnique({
-        where: { id: sessionIdA },
+        where: { tokenHash: hashSessionToken(sessionIdA) },
       });
       expect(dbSession).toBeNull();
 

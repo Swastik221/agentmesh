@@ -711,11 +711,14 @@ describe('PRD-56 Real Agent Execution Hardening Integration Tests', () => {
       asset: '0.0.429274',
     });
 
-    const paymentRef = `test-ref-${Date.now()}`;
-    const req = x402Service.generateRequirement({
-      paymentReference: paymentRef,
-      amount: '1000',
+    // A reference the server itself issued (settlement refuses invented ones).
+    const { requirement: req } = await paymentService.createPaymentRequirement({
+      projectId: testProjectA.id,
+      requesterUserId: testUser.id,
+      agentId: agent.id,
+      action: 'capability.execute',
     });
+    const paymentRef = req.paymentReference;
 
     const validHeader = JSON.stringify({
       scheme: 'exact',
@@ -730,7 +733,7 @@ describe('PRD-56 Real Agent Execution Hardening Integration Tests', () => {
       testProjectA.id,
       testUser.id,
       validHeader,
-      req,
+      paymentRef,
       agent.id,
     );
 
@@ -738,7 +741,7 @@ describe('PRD-56 Real Agent Execution Hardening Integration Tests', () => {
       testProjectA.id,
       testUser.id,
       validHeader,
-      req,
+      paymentRef,
       agent.id,
     );
 

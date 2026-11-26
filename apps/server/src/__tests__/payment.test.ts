@@ -9,6 +9,7 @@ import { connectorService } from '../connector/connector.service.js';
 import { PAYMENT_CONFIG } from '../payments/payment.config.js';
 import { x402Service } from '../payments/x402.service.js';
 import { PolicyDecision, PaymentStatus } from '@prisma/client';
+import { sessionService } from '../auth/session.service.js';
 
 const app = createApp();
 const request = supertest(app);
@@ -23,6 +24,9 @@ describe('PRD-36-C1 — Hedera x402 Agent Payment Corrective Tests', () => {
   let agent1Id: string;
 
   beforeEach(async () => {
+    // These tests exercise payment; the agents in them are treated as online.
+    // The offline case has its own test below.
+    vi.spyOn(connectorService, 'isAgentConnected').mockReturnValue(true);
     // Clean tables
     await prisma.payment.deleteMany();
     await prisma.approvalRequest.deleteMany();
@@ -43,12 +47,7 @@ describe('PRD-36-C1 — Hedera x402 Agent Payment Corrective Tests', () => {
       },
     });
 
-    const session1 = await prisma.authSession.create({
-      data: {
-        userId: user1.id,
-        expiresAt: new Date(Date.now() + 3600 * 1000),
-      },
-    });
+    const session1 = await sessionService.createSession(user1.id);
     user1Token = session1.id;
 
     // Create User 2 (unauthorized for project 1)
@@ -58,12 +57,7 @@ describe('PRD-36-C1 — Hedera x402 Agent Payment Corrective Tests', () => {
         displayName: 'User Two',
       },
     });
-    const session2 = await prisma.authSession.create({
-      data: {
-        userId: user2.id,
-        expiresAt: new Date(Date.now() + 3600 * 1000),
-      },
-    });
+    const session2 = await sessionService.createSession(user2.id);
     user2Token = session2.id;
 
     // Create Project 1 (Owned by User 1)

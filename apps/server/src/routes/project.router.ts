@@ -16,6 +16,8 @@ import {
   removeMember,
 } from '../controllers/member.controller.js';
 import { requireAuth } from '../auth/auth.middleware.js';
+import { rateLimit } from '../middleware/rate-limit.js';
+import { config } from '../config/index.js';
 
 const router: Router = Router();
 
@@ -25,7 +27,12 @@ router.post('/projects', requireAuth, createProject);
 
 // Shareable join code: the owner hands the code out, anyone signed in redeems
 // it to become a MEMBER of that exact workspace.
-router.post('/projects/join', requireAuth, joinProjectByCode);
+router.post(
+  '/projects/join',
+  requireAuth,
+  rateLimit({ name: 'join', windowMs: 60_000, max: config.rateLimits.join }),
+  joinProjectByCode,
+);
 router.get('/projects/:projectId/join-code', requireAuth, getJoinCode);
 router.post('/projects/:projectId/join-code/rotate', requireAuth, rotateJoinCode);
 

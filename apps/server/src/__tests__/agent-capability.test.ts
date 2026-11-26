@@ -450,40 +450,12 @@ describe('PRD #5 Agent Capabilities API Integration Tests', () => {
       expect(res.body.error).toBe('NOT_FOUND');
     });
 
-    it('should return 402 Payment Required when payment header is missing', async () => {
-      const res = await request(app)
-        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
-        .set('Cookie', [sessionCookie])
-        .send({
-          input: { task: 'test' },
-        });
-
-      expect(res.status).toBe(402);
-      expect(res.headers['x-payment-requirement'] || res.body.paymentRequirement).toBeDefined();
-      expect(res.body.error).toBe('Payment Required');
-    });
-
-    it('should settle payment and return execution AGENT_UNAVAILABLE when agent is disconnected', async () => {
-      const res = await request(app)
-        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
-        .set('Cookie', [sessionCookie])
-        .set('X-Payment', validPaymentHeader)
-        .send({
-          input: { query: 'disconnected-test' },
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.payment).toBeDefined();
-      expect(res.body.payment.status).toBe('SETTLED');
-      expect(res.body.execution).toBeDefined();
-      expect(res.body.execution.status).toBe('FAILED');
-      expect(res.body.execution.error).toContain('not connected');
-    }, 15000);
-
-    it('should settle payment and execute task via real connected WebSocket agent with causal proof', async () => {
-      const causalProof = 'PAID-CAPABILITY-PROOF-9876';
-
-      // Setup connected agent mock
+    /**
+     * Connects a stand-in agent socket for the duration of `fn`. It completes
+     * any task it is sent with `summary`, the way a real connector would.
+     */
+    const withConnectedAgent = async (summary: string, fn: () => Promise<void>) => {
+      let connectionMetadata: ReturnType<typeof connectionManager.addConnection> | null = null;
       const fakeSocket = {
         send: (data: string) => {
           try {
@@ -495,13 +467,7 @@ describe('PRD #5 Agent Capabilities API Integration Tests', () => {
                   type: AgentMeshMessageType.TASK_COMPLETED,
                   projectId: project1Id,
                   senderId: agent1Id,
-                  payload: {
-                    taskId,
-                    executionId,
-                    result: {
-                      summary: `Real Paid Capability Executed: ${causalProof}`,
-                    },
-                  },
+                  payload: { taskId, executionId, result: { summary } },
                 });
                 if (connectionMetadata) {
                   await connectorService.processConnectorTaskMessage(connectionMetadata, completedMsg);
@@ -517,16 +483,68 @@ describe('PRD #5 Agent Capabilities API Integration Tests', () => {
         on: () => {},
       } as unknown as WebSocket;
 
-      const connectionMetadata = connectionManager.addConnection(project1Id, fakeSocket);
+      connectionMetadata = connectionManager.addConnection(project1Id, fakeSocket);
       connectionMetadata.authenticated = true;
       connectionMetadata.agentId = agent1Id;
       connectionMetadata.userId = userId;
-
       try {
+        await fn();
+      } finally {
+        connectionManager.removeConnection(connectionMetadata.connectionId);
+      }
+    };
+
+    /** The x402 flow: ask, get a 402 with a reference, then pay against it. */
+    const requestReference = async (): Promise<string> => {
+      const quote = await request(app)
+        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+        .set('Cookie', [sessionCookie])
+        .send({});
+      expect(quote.status).toBe(402);
+      return quote.body.paymentRequirement.paymentReference as string;
+    };
+
+    it('should return 402 Payment Required when payment header is missing', async () => {
+      await withConnectedAgent('unused', async () => {
+        const res = await request(app)
+          .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+          .set('Cookie', [sessionCookie])
+          .send({
+            input: { task: 'test' },
+          });
+
+        expect(res.status).toBe(402);
+        expect(res.headers['payment-required']).toBeDefined();
+        expect(res.headers['x-payment-requirement'] || res.body.paymentRequirement).toBeDefined();
+        expect(res.body.error).toBe('Payment Required');
+      });
+    });
+
+    it('should neither quote nor charge when the agent is disconnected', async () => {
+      const before = await prisma.payment.count({ where: { agentId: agent1Id, status: 'SETTLED' } });
+      const res = await request(app)
+        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+        .set('Cookie', [sessionCookie])
+        .set('X-Payment', validPaymentHeader)
+        .send({
+          input: { query: 'disconnected-test' },
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('AGENT_UNAVAILABLE');
+      expect(res.body.message).toContain('not been charged');
+      expect(await prisma.payment.count({ where: { agentId: agent1Id, status: 'SETTLED' } })).toBe(before);
+    });
+
+    it('should settle payment and execute task via real connected WebSocket agent with causal proof', async () => {
+      const causalProof = 'PAID-CAPABILITY-PROOF-9876';
+      await withConnectedAgent(`Real Paid Capability Executed: ${causalProof}`, async () => {
+        const reference = await requestReference();
         const res = await request(app)
           .post(`/agents/${agent1Id}/capabilities/backend/execute`)
           .set('Cookie', [sessionCookie])
           .set('X-Payment', validPaymentHeader)
+          .set('X-Payment-Reference', reference)
           .send({
             input: { query: causalProof },
           });
@@ -538,51 +556,57 @@ describe('PRD #5 Agent Capabilities API Integration Tests', () => {
         expect(res.body.execution.status).toBe('COMPLETED');
         expect(res.body.execution.output || res.body.result).toBeDefined();
         expect(JSON.stringify(res.body.execution.output || res.body.result)).toContain(causalProof);
-      } finally {
-        if (connectionMetadata) {
-          connectionManager.removeConnection(connectionMetadata.connectionId);
-        }
-      }
+      });
     }, 15000);
 
-    it('should enforce idempotency and return existing execution result on duplicate payment reference', async () => {
-      const reqRes = await request(app)
-        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
-        .set('Cookie', [sessionCookie])
-        .send({});
-
-      const reqData = reqRes.body.paymentRequirement;
-      const customPaymentHeader = JSON.stringify({
-        scheme: 'exact',
-        network: PAYMENT_CONFIG.NETWORK || 'hedera:testnet',
-        asset: PAYMENT_CONFIG.USDC_TOKEN_ID || '0.0.429274',
-        amount: '1000',
-        receiverAddress: PAYMENT_CONFIG.RECEIVER_ADDRESS,
-        paymentReference: reqData.paymentReference,
+    it('should refuse a payment that does not name a reference this server issued', async () => {
+      await withConnectedAgent('unused', async () => {
+        const res = await request(app)
+          .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+          .set('Cookie', [sessionCookie])
+          .set('X-Payment', validPaymentHeader)
+          .set('X-Payment-Reference', 'x402_invented_by_client')
+          .send({});
+        expect(res.status).toBe(400);
+        expect(res.body.message).toMatch(/Unknown payment reference/);
       });
+    });
 
-      // First call (agent disconnected -> SETTLED + FAILED)
-      const res1 = await request(app)
-        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
-        .set('Cookie', [sessionCookie])
-        .set('X-Payment', customPaymentHeader)
-        .set('X-Payment-Reference', reqData.paymentReference)
-        .send({ input: { query: 'idempotent-test' } });
+    it('should enforce idempotency and return existing execution result on duplicate payment reference', async () => {
+      await withConnectedAgent('idempotent result', async () => {
+        const reference = await requestReference();
+        const customPaymentHeader = JSON.stringify({
+          scheme: 'exact',
+          network: PAYMENT_CONFIG.NETWORK || 'hedera:testnet',
+          asset: PAYMENT_CONFIG.USDC_TOKEN_ID || '0.0.429274',
+          amount: '1000',
+          payTo: PAYMENT_CONFIG.RECEIVER_ADDRESS,
+          paymentReference: reference,
+        });
 
-      expect(res1.status).toBe(200);
-      expect(res1.body.payment.status).toBe('SETTLED');
+        const res1 = await request(app)
+          .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+          .set('Cookie', [sessionCookie])
+          .set('X-Payment', customPaymentHeader)
+          .set('X-Payment-Reference', reference)
+          .send({ input: { query: 'idempotent-test' } });
 
-      // Second call with exact same payment reference
-      const res2 = await request(app)
-        .post(`/agents/${agent1Id}/capabilities/backend/execute`)
-        .set('Cookie', [sessionCookie])
-        .set('X-Payment', customPaymentHeader)
-        .set('X-Payment-Reference', reqData.paymentReference)
-        .send({ input: { query: 'idempotent-test' } });
+        expect(res1.status).toBe(200);
+        expect(res1.body.payment.status).toBe('SETTLED');
 
-      expect(res2.status).toBe(200);
-      expect(res2.body.payment.status).toBe('SETTLED');
-      expect(res2.body.payment.id).toBe(res1.body.payment.id);
+        // Second call with exact same payment reference
+        const res2 = await request(app)
+          .post(`/agents/${agent1Id}/capabilities/backend/execute`)
+          .set('Cookie', [sessionCookie])
+          .set('X-Payment', customPaymentHeader)
+          .set('X-Payment-Reference', reference)
+          .send({ input: { query: 'idempotent-test' } });
+
+        expect(res2.status).toBe(200);
+        expect(res2.body.payment.status).toBe('SETTLED');
+        expect(res2.body.payment.id).toBe(res1.body.payment.id);
+        expect(res2.body.execution.id).toBe(res1.body.execution.id);
+      });
     }, 15000);
   });
 });

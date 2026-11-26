@@ -7,6 +7,14 @@ export interface X402PaymentRequirement {
   amount: string;
   receiver: string;
   paymentReference: string;
+  /** Seconds the signed payment is valid; must match exactly at settlement. */
+  maxTimeoutSeconds: number;
+  /**
+   * The facilitator-managed account that pays the Hedera network fee. Taken
+   * from the facilitator's /supported response, never from the client: the
+   * facilitator refuses any fee payer it does not manage.
+   */
+  feePayer?: string;
 }
 
 export interface X402PaymentPayload {

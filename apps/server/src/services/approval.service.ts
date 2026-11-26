@@ -7,6 +7,13 @@ import { connectionManager } from '../websocket/connection.manager.js';
 import type { WebSocketMessage } from '../websocket/websocket.types.js';
 import { activityService } from './activity.service.js';
 
+const RESUMABLE_ACTIONS = new Set(['task.execute', 'agent.execute', 'capability.execute', 'artifact.write']);
+
+/** Whether approving this request re-runs a blocked action. */
+function isResumable(approval: Pick<ApprovalRequest, 'action' | 'metadata'>): boolean {
+  return Boolean(approval.metadata && typeof approval.metadata === 'object' && RESUMABLE_ACTIONS.has(approval.action));
+}
+
 export class ApprovalService {
   async verifyProjectMembership(projectId: string, userId: string): Promise<void> {
     const project = await prisma.project.findUnique({
@@ -278,6 +285,9 @@ export class ApprovalService {
           resolvedByUserId: userId,
           resolvedAt: new Date(),
           reason: reason || existing.reason,
+          // Recorded with the decision: this approval owes a resumed action.
+          resumeStatus: isResumable(existing) ? 'PENDING' : 'NOT_APPLICABLE',
+          resumeAttempts: isResumable(existing) ? 1 : 0,
         },
       });
 
@@ -298,8 +308,12 @@ export class ApprovalService {
       return resolved!;
     });
 
-    // Resume original blocked action (propagating failure cleanly if resume fails)
-    await this.resumeBlockedAction(updatedApproval);
+    // Resume the blocked action. Its outcome is written back to the approval
+    // either way; a failure still propagates to the approver, and the
+    // approval is left FAILED (retryable) rather than silently APPROVED.
+    if (updatedApproval.resumeStatus === 'PENDING') {
+      await this.runResume(updatedApproval);
+    }
 
     // Notify WS subscribers & activity log
     try {
@@ -407,9 +421,74 @@ export class ApprovalService {
     return updatedApproval;
   }
 
-  private async resumeBlockedAction(approval: ApprovalRequest): Promise<void> {
+  /**
+   * Runs the resumed action for an approval whose resumeStatus has already
+   * been claimed as PENDING, and records DONE or FAILED.
+   */
+  private async runResume(approval: ApprovalRequest): Promise<string | null> {
+    try {
+      const resultId = await this.resumeBlockedAction(approval);
+      await prisma.approvalRequest.update({
+        where: { id: approval.id },
+        data: { resumeStatus: 'DONE', resumeError: null, resumeResultId: resultId, resumedAt: new Date() },
+      });
+      return resultId;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await prisma.approvalRequest
+        .update({ where: { id: approval.id }, data: { resumeStatus: 'FAILED', resumeError: message.slice(0, 1000) } })
+        .catch(() => {});
+      throw err;
+    }
+  }
+
+  /**
+   * Retries the action of an approved request whose resume failed (or was
+   * interrupted by a restart). Same authority as approving. The FAILED →
+   * PENDING claim is atomic, so two concurrent retries cannot both run it.
+   */
+  async retryResume(approvalId: string, userId: string): Promise<ApprovalRequest> {
+    const existing = await prisma.approvalRequest.findUnique({ where: { id: approvalId } });
+    if (!existing) {
+      throw new NotFoundError(`Approval request with ID '${approvalId}' not found`);
+    }
+    const role = await getProjectRole(existing.projectId, userId);
+    if (role === ProjectRole.VIEWER) {
+      throw new ForbiddenError('Viewers cannot retry approvals');
+    }
+    if (existing.requestedByUserId === userId && !PROJECT_MANAGER_ROLES.includes(role)) {
+      throw new ForbiddenError('Another member, or a project OWNER or ADMIN, must retry your request.');
+    }
+
+    const claimed = await prisma.approvalRequest.updateMany({
+      where: { id: approvalId, status: ApprovalStatus.APPROVED, resumeStatus: 'FAILED' },
+      data: { resumeStatus: 'PENDING', resumeError: null, resumeAttempts: { increment: 1 } },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictError('Nothing to retry: the approval is not approved with a failed action, or a retry is already running');
+    }
+
+    const approval = (await prisma.approvalRequest.findUnique({ where: { id: approvalId } }))!;
+    await this.runResume(approval);
+    return (await prisma.approvalRequest.findUnique({ where: { id: approvalId } }))!;
+  }
+
+  /**
+   * A resume that was running when the server stopped did not finish. Mark it
+   * FAILED so a human can retry it; it is never re-run automatically, since
+   * creating an execution or artifact is not idempotent.
+   */
+  async reconcileOnStartup(): Promise<number> {
+    const result = await prisma.approvalRequest.updateMany({
+      where: { resumeStatus: 'PENDING' },
+      data: { resumeStatus: 'FAILED', resumeError: 'Interrupted by a server restart. Retry it explicitly.' },
+    });
+    return result.count;
+  }
+
+  private async resumeBlockedAction(approval: ApprovalRequest): Promise<string | null> {
     if (!approval.metadata || typeof approval.metadata !== 'object') {
-      return;
+      return null;
     }
 
     if (
@@ -436,12 +515,13 @@ export class ApprovalService {
       }
 
       const { executionService } = await import('../execution/execution.service.js');
-      await executionService.createExecutionBypassingPolicy(
+      const execution = await executionService.createExecutionBypassingPolicy(
         approval.projectId,
         taskId,
         originalRequesterUserId,
         { agentId, input },
       );
+      return execution.id;
     } else if (approval.action === 'artifact.write') {
       const taskId = typeof meta.taskId === 'string' ? meta.taskId : undefined;
       const artifactData = meta.artifactData as import('./artifact.service.js').CreateArtifactInput | undefined;
@@ -451,13 +531,15 @@ export class ApprovalService {
       }
 
       const { artifactService } = await import('./artifact.service.js');
-      await artifactService.createArtifactBypassingPolicy(
+      const artifact = await artifactService.createArtifactBypassingPolicy(
         approval.projectId,
         taskId,
         originalRequesterUserId,
         artifactData,
       );
+      return artifact.id;
     }
+    return null;
   }
 }
 
