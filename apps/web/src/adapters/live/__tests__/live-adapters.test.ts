@@ -4,7 +4,6 @@ import { liveAuthAdapter, LiveAuthError } from '../auth.adapter';
 import { liveAgentConnectionAdapter, LiveAgentConnectionError } from '../agent-connection.adapter';
 import { liveTaskProtocolAdapter, LiveTaskProtocolError } from '../task-protocol.adapter';
 import { liveFileAdapter, LiveFileAdapterError } from '../file.adapter';
-import { liveTerminalAdapter, LiveTerminalError } from '../terminal.adapter';
 import { liveBrowserPreviewAdapter, LiveBrowserPreviewError } from '../browser-preview.adapter';
 import { liveWorkspaceRealtimeAdapter } from '../workspace-realtime.adapter';
 import { getAdapters, adapters } from '../../index';
@@ -145,11 +144,6 @@ describe('INT-1-C3 Live Adapters Contract Alignment & Mode Isolation Tests', () 
       await expect(liveFileAdapter.readFile('ws_1', 'file.txt')).rejects.toThrow(LiveFileAdapterError);
       await expect(liveFileAdapter.getArtifacts('ws_1')).rejects.toThrow(LiveFileAdapterError);
       await expect(liveFileAdapter.publishArtifact('ws_1', { id: 'art_1', name: 'n', schema: 's', hash: 'h', publishedBy: 'p', usedBy: 'u' })).rejects.toThrow(LiveFileAdapterError);
-    });
-
-    it('throws LiveTerminalError on createSession and executeCommand', async () => {
-      await expect(liveTerminalAdapter.createSession('agent_1')).rejects.toThrow(LiveTerminalError);
-      await expect(liveTerminalAdapter.executeCommand('sess_1', 'ls')).rejects.toThrow(LiveTerminalError);
     });
 
     it('throws LiveBrowserPreviewError on getPreview', async () => {

@@ -5,7 +5,11 @@ import {
   AgentMeshMessageType,
   createWorkspaceSnapshotMessage,
   createWorkspacePresenceChangedMessage,
+  isCoordinationMessageType,
 } from '@agentmesh/agent-protocol';
+import { handleCoordinationMessage } from './coordination.handler.js';
+import { terminalService } from '../terminals/terminal.service.js';
+import { isExecutorConnection } from './connection.manager.js';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
 import { connectionManager } from './connection.manager.js';
@@ -267,18 +271,37 @@ export class AgentMeshWebSocketServer {
     const httpSessionId = extractSessionIdFromReq(req);
     const metadata = connectionManager.addConnection(projectId, ws, httpSessionId);
 
+    // Resolving the connect token takes a database round trip. A client sends
+    // its handshake the moment the socket opens, so the message listener must
+    // be attached now, not after that await, or the handshake is lost and the
+    // client waits forever. Messages are held until the token is resolved and
+    // then handled in arrival order.
     const presentedConnectToken = extractConnectTokenFromReq(req);
-    if (presentedConnectToken) {
-      try {
-        const resolved = await agentConnectTokenService.resolve(presentedConnectToken);
-        if (resolved.projectId === projectId) {
-          metadata.connectToken = resolved;
-        }
-      } catch {
-        // Already rejected at upgrade time; a token that expires in between
-        // simply leaves the connection unauthenticated and the handshake fails.
-      }
-    }
+    const ready: Promise<void> = presentedConnectToken
+      ? agentConnectTokenService
+          .resolve(presentedConnectToken)
+          .then((resolved) => {
+            if (resolved.projectId === projectId) {
+              metadata.connectToken = resolved;
+            }
+          })
+          .catch(() => {
+            // Already rejected at upgrade time; a token that expires in between
+            // simply leaves the connection unauthenticated and the handshake fails.
+          })
+      : Promise.resolve();
+
+    ws.on('message', (data: RawData) => {
+      // Fire-and-forget async boundary: never allow message handling to leak an
+      // unhandled rejection (e.g. delta recording racing workspace teardown).
+      ready
+        .then(() => this.handleIncomingMessage(metadata, data))
+        .catch((err: unknown) => {
+          logger.error(`[WebSocket] Error handling message on ${metadata.connectionId}:`, err);
+        });
+    });
+
+    await ready;
     logger.info(
       `[WebSocket] Connection ${metadata.connectionId} established for project ${projectId}`,
     );
@@ -288,19 +311,22 @@ export class AgentMeshWebSocketServer {
       metadata.lastHeartbeat = Date.now();
     });
 
-    ws.on('message', (data: RawData) => {
-      // Fire-and-forget async boundary: never allow message handling to leak an
-      // unhandled rejection (e.g. delta recording racing workspace teardown).
-      this.handleIncomingMessage(metadata, data).catch((err: unknown) => {
-        logger.error(`[WebSocket] Error handling message on ${metadata.connectionId}:`, err);
-      });
-    });
-
     ws.on('close', async () => {
       try {
         logger.info(
           `[WebSocket] Connection ${metadata.connectionId} closed for project ${projectId}`,
         );
+        await terminalService.onConnectionClosed(metadata).catch((err: unknown) => {
+          logger.error('[WebSocket] Terminal cleanup failed:', err);
+        });
+
+        // A terminal or observer connection sits next to a running executor;
+        // its going away says nothing about the agent's presence.
+        if (metadata.agentId && !isExecutorConnection(metadata)) {
+          connectionManager.removeConnection(metadata.connectionId);
+          return;
+        }
+
         const isUser = Boolean(metadata.userId);
         const userId = metadata.userId;
         const isAgent = Boolean(metadata.agentId);
@@ -627,7 +653,7 @@ export class AgentMeshWebSocketServer {
       const handshakeResult = await handshakeService.processHandshake(metadata, parsed);
       this.sendJson(metadata.socket, handshakeResult.message as unknown as WebSocketMessage);
 
-      if (handshakeResult.success && metadata.agentId) {
+      if (handshakeResult.success && metadata.agentId && isExecutorConnection(metadata)) {
         const presenceMsg = createWorkspacePresenceChangedMessage(
           {
             projectId: metadata.projectId,
@@ -704,6 +730,12 @@ export class AgentMeshWebSocketServer {
           error?.message || 'Failed to process workspace resync',
         );
       }
+      return;
+    }
+
+    // Connected terminals and structured workspace context.
+    if (isCoordinationMessageType(message.type)) {
+      await handleCoordinationMessage(metadata, parsed);
       return;
     }
 

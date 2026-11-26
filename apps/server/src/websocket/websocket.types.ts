@@ -33,6 +33,19 @@ export interface ConnectionMetadata {
    * session. Scoped to exactly this agent in this project; it never stands in
    * for a user login anywhere else.
    */
+  /**
+   * Declared in the handshake. Only `executor` connections (or ones that
+   * declared nothing, the historical behaviour) receive tasks and make the
+   * agent count as online. `terminal` and `observer` connections exist next to
+   * a running executor and must never be mistaken for one.
+   */
+  connectionRole?: 'executor' | 'terminal' | 'observer';
+  /** Terminal sessions this connection streams, as their owner. */
+  ownedTerminalIds?: Set<string>;
+  /** Terminal sessions this connection is viewing. */
+  subscribedTerminalIds?: Set<string>;
+  /** Recent message ids, to drop duplicates and replays on this connection. */
+  recentMessageIds?: string[];
   connectToken?: {
     agentId: string;
     projectId: string;

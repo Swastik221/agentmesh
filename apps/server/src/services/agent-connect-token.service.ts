@@ -24,6 +24,15 @@ import { ForbiddenError, NotFoundError, UnauthorizedError } from '../errors/app-
 /** Ten minutes is enough to paste a command into a terminal, and little else. */
 export const CONNECT_TOKEN_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * Lifetime of the resume token handed back on every accepted handshake. It
+ * lets a long-running connector (an agent, a shared terminal) reconnect after
+ * a network blip or server restart without a fresh token from the UI. It is
+ * rotated on every handshake, and the handshake still re-checks agent
+ * ownership and project membership, so it never outlives the user's access.
+ */
+export const RESUME_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+
 const TOKEN_PREFIX = 'amct_';
 
 export interface IssuedConnectToken {
@@ -90,6 +99,19 @@ export class AgentConnectTokenService {
     });
 
     return { token, agentId: agent.id, projectId: agent.projectId, expiresAt };
+  }
+
+  /**
+   * Mints a resume token for a connection that has just completed a
+   * handshake. The caller has already verified ownership and membership.
+   */
+  async issueResume(agentId: string, projectId: string, issuedByUserId: string): Promise<IssuedConnectToken> {
+    const token = `${TOKEN_PREFIX}${crypto.randomBytes(32).toString('base64url')}`;
+    const expiresAt = new Date(Date.now() + RESUME_TOKEN_TTL_MS);
+    await prisma.agentConnectToken.create({
+      data: { tokenHash: hashToken(token), agentId, projectId, issuedByUserId, expiresAt },
+    });
+    return { token, agentId, projectId, expiresAt };
   }
 
   /**

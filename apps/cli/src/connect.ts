@@ -2,6 +2,8 @@ import readline from 'node:readline';
 import { AgentMeshClient } from './client.js';
 import { MockAgentAdapter } from './adapter/mock-agent.adapter.js';
 import { RealAgentAdapter } from './adapter/real-agent.adapter.js';
+import { CoordinationMessageType, workspaceContextSchema } from '@agentmesh/agent-protocol';
+import { formatContext } from './context.js';
 
 export interface ConnectOptions {
   workspace: string;
@@ -68,6 +70,20 @@ export async function runConnect(options: ConnectOptions): Promise<AgentMeshClie
     ...(connectToken ? { connectToken } : {}),
     ...(sessionId ? { sessionId } : {}),
     adapter,
+    // Replies to /context and /tail typed at the prompt below.
+    onFrame: (frame) => {
+      const payload = (frame.payload ?? {}) as Record<string, unknown>;
+      if (frame.type === CoordinationMessageType.WORKSPACE_CONTEXT) {
+        const parsed = workspaceContextSchema.safeParse(payload.context);
+        console.log(parsed.success ? `\n${formatContext(parsed.data)}\n` : '\n[context] unreadable reply\n');
+        return true;
+      }
+      if (frame.type === CoordinationMessageType.TERMINAL_TAIL) {
+        console.log(`\n[tail ${payload.terminalId as string}]\n${payload.data as string}\n`);
+        return true;
+      }
+      return false;
+    },
   });
 
   console.log(
@@ -79,6 +95,8 @@ export async function runConnect(options: ConnectOptions): Promise<AgentMeshClie
   console.log(`  /who              list the other agents on this workspace`);
   console.log(`  /offers           list the tasks open to any agent right now`);
   console.log(`  /claim <task-id>  take an open task for this agent`);
+  console.log(`  /context [files]  what other agents are doing, and what overlaps these files`);
+  console.log(`  /tail <terminal>  recent output of a terminal shared with you`);
   console.log(`  @<agent> <text>   send that agent a direct message`);
   console.log(`Ctrl+C to disconnect.\n`);
 
@@ -133,6 +151,28 @@ export async function runConnect(options: ConnectOptions): Promise<AgentMeshClie
         console.log('\n[usage] /claim <task-id>   (see /offers)\n');
       } else {
         client.claimOffer(taskId);
+      }
+      rl.prompt();
+      return;
+    }
+
+    // /context [a,b]: structured workspace awareness, optionally focused on files.
+    if (trimmed === '/context' || trimmed.startsWith('/context ')) {
+      const files = trimmed.slice('/context'.length).trim().split(/[\s,]+/).filter(Boolean);
+      client.sendFrame(
+        CoordinationMessageType.WORKSPACE_CONTEXT_REQUEST,
+        files.length ? { focus: { filePaths: files } } : {},
+      );
+      rl.prompt();
+      return;
+    }
+
+    if (trimmed.startsWith('/tail')) {
+      const terminalId = trimmed.slice('/tail'.length).trim();
+      if (!terminalId) {
+        console.log('\n[usage] /tail <terminal-id>   (see /context)\n');
+      } else {
+        client.sendFrame(CoordinationMessageType.TERMINAL_TAIL_REQUEST, { terminalId });
       }
       rl.prompt();
       return;

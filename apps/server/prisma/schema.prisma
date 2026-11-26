@@ -28,8 +28,8 @@ enum AgentStatus {
 }
 
 model User {
-  id            String              @id @default(cuid())
-  walletAddress String?             @unique
+  id            String    @id @default(cuid())
+  walletAddress String?   @unique
   displayName   String?
   /// Primary ENS name for walletAddress, cached after a verified round trip
   /// (reverse record confirmed by forward resolution). Null means the wallet
@@ -38,54 +38,55 @@ model User {
   /// When ensName was last refreshed from the chain. Used to avoid an RPC call
   /// on every sign-in; null means it has never been looked up.
   ensCheckedAt  DateTime?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  ownedProjects Project[]           @relation("UserOwnedProjects")
-  memberships   ProjectMember[]     @relation("UserProjectMemberships")
-  ownedAgents   Agent[]             @relation("UserOwnedAgents")
-  authSessions  AuthSession[]
-  brainEntries  ProjectBrainEntry[]
-  createdTasks  Task[]
-  artifacts     Artifact[]
-  artifactsReviewed Artifact[] @relation("ArtifactReviewer")
-  approvalRequestsRequested ApprovalRequest[] @relation("ApprovalRequester")
-  approvalRequestsResolved  ApprovalRequest[] @relation("ApprovalResolver")
-  payments                  Payment[]         @relation("PaymentRequester")
+  ownedProjects             Project[]           @relation("UserOwnedProjects")
+  memberships               ProjectMember[]     @relation("UserProjectMemberships")
+  ownedAgents               Agent[]             @relation("UserOwnedAgents")
+  authSessions              AuthSession[]
+  brainEntries              ProjectBrainEntry[]
+  createdTasks              Task[]
+  artifacts                 Artifact[]
+  artifactsReviewed         Artifact[]          @relation("ArtifactReviewer")
+  approvalRequestsRequested ApprovalRequest[]   @relation("ApprovalRequester")
+  approvalRequestsResolved  ApprovalRequest[]   @relation("ApprovalResolver")
+  payments                  Payment[]           @relation("PaymentRequester")
   agentConnectTokens        AgentConnectToken[] @relation("AgentConnectTokenIssuer")
+  terminalSessions          TerminalSession[]   @relation("TerminalSessionOwner")
   invitationsSent           ProjectInvitation[] @relation("InvitationInviter")
 
   @@map("users")
 }
 
-
 model Project {
-  id           String              @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String
   description  String?
   ownerId      String
   /// Shareable code the owner hands out so a teammate can join this exact
   /// workspace. Nullable because it is minted on first use rather than
   /// backfilled, and unique so a code can only ever resolve to one project.
-  joinCode     String?             @unique
-  lastSequence Int                 @default(0)
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  joinCode     String?  @unique
+  lastSequence Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  owner        User                @relation("UserOwnedProjects", fields: [ownerId], references: [id], onDelete: Restrict)
-  members      ProjectMember[]
-  agents       Agent[]
-  brainEntries ProjectBrainEntry[]
-  tasks        Task[]
-  workspace    ProjectWorkspace?
-  artifacts    Artifact[]
-  taskDependencies TaskDependency[]
-  activityEvents   ActivityEvent[]
-  policies         Policy[]
-  approvalRequests ApprovalRequest[]
-  payments         Payment[]
-  invitations      ProjectInvitation[]
+  owner              User                @relation("UserOwnedProjects", fields: [ownerId], references: [id], onDelete: Restrict)
+  members            ProjectMember[]
+  agents             Agent[]
+  brainEntries       ProjectBrainEntry[]
+  tasks              Task[]
+  workspace          ProjectWorkspace?
+  artifacts          Artifact[]
+  taskDependencies   TaskDependency[]
+  activityEvents     ActivityEvent[]
+  policies           Policy[]
+  approvalRequests   ApprovalRequest[]
+  payments           Payment[]
+  invitations        ProjectInvitation[]
   agentConnectTokens AgentConnectToken[]
+  terminalSessions   TerminalSession[]
 
   @@index([ownerId])
   @@map("projects")
@@ -105,10 +106,10 @@ model ProjectInvitation {
   project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   inviterUser User    @relation("InvitationInviter", fields: [inviterUserId], references: [id], onDelete: Cascade)
 
+  @@unique([projectId, invitedWallet, status])
   @@index([projectId])
   @@index([invitedWallet])
   @@index([status])
-  @@unique([projectId, invitedWallet, status])
   @@map("project_invitations")
 }
 
@@ -119,8 +120,8 @@ model ProjectMember {
   role      ProjectRole
   createdAt DateTime    @default(now())
 
-  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User        @relation("UserProjectMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation("UserProjectMemberships", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
   @@index([projectId])
@@ -154,6 +155,7 @@ model Agent {
   approvalRequests     ApprovalRequest[]
   payments             Payment[]
   connectTokens        AgentConnectToken[]
+  terminalSessions     TerminalSession[]
 
   @@index([projectId])
   @@index([ownerId])
@@ -330,25 +332,25 @@ enum ArtifactStatus {
 }
 
 model Artifact {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   projectId   String
   taskId      String
   executionId String?
   agentId     String
   ownerUserId String
 
-  type        String
-  name        String
-  version     Int      @default(1)
-  payload     Json
-  status      ArtifactStatus @default(PENDING)
-  requiresReview Boolean     @default(false)
+  type           String
+  name           String
+  version        Int            @default(1)
+  payload        Json
+  status         ArtifactStatus @default(PENDING)
+  requiresReview Boolean        @default(false)
   reviewedById   String?
   reviewedAt     DateTime?
   reviewNote     String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task         Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
@@ -388,9 +390,9 @@ model TaskExecution {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  task     Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  agent    Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  worktree GitWorktree?
+  task      Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agent     Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  worktree  GitWorktree?
   artifacts Artifact[]
 
   @@index([taskId])
@@ -563,7 +565,6 @@ model Payment {
   @@map("payments")
 }
 
-
 /// Short-lived credential that lets one BYOA agent process open a WebSocket for
 /// exactly one agent in one project. Deliberately not a session: it cannot be
 /// used against the REST API, it carries no user login, and it expires. Only
@@ -587,4 +588,45 @@ model AgentConnectToken {
   @@index([projectId])
   @@index([expiresAt])
   @@map("agent_connect_tokens")
+}
+
+enum TerminalVisibility {
+  PRIVATE
+  SHARED
+}
+
+enum TerminalSessionStatus {
+  ACTIVE
+  DISCONNECTED
+  CLOSED
+}
+
+/// A developer's local terminal connected to the workspace. Metadata only:
+/// output is never persisted. It lives in a bounded in-memory buffer on the
+/// server and is forwarded only to viewers the visibility allows.
+model TerminalSession {
+  id           String                @id @default(cuid())
+  projectId    String
+  ownerUserId  String
+  agentId      String?
+  name         String
+  command      String?
+  cwd          String?
+  visibility   TerminalVisibility    @default(PRIVATE)
+  status       TerminalSessionStatus @default(ACTIVE)
+  cols         Int?
+  rows         Int?
+  lastActiveAt DateTime              @default(now())
+  closedAt     DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner   User    @relation("TerminalSessionOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([ownerUserId])
+  @@index([agentId])
+  @@map("terminal_sessions")
 }

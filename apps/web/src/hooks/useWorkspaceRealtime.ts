@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AgentMeshMessageType, PROTOCOL_VERSION } from '@agentmesh/agent-protocol';
 import { envConfig } from '../config/env';
 
@@ -71,6 +71,20 @@ export interface UseWorkspaceRealtimeResult {
   status: RealtimeConnectionStatus;
   /** The last sequence number this hook has applied; 0 before the first snapshot. */
   sequence: number;
+  /**
+   * Sends a protocol envelope on this hook's socket (terminal subscribe and
+   * the like). Returns false when not connected; callers resend once
+   * `status` is 'connected' again, since subscriptions do not survive a
+   * reconnect.
+   */
+  send: (type: string, payload: unknown) => boolean;
+}
+
+/** A frame this hook does not interpret itself, handed to `onMessage`. */
+export interface RealtimeFrame {
+  type: string;
+  payload: unknown;
+  correlationId?: string;
 }
 
 const RECONNECT_BASE_DELAY_MS = 1000;
@@ -89,6 +103,8 @@ export interface UseWorkspaceRealtimeCallbacks {
    * complete, rather than only as current as whatever fit in the summary.
    */
   onResync?: () => void;
+  /** Any other frame (terminal output, terminal session changes, errors). */
+  onMessage?: (frame: RealtimeFrame) => void;
 }
 
 export function useWorkspaceRealtime(
@@ -99,6 +115,27 @@ export function useWorkspaceRealtime(
   const [sequence, setSequence] = useState(0);
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
+  const socketRef = useRef<WebSocket | null>(null);
+
+  const send = useCallback(
+    (type: string, payload: unknown): boolean => {
+      const ws = socketRef.current;
+      if (!projectId || !ws || ws.readyState !== WebSocket.OPEN) return false;
+      ws.send(
+        JSON.stringify({
+          id: crypto.randomUUID(),
+          protocolVersion: PROTOCOL_VERSION,
+          projectId,
+          senderId: 'user-client',
+          timestamp: new Date().toISOString(),
+          type,
+          payload,
+        }),
+      );
+      return true;
+    },
+    [projectId],
+  );
 
   useEffect(() => {
     if (!projectId) {
@@ -143,6 +180,7 @@ export function useWorkspaceRealtime(
       const url = `${base}/ws?projectId=${encodeURIComponent(projectId)}&clientType=user`;
       const ws = new WebSocket(url);
       socket = ws;
+      socketRef.current = ws;
 
       ws.onopen = () => {
         if (!active) return;
@@ -222,6 +260,7 @@ export function useWorkspaceRealtime(
           }
 
           default:
+            callbacksRef.current?.onMessage?.(data as RealtimeFrame);
             return;
         }
       };
@@ -254,5 +293,5 @@ export function useWorkspaceRealtime(
     };
   }, [projectId]);
 
-  return { status, sequence };
+  return { status, sequence, send };
 }

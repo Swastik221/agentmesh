@@ -8,7 +8,7 @@ import type { Node } from '@xyflow/react';
  * whose output already streams onto that agent's card on the canvas.
  */
 export type SectionId =
-  'overview' | 'agents' | 'tasks' | 'files' | 'activity' | 'team' | 'notes';
+  'overview' | 'agents' | 'tasks' | 'terminals' | 'awareness' | 'files' | 'activity' | 'team' | 'notes';
 
 export interface NavItem {
   id: SectionId;

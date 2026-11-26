@@ -6,3 +6,5 @@ export * from './validation.js';
 export * from './serialization.js';
 export * from './lifecycle.js';
 export * from './builders.js';
+export * from './coordination.js';
+export * from './redaction.js';

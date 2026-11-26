@@ -18,6 +18,8 @@ export const navItems: NavItem[] = [
   { id: 'overview', label: 'Project' },
   { id: 'agents', label: 'Agents' },
   { id: 'tasks', label: 'Tasks' },
+  { id: 'terminals', label: 'Terminals' },
+  { id: 'awareness', label: 'Awareness' },
   { id: 'files', label: 'Files' },
   { id: 'activity', label: 'Activity' },
   { id: 'team', label: 'Team' },

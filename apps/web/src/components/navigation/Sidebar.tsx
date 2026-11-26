@@ -7,6 +7,8 @@ import {
   ListChecks,
   PanelLeftClose,
   PanelLeftOpen,
+  Radar,
+  SquareTerminal,
   StickyNote,
   Users,
 } from 'lucide-react';
@@ -18,6 +20,8 @@ const SECTION_ICONS: Record<SectionId, ComponentType<NavItemIconProps>> = {
   overview: LayoutDashboard,
   agents: Bot,
   tasks: ListChecks,
+  terminals: SquareTerminal,
+  awareness: Radar,
   files: FolderTree,
   activity: Activity,
   team: Users,

@@ -54,7 +54,7 @@ import {
 
 
 
-interface WorkspaceViewProps {
+export interface WorkspaceViewProps {
   onOpenCanvas(): void;
 }
 
@@ -94,7 +94,7 @@ const EXECUTION_STATUS_META: Record<LiveExecutionStatus, { label: string; classN
   CANCELLED: { label: 'Cancelled', className: 'is-cancelled' },
 };
 
-function ViewHeader({ eyebrow, title, description, onOpenCanvas }: { eyebrow: string; title: string; description: string; onOpenCanvas(): void }) {
+export function ViewHeader({ eyebrow, title, description, onOpenCanvas }: { eyebrow: string; title: string; description: string; onOpenCanvas(): void }) {
   return (
     <header className="workspace-view__header">
       <div>
@@ -200,7 +200,7 @@ function LiveAgentsView({ onOpenCanvas }: WorkspaceViewProps) {
 
       {!projectId ? (
         <p className="workspace-view__note"><Sparkles /> Open a project to see its registered agents.</p>
-      ) : loading ? (
+      ) : loading && liveAgents.length === 0 ? (
         <p role="status" className="workspace-view__note">Loading agents…</p>
       ) : error ? (
         <div role="alert" className="workspace-view__note"><span>{error}</span> <button type="button" onClick={() => void refetch()}>Retry</button></div>
@@ -802,7 +802,7 @@ function LiveTasksView({ onOpenCanvas }: WorkspaceViewProps) {
 
       {!projectId ? (
         <p className="workspace-view__note"><Sparkles /> Open a project to see its shared task board.</p>
-      ) : loading ? (
+      ) : loading && tasks.length === 0 ? (
         <p role="status" className="workspace-view__note">Loading tasks…</p>
       ) : error ? (
         <div role="alert" className="workspace-view__note"><span>{error}</span> <button type="button" onClick={() => void refetch()}>Retry</button></div>
