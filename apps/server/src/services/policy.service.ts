@@ -1,6 +1,7 @@
 import { PolicyDecision, Policy } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { ForbiddenError, NotFoundError } from '../errors/app-error.js';
+import { requireProjectRole, PROJECT_MANAGER_ROLES } from '../auth/project-access.js';
 import { CreatePolicyInput, UpdatePolicyInput } from '../schemas/policy.schema.js';
 
 export class PolicyService {
@@ -69,7 +70,7 @@ export class PolicyService {
     userId: string,
     data: CreatePolicyInput,
   ): Promise<Policy> {
-    await this.verifyProjectMembership(projectId, userId);
+    await requireProjectRole(projectId, userId, PROJECT_MANAGER_ROLES);
 
     return await prisma.policy.create({
       data: {
@@ -112,7 +113,7 @@ export class PolicyService {
     userId: string,
     data: UpdatePolicyInput,
   ): Promise<Policy> {
-    await this.verifyProjectMembership(projectId, userId);
+    await requireProjectRole(projectId, userId, PROJECT_MANAGER_ROLES);
 
     const existing = await prisma.policy.findUnique({
       where: { id: policyId },
@@ -135,7 +136,7 @@ export class PolicyService {
   }
 
   async deletePolicy(projectId: string, policyId: string, userId: string): Promise<Policy> {
-    await this.verifyProjectMembership(projectId, userId);
+    await requireProjectRole(projectId, userId, PROJECT_MANAGER_ROLES);
 
     const existing = await prisma.policy.findUnique({
       where: { id: policyId },

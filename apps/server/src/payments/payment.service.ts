@@ -119,6 +119,14 @@ export class PaymentService {
       where: { x402PaymentReference: expectedRequirement.paymentReference },
     });
 
+    // The client supplies the payment reference, so a reference alone proves
+    // nothing. A record that belongs to another project, agent or requester
+    // must never be returned (it would hand back that payment's execution
+    // output) or flipped to SETTLED by this request.
+    if (existingSettled) {
+      this.assertPaymentBelongsTo(existingSettled, projectId, requesterUserId, agentId);
+    }
+
     if (existingSettled && existingSettled.status === PaymentStatus.SETTLED) {
       return existingSettled;
     }
@@ -194,10 +202,27 @@ export class PaymentService {
           where: { x402PaymentReference: expectedRequirement.paymentReference },
         });
         if (recheck && recheck.status === PaymentStatus.SETTLED) {
+          this.assertPaymentBelongsTo(recheck, projectId, requesterUserId, agentId);
           return recheck;
         }
       }
       throw err;
+    }
+  }
+
+  private assertPaymentBelongsTo(
+    payment: Payment,
+    projectId: string,
+    requesterUserId: string,
+    agentId?: string,
+  ): void {
+    const agentMismatch = Boolean(agentId && payment.agentId && payment.agentId !== agentId);
+    if (
+      payment.projectId !== projectId ||
+      payment.requesterUserId !== requesterUserId ||
+      agentMismatch
+    ) {
+      throw new ForbiddenError('This payment reference belongs to a different payment request');
     }
   }
 

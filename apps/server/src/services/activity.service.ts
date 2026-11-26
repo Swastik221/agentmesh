@@ -6,6 +6,7 @@ import { AgentMeshMessageType, PROTOCOL_VERSION } from '@agentmesh/agent-protoco
 import { deltaSequencerService } from './delta-sequencer.service.js';
 import type { WebSocketMessage } from '../websocket/websocket.types.js';
 import { BadRequestError } from '../errors/app-error.js';
+import { getProjectRole } from '../auth/project-access.js';
 
 export type ActivityActorType = 'human' | 'agent' | 'system' | 'coordinator';
 
@@ -112,7 +113,7 @@ export class ActivityService {
 
   async listActivity(
     projectId: string,
-    _userId: string,
+    userId: string,
     options: { limit?: number } = {},
   ): Promise<
     Array<{
@@ -127,6 +128,8 @@ export class ActivityService {
       createdAt: Date;
     }>
   > {
+    // Activity includes payment and approval payloads: members only.
+    await getProjectRole(projectId, userId);
     return prisma.activityEvent.findMany({
       where: { projectId },
       orderBy: { createdAt: 'desc' },

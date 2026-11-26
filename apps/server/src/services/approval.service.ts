@@ -1,5 +1,6 @@
-import { Prisma, ApprovalStatus, ApprovalRequest } from '@prisma/client';
+import { Prisma, ApprovalStatus, ApprovalRequest, ProjectRole } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { getProjectRole, PROJECT_MANAGER_ROLES } from '../auth/project-access.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../errors/app-error.js';
 import { CreateApprovalRequestInput, ListApprovalsQuery } from '../schemas/approval.schema.js';
 import { connectionManager } from '../websocket/connection.manager.js';
@@ -245,6 +246,22 @@ export class ApprovalService {
 
       if (!membership) {
         throw new ForbiddenError('User is not a member of this project');
+      }
+
+      // Approval is the human check on a gated action, so it must come from
+      // someone with authority over the project. An approval executes its
+      // action bypassing policy, which means a plain MEMBER approving their
+      // own request would let them skip any policy. OWNER and ADMIN may
+      // approve their own requests: they can edit the policies anyway.
+      const approverRole = await getProjectRole(existing.projectId, userId, tx);
+      const isManager = PROJECT_MANAGER_ROLES.includes(approverRole);
+      if (approverRole === ProjectRole.VIEWER) {
+        throw new ForbiddenError('Viewers cannot approve requests');
+      }
+      if (existing.requestedByUserId === userId && !isManager) {
+        throw new ForbiddenError(
+          'You cannot approve your own request. Another member, or a project OWNER or ADMIN, must approve it.',
+        );
       }
 
       if (existing.status !== ApprovalStatus.PENDING) {

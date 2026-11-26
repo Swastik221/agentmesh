@@ -16,6 +16,7 @@ import { sessionService } from '../auth/session.service.js';
 import { deltaSequencerService } from '../services/delta-sequencer.service.js';
 import { agentConnectTokenService } from '../services/agent-connect-token.service.js';
 import { TaskPriority } from '@prisma/client';
+import { config } from '../config/index.js';
 
 function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
   const cookieHeader = req.headers.cookie;
@@ -31,7 +32,10 @@ function extractSessionIdFromReq(req: IncomingMessage): string | undefined {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7).trim();
   }
-  if (req.url) {
+  // A session id in the URL ends up in proxy and access logs, where it can be
+  // read and replayed. Browsers authenticate with the httpOnly cookie, so the
+  // query form is only accepted outside production (tests and local tools).
+  if (req.url && process.env.NODE_ENV !== 'production') {
     try {
       const parsedUrl = new URL(req.url, 'http://localhost');
       const token = parsedUrl.searchParams.get('token');
@@ -111,12 +115,25 @@ function extractConnectTokenFromReq(req: IncomingMessage): string | undefined {
   return undefined;
 }
 
+export const WS_MAX_PAYLOAD_BYTES = 2 * 1024 * 1024;
+
+/** True when a browser Origin header matches the configured web origin. */
+export function isAllowedWsOrigin(origin: string): boolean {
+  try {
+    return new URL(origin).origin === new URL(config.webOrigin).origin;
+  } catch {
+    return false;
+  }
+}
+
 export class AgentMeshWebSocketServer {
   private wss: WebSocketServer;
   private heartbeatTimer: NodeJS.Timeout | null = null;
 
   constructor(server: HTTPServer, heartbeatIntervalMs = 30000) {
-    this.wss = new WebSocketServer({ noServer: true });
+    // The ws default is 100 MB. Artifact payloads are capped at 512 KB and
+    // workspace deltas at 64 KB, so 2 MB leaves room for envelope overhead.
+    this.wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD_BYTES });
 
     server.on('upgrade', (req: IncomingMessage, socket, head) => {
       this.handleUpgrade(req, socket as Duplex, head);
@@ -179,6 +196,17 @@ export class AgentMeshWebSocketServer {
           socket.destroy();
           return;
         }
+      }
+
+      // Browsers always send Origin and attach the session cookie to any
+      // WebSocket they open, whichever page opened it. Without this check a
+      // page on another origin could open a socket that acts as the signed-in
+      // user. Non-browser clients (the CLI) send no Origin and use tokens.
+      const origin = req.headers.origin;
+      if (origin && !isAllowedWsOrigin(origin)) {
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+        socket.destroy();
+        return;
       }
 
       // Pre-Upgrade Session Authentication & Project Authorization (PRD-37 FIX 1)
