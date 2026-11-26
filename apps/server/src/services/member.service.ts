@@ -1,5 +1,6 @@
 import { ProjectMember, ProjectRole } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { getProjectRole } from '../auth/project-access.js';
 import { AddMemberInput, UpdateMemberRoleInput } from '../schemas/member.schema.js';
 import { ConflictError, NotFoundError, ForbiddenError } from '../errors/app-error.js';
 
@@ -28,7 +29,17 @@ export class MemberService {
   }
 
   async addMember(projectId: string, actorUserId: string, data: AddMemberInput): Promise<ProjectMember> {
-    await this.verifyProjectMembership(projectId, actorUserId);
+    const actorRole = await getProjectRole(projectId, actorUserId);
+    if (actorRole !== ProjectRole.OWNER && actorRole !== ProjectRole.ADMIN) {
+      throw new ForbiddenError('Only a project OWNER or ADMIN can add members');
+    }
+    const requestedRole = data.role || ProjectRole.MEMBER;
+    if (
+      (requestedRole === ProjectRole.OWNER || requestedRole === ProjectRole.ADMIN) &&
+      actorRole !== ProjectRole.OWNER
+    ) {
+      throw new ForbiddenError('Only a project OWNER can grant the OWNER or ADMIN role');
+    }
 
     const user = await prisma.user.findUnique({ where: { id: data.userId } });
     if (!user) {
@@ -52,7 +63,7 @@ export class MemberService {
       data: {
         projectId,
         userId: data.userId,
-        role: data.role || ProjectRole.MEMBER,
+        role: requestedRole,
       },
     });
   }
@@ -82,7 +93,10 @@ export class MemberService {
     actorUserId: string,
     data: UpdateMemberRoleInput,
   ): Promise<ProjectMember> {
-    await this.verifyProjectMembership(projectId, actorUserId);
+    const actorRole = await getProjectRole(projectId, actorUserId);
+    if (actorRole !== ProjectRole.OWNER) {
+      throw new ForbiddenError('Only a project OWNER can change member roles');
+    }
 
     return await prisma.$transaction(async (tx) => {
       // Row-level lock on the project to ensure concurrency-safe OWNER invariant enforcement
@@ -143,7 +157,11 @@ export class MemberService {
     userId: string,
     actorUserId: string,
   ): Promise<{ message: string }> {
-    await this.verifyProjectMembership(projectId, actorUserId);
+    const actorRole = await getProjectRole(projectId, actorUserId);
+    const isSelf = userId === actorUserId;
+    if (!isSelf && actorRole !== ProjectRole.OWNER && actorRole !== ProjectRole.ADMIN) {
+      throw new ForbiddenError('Only a project OWNER or ADMIN can remove other members');
+    }
 
     return await prisma.$transaction(async (tx) => {
       // Row-level lock on the project to ensure concurrency-safe OWNER invariant enforcement
@@ -168,6 +186,20 @@ export class MemberService {
         throw new NotFoundError(
           `Membership for user '${userId}' in project '${projectId}' not found`,
         );
+      }
+
+      // An ADMIN may remove MEMBERs and VIEWERs, but not peers or owners.
+      if (
+        !isSelf &&
+        actorRole === ProjectRole.ADMIN &&
+        (member.role === ProjectRole.OWNER || member.role === ProjectRole.ADMIN)
+      ) {
+        throw new ForbiddenError('Only a project OWNER can remove an OWNER or ADMIN');
+      }
+
+      const project = await tx.project.findUnique({ where: { id: projectId } });
+      if (project?.ownerId === userId && !isSelf) {
+        throw new ForbiddenError('The project creator cannot be removed by another member');
       }
 
       if (member.role === ProjectRole.OWNER) {

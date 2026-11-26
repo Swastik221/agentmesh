@@ -1,6 +1,7 @@
 import { Prisma, TaskStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import {
+  BadRequestError,
   ConflictError,
   ForbiddenError,
   NotFoundError,
@@ -26,6 +27,29 @@ const creatorSelect = {
   createdAt: true,
   updatedAt: true,
 };
+
+/**
+ * Guards status changes made by hand through PATCH. Humans may move tasks
+ * around a board freely, including marking work done, but not in ways that
+ * skip the system's gates:
+ * - PENDING_APPROVAL is set only by the policy engine, and left only through
+ *   the approve/reject endpoints (cancelling is still allowed).
+ * - COMPLETED and CANCELLED are final; dependent tasks may already have
+ *   consumed a completed task's artifacts.
+ */
+export function assertManualStatusTransition(from: TaskStatus, to: TaskStatus): void {
+  if (to === TaskStatus.PENDING_APPROVAL) {
+    throw new BadRequestError('PENDING_APPROVAL is set by project policy and cannot be set by hand');
+  }
+  if (from === TaskStatus.PENDING_APPROVAL && to !== TaskStatus.CANCELLED) {
+    throw new ConflictError(
+      'This task is waiting for approval. Approve or reject the request instead of changing its status.',
+    );
+  }
+  if (from === TaskStatus.COMPLETED || from === TaskStatus.CANCELLED) {
+    throw new ConflictError(`A ${from} task cannot be moved to ${to}`);
+  }
+}
 
 export class TaskService {
   /**
@@ -226,6 +250,16 @@ export class TaskService {
     const validatedFilePaths =
       data.filePaths !== undefined ? validateFilePaths(data.filePaths) : undefined;
 
+    if (data.preferredAgentId) {
+      const preferredAgent = await prisma.agent.findUnique({
+        where: { id: data.preferredAgentId },
+        select: { projectId: true },
+      });
+      if (!preferredAgent || preferredAgent.projectId !== projectId) {
+        throw new BadRequestError('preferredAgentId must be an agent in this project');
+      }
+    }
+
     const updateData: Prisma.TaskUpdateInput = {};
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined) updateData.description = data.description;
@@ -250,6 +284,10 @@ export class TaskService {
 
       if (!freshTask || freshTask.projectId !== projectId) {
         throw new NotFoundError('Task not found');
+      }
+
+      if (data.status !== undefined && data.status !== freshTask.status) {
+        assertManualStatusTransition(freshTask.status, data.status);
       }
 
       const targetStatus = data.status !== undefined ? data.status : freshTask.status;

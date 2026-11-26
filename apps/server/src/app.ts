@@ -32,7 +32,8 @@ export const createApp = (): Express => {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: '10mb' }));
+  // Artifact payloads are capped at 512 KB, so 2 MB is ample for any real body.
+  app.use(express.json({ limit: '2mb' }));
   app.use(cookieParser());
 
   app.use('/', healthRouter);

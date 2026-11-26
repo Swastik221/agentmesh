@@ -10,6 +10,14 @@ import { paymentService } from '../payments/payment.service.js';
 import { x402Service } from '../payments/x402.service.js';
 import { PAYMENT_CONFIG } from '../payments/payment.config.js';
 
+const requireUserId = (req: Request): string => {
+  const userId = (req as AuthenticatedRequest).auth?.userId;
+  if (!userId) {
+    throw new UnauthorizedError('Authentication required');
+  }
+  return userId;
+};
+
 export const addCapability = async (
   req: Request,
   res: Response,
@@ -18,7 +26,7 @@ export const addCapability = async (
   try {
     const agentId = req.params.agentId as string;
     const input = addCapabilitySchema.parse(req.body);
-    const capabilityRecord = await agentCapabilityService.addCapability(agentId, input.capability);
+    const capabilityRecord = await agentCapabilityService.addCapability(agentId, input.capability, requireUserId(req));
     res.status(201).json(capabilityRecord);
   } catch (error) {
     next(error);
@@ -32,7 +40,7 @@ export const listCapabilities = async (
 ): Promise<void> => {
   try {
     const agentId = req.params.agentId as string;
-    const result = await agentCapabilityService.listCapabilities(agentId);
+    const result = await agentCapabilityService.listCapabilities(agentId, requireUserId(req));
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -47,7 +55,7 @@ export const removeCapability = async (
   try {
     const agentId = req.params.agentId as string;
     const capability = req.params.capability as string;
-    await agentCapabilityService.removeCapability(agentId, capability);
+    await agentCapabilityService.removeCapability(agentId, capability, requireUserId(req));
     res.status(204).send();
   } catch (error) {
     next(error);
