@@ -2,6 +2,11 @@ import type { WebSocket } from 'ws';
 import crypto from 'node:crypto';
 import { ConnectionMetadata, WebSocketMessage } from './websocket.types.js';
 
+/** True when a connection runs tasks (see ConnectionMetadata.connectionRole). */
+export function isExecutorConnection(conn: ConnectionMetadata): boolean {
+  return !conn.connectionRole || conn.connectionRole === 'executor';
+}
+
 export class ConnectionManager {
   private connections: Map<string, ConnectionMetadata> = new Map();
   private projectRooms: Map<string, Set<string>> = new Map();
@@ -41,7 +46,7 @@ export class ConnectionManager {
       if (excludingConnectionId && conn.connectionId === excludingConnectionId) {
         continue;
       }
-      if (conn.authenticated && conn.agentId === agentId) {
+      if (conn.authenticated && conn.agentId === agentId && isExecutorConnection(conn)) {
         count++;
       }
     }
@@ -71,7 +76,12 @@ export class ConnectionManager {
 
   isAgentConnected(projectId: string, agentId: string): boolean {
     for (const conn of this.connections.values()) {
-      if (conn.authenticated && conn.projectId === projectId && conn.agentId === agentId) {
+      if (
+        conn.authenticated &&
+        conn.projectId === projectId &&
+        conn.agentId === agentId &&
+        isExecutorConnection(conn)
+      ) {
         return true;
       }
     }
@@ -81,7 +91,7 @@ export class ConnectionManager {
   getAuthenticatedAgentConnections(agentId: string): ConnectionMetadata[] {
     const result: ConnectionMetadata[] = [];
     for (const conn of this.connections.values()) {
-      if (conn.authenticated && conn.agentId === agentId) {
+      if (conn.authenticated && conn.agentId === agentId && isExecutorConnection(conn)) {
         result.push(conn);
       }
     }

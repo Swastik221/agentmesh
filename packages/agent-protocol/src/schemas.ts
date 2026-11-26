@@ -14,6 +14,14 @@ export const agentHandshakePayloadSchema = z
       .array(z.string().trim())
       .optional()
       .transform((caps) => (caps ? caps.map((c) => c.trim().toLowerCase()) : undefined)),
+    /**
+     * What this connection is for. `executor` (the default) receives and runs
+     * tasks and is what makes the agent count as online. `terminal` streams a
+     * local terminal session, and `observer` only reads workspace context; the
+     * server never dispatches tasks to either, so a developer can run a
+     * terminal or a one-off `agentmesh context` next to the executing agent.
+     */
+    connectionRole: z.enum(['executor', 'terminal', 'observer']).optional(),
   })
   .strict();
 
@@ -22,6 +30,13 @@ export const agentHandshakeAcceptedPayloadSchema = z.object({
   sessionId: z.string().trim().min(1, 'Session ID is required'),
   projectId: z.string().trim().min(1, 'Project ID is required'),
   capabilities: z.array(z.string().trim().toLowerCase()),
+  /**
+   * A fresh agent-scoped credential the client uses to reconnect after the
+   * short-lived connect token it started with has expired. Rotated on every
+   * accepted handshake.
+   */
+  resumeToken: z.string().trim().min(1).optional(),
+  resumeTokenExpiresAt: z.string().datetime().optional(),
 });
 
 export const agentHandshakeRejectedPayloadSchema = z.object({

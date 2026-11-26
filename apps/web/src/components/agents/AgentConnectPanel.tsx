@@ -37,6 +37,11 @@ export function AgentConnectPanel({ agentId, agentName }: AgentConnectPanelProps
   const command = issued
     ? `agentmesh connect --workspace ${issued.projectId} --agent ${issued.agentId} --connect-token ${issued.token} --url ${envConfig.apiUrl}`
     : '';
+  // Same token, run through a shared terminal instead: your agent CLI stays
+  // fully yours locally, and teammates can watch it read-only.
+  const terminalCommand = issued
+    ? `agentmesh terminal --workspace ${issued.projectId} --agent ${issued.agentId} --connect-token ${issued.token} --url ${envConfig.apiUrl} --share -- claude`
+    : '';
 
   const issue = async () => {
     setBusy(true);
@@ -80,6 +85,13 @@ export function AgentConnectPanel({ agentId, agentName }: AgentConnectPanelProps
             <button type="button" onClick={() => void copy()} aria-label="Copy connect command">
               {copied ? <Check size={13} /> : <Copy size={13} />}
             </button>
+          </div>
+          <p className="agent-connect-panel__hint">
+            Or run your agent's own CLI (here <code>claude</code>) in a terminal connected to the workspace.
+            Drop <code>--share</code> to keep it private.
+          </p>
+          <div className="agent-connect-panel__cmd">
+            <code>{terminalCommand}</code>
           </div>
           <button type="button" className="agent-connect-panel__link" onClick={() => setIssued(null)}>
             Issue a new token

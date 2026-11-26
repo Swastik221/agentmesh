@@ -1,33 +1,79 @@
 import { runConnect } from './connect.js';
+import { runTerminal } from './terminal.js';
+import { runContext } from './context.js';
 
-function parseArgs(args: string[]): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--workspace' || arg === '-w') {
-      result.workspace = args[++i];
-    } else if (arg === '--agent' || arg === '-a') {
-      result.agent = args[++i];
-    } else if (arg === '--session-id' || arg === '--token') {
-      result.sessionId = args[++i];
-    } else if (arg === '--connect-token') {
-      result.connectToken = args[++i];
-    } else if (arg === '--url' || arg === '-u') {
-      result.url = args[++i];
-    } else if (arg === '--mock') {
-      result.mock = 'true';
-    }
-  }
-  return result;
+export interface ParsedArgs {
+  options: Record<string, string>;
+  /** Everything after a bare `--`, untouched. */
+  rest: string[];
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const command = args[0];
+export function parseArgs(args: string[]): ParsedArgs {
+  const options: Record<string, string> = {};
+  const separator = args.indexOf('--');
+  const flags = separator === -1 ? args : args.slice(0, separator);
+  const rest = separator === -1 ? [] : args.slice(separator + 1);
 
-  if (command === 'connect') {
-    const options = parseArgs(args.slice(1));
-    try {
+  for (let i = 0; i < flags.length; i++) {
+    const arg = flags[i];
+    if (arg === '--workspace' || arg === '-w') {
+      options.workspace = flags[++i];
+    } else if (arg === '--agent' || arg === '-a') {
+      options.agent = flags[++i];
+    } else if (arg === '--session-id' || arg === '--token') {
+      options.sessionId = flags[++i];
+    } else if (arg === '--connect-token') {
+      options.connectToken = flags[++i];
+    } else if (arg === '--url' || arg === '-u') {
+      options.url = flags[++i];
+    } else if (arg === '--mock') {
+      options.mock = 'true';
+    } else if (arg === '--share') {
+      options.share = 'true';
+    } else if (arg === '--name') {
+      options.name = flags[++i];
+    } else if (arg === '--json') {
+      options.json = 'true';
+    } else if (arg === '--files') {
+      options.files = flags[++i];
+    } else if (arg === '--task') {
+      options.taskId = flags[++i];
+    } else if (arg === '--tail') {
+      options.tail = flags[++i];
+    }
+  }
+  return { options, rest };
+}
+
+const USAGE = `AgentMesh CLI v0.1.0
+
+Usage:
+  agentmesh connect  --workspace <id> --agent <id> --connect-token <token>
+      Run this agent: it receives tasks assigned to it and runs them here.
+
+  agentmesh terminal --workspace <id> --agent <id> --connect-token <token> [--share] [--name <n>] [-- <command...>]
+      Run <command> (default: your shell) in this terminal and connect it to
+      the workspace. Private unless --share. Read-only for everyone else.
+      Example: agentmesh terminal -w <id> -a <id> --connect-token <t> --share -- claude
+
+  agentmesh context  --workspace <id> --agent <id> --connect-token <token> [--files a,b] [--task <id>] [--json]
+      Print what other agents are doing, where, and what overlaps your work.
+      --tail <terminal-id> prints a shared terminal's recent output instead.
+
+Options:
+  -w, --workspace <id>     Project to join            (or AGENTMESH_WORKSPACE)
+  -a, --agent <id>         Agent to act as            (or AGENTMESH_AGENT)
+      --connect-token <t>  Token from the workspace UI (or AGENTMESH_CONNECT_TOKEN)
+  -u, --url <url>          Server URL, default http://localhost:3001 (or AGENTMESH_URL)
+      --mock               connect: use the canned mock adapter
+`;
+
+async function main() {
+  const [command, ...args] = process.argv.slice(2);
+  const { options, rest } = parseArgs(args);
+
+  try {
+    if (command === 'connect') {
       await runConnect({
         workspace: options.workspace,
         agent: options.agent,
@@ -36,27 +82,23 @@ async function main() {
         url: options.url,
         mock: options.mock === 'true',
       });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`Error: ${message}`);
-      process.exit(1);
+    } else if (command === 'terminal') {
+      await runTerminal({ ...options, share: options.share === 'true', command: rest });
+      process.exit(process.exitCode ?? 0);
+    } else if (command === 'context') {
+      await runContext({ ...options, json: options.json === 'true' });
+      process.exit(0);
+    } else {
+      console.log(USAGE);
+      process.exit(command && command !== 'help' && command !== '--help' ? 1 : 0);
     }
-  } else {
-    console.log(`AgentMesh CLI v0.1.0
-
-Usage:
-  agentmesh connect --workspace <workspace-id> --agent <agent-id> --connect-token <token>
-
-Options:
-  -w, --workspace <id>     Project the agent joins
-  -a, --agent <id>         Agent to connect as
-      --connect-token <t>  Short-lived token from the workspace UI
-                           (or set AGENTMESH_CONNECT_TOKEN)
-  -u, --url <url>          Server URL (default http://localhost:3001)
-      --mock               Use the canned mock adapter instead of doing real work
-`);
-    process.exit(command ? 1 : 0);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Error: ${message}`);
+    process.exit(1);
   }
 }
 
-main();
+if (process.env.VITEST === undefined) {
+  void main();
+}

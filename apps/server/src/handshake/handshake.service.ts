@@ -14,6 +14,7 @@ import { sessionService } from '../auth/session.service.js';
 import { ConnectionMetadata } from '../websocket/websocket.types.js';
 import { connectionManager } from '../websocket/connection.manager.js';
 import { HandshakeErrorCode } from './handshake.errors.js';
+import { agentConnectTokenService } from '../services/agent-connect-token.service.js';
 
 export interface HandshakeResult {
   success: boolean;
@@ -244,17 +245,27 @@ export class HandshakeService {
     connection.userId = authenticatedUserId;
     connection.agentId = agent.id;
     connection.sessionId = sessionId;
+    connection.connectionRole = payload.connectionRole ?? 'executor';
 
-    // Update agent status to ONLINE if OFFLINE
-    if (agent.status === 'OFFLINE') {
-      await prisma.agent.update({
-        where: { id: agent.id },
-        data: { status: 'ONLINE' },
-      });
+    // Only an executor connection can take work, so only it changes the
+    // agent's status or triggers dispatch of queued tasks.
+    if (connection.connectionRole === 'executor') {
+      if (agent.status === 'OFFLINE') {
+        await prisma.agent.update({
+          where: { id: agent.id },
+          data: { status: 'ONLINE' },
+        });
+      }
+
+      const { connectorService } = await import('../connector/connector.service.js');
+      void connectorService.onAgentConnected(agent.id, connection.projectId).catch(() => {});
     }
 
-    const { connectorService } = await import('../connector/connector.service.js');
-    void connectorService.onAgentConnected(agent.id, connection.projectId).catch(() => {});
+    // A fresh credential for reconnecting once the original connect token has
+    // expired. Best effort: failing to mint one must not fail the handshake.
+    const resume = await agentConnectTokenService
+      .issueResume(agent.id, connection.projectId, authenticatedUserId)
+      .catch(() => null);
 
     const acceptedMessage = createAgentMeshMessage({
       type: AgentMeshMessageType.AGENT_HANDSHAKE_ACCEPTED,
@@ -267,6 +278,10 @@ export class HandshakeService {
         sessionId,
         projectId: connection.projectId,
         capabilities: registeredCaps,
+        ...(resume && {
+          resumeToken: resume.token,
+          resumeTokenExpiresAt: resume.expiresAt.toISOString(),
+        }),
       },
     });
 
@@ -278,6 +293,9 @@ export class HandshakeService {
 
   async handleDisconnection(connection: ConnectionMetadata): Promise<void> {
     if (!connection.authenticated || !connection.agentId) {
+      return;
+    }
+    if (connection.connectionRole && connection.connectionRole !== 'executor') {
       return;
     }
 

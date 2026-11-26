@@ -6,6 +6,7 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 import { navItems } from './data/workspace';
 import type { SectionId } from './types';
 import { ActivityView, AgentsView, FilesView, TasksView, TeamView } from './pages/Workspace/WorkspaceViews';
+import { AwarenessView, TerminalsView } from './pages/Workspace/CanvasViews';
 import { WorkspaceScenery } from './components/canvas/WorkspaceScenery';
 import './features/workspace/scenery.css';
 import './pages/Workspace/workspace-views.css';
@@ -48,6 +49,10 @@ export function App() {
               <AgentsView onOpenCanvas={() => setActiveSection('overview')} />
             ) : activeSection === 'tasks' ? (
               <TasksView onOpenCanvas={() => setActiveSection('overview')} />
+            ) : activeSection === 'terminals' ? (
+              <TerminalsView onOpenCanvas={() => setActiveSection('overview')} />
+            ) : activeSection === 'awareness' ? (
+              <AwarenessView onOpenCanvas={() => setActiveSection('overview')} />
             ) : activeSection === 'files' ? (
               <FilesView onOpenCanvas={() => setActiveSection('overview')} />
             ) : activeSection === 'activity' ? (

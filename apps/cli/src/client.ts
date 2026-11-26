@@ -20,7 +20,24 @@ export interface ClientOptions {
   adapter?: AgentAdapter;
   reconnectIntervalMs?: number;
   maxReconnectAttempts?: number;
+  /**
+   * What this connection is for. Only `executor` (the default) receives tasks.
+   * A terminal or a one-off context query declares its role so the server
+   * never mistakes it for the agent being ready to work.
+   */
+  connectionRole?: ConnectionRole;
+  /**
+   * Sees every inbound frame first. Return true to mark it handled. Used by
+   * the terminal and context commands for coordination messages.
+   */
+  onFrame?: (frame: { type?: string; correlationId?: string; payload?: unknown }) => boolean;
+  /** Called after every accepted handshake, including after a reconnect. */
+  onRegistered?: () => void;
+  /** Keep printing task, team and board notices (the interactive REPL does). */
+  quiet?: boolean;
 }
+
+export type ConnectionRole = 'executor' | 'terminal' | 'observer';
 
 /** A teammate agent in the same project, as pushed by the server. */
 export interface RosterAgent {
@@ -57,6 +74,10 @@ export class AgentMeshClient {
   private lastRejection: string | null = null;
   /** Teammate agents in this project, pushed by the server as they change. */
   private roster: RosterAgent[] = [];
+  private connectionRole: ConnectionRole;
+  private onFrame?: ClientOptions['onFrame'];
+  private onRegistered?: () => void;
+  private quiet: boolean;
 
   constructor(options: ClientOptions) {
     this.serverUrl = options.serverUrl;
@@ -69,6 +90,10 @@ export class AgentMeshClient {
       getCapabilities: async () => ({ capabilities: [] }),
       executeTask: async () => ({ summary: 'Default execution' }),
     });
+    this.connectionRole = options.connectionRole ?? 'executor';
+    this.onFrame = options.onFrame;
+    this.onRegistered = options.onRegistered;
+    this.quiet = options.quiet ?? false;
     this.reconnectIntervalMs = options.reconnectIntervalMs || 1000;
     this.maxReconnectAttempts = options.maxReconnectAttempts || 10;
   }
@@ -162,6 +187,9 @@ export class AgentMeshClient {
         agentId: this.agentId,
         clientVersion: '0.1.0',
         capabilities,
+        // Omitted for executors so older servers, which reject unknown
+        // handshake fields, keep accepting the default connector.
+        ...(this.connectionRole !== 'executor' && { connectionRole: this.connectionRole }),
       },
     });
 
@@ -173,6 +201,10 @@ export class AgentMeshClient {
     try {
       parsedRaw = JSON.parse(rawMessageText);
     } catch {
+      return;
+    }
+
+    if (typeof parsedRaw === 'object' && parsedRaw !== null && this.onFrame?.(parsedRaw as { type?: string })) {
       return;
     }
 
@@ -245,11 +277,20 @@ export class AgentMeshClient {
     switch (message.type) {
       case AgentMeshMessageType.AGENT_HANDSHAKE_ACCEPTED: {
         this.state = 'REGISTERED';
+        // The connect token from the UI lives ten minutes. Reconnect with the
+        // rotating resume token instead, so a long session survives a network
+        // drop or a server restart without a trip back to the browser.
+        if (message.payload.resumeToken) {
+          this.connectToken = message.payload.resumeToken;
+        }
+        this.onRegistered?.();
         break;
       }
 
       case AgentMeshMessageType.ERROR: {
-        console.error(`\n[error] ${message.payload.code}: ${message.payload.message}\n`);
+        if (!this.quiet) {
+          console.error(`\n[error] ${message.payload.code}: ${message.payload.message}\n`);
+        }
         break;
       }
 
@@ -257,6 +298,7 @@ export class AgentMeshClient {
       // workspace activity and broadcasts them to every connected agent, so
       // this is how one agent learns another picked up or finished work.
       case AgentMeshMessageType.ACTIVITY_CREATED: {
+        if (this.quiet) break;
         const p = message.payload;
         // An open offer is addressed to every agent including whoever posted
         // it, and it is actionable, so it gets its own line with the id needed
@@ -294,7 +336,10 @@ export class AgentMeshClient {
       }
 
       case AgentMeshMessageType.TASK_REQUEST: {
-        await this.handleTaskRequest(message.payload);
+        // The server only dispatches to executors; never run work elsewhere.
+        if (this.connectionRole === 'executor') {
+          await this.handleTaskRequest(message.payload);
+        }
         break;
       }
 
@@ -583,6 +628,24 @@ export class AgentMeshClient {
       type: 'agent.prompt',
       payload: { body: trimmed },
     });
+  }
+
+  /**
+   * Sends a protocol envelope of any type and returns its id, which the
+   * server echoes as `correlationId` on its reply.
+   */
+  public sendFrame(type: string, payload: unknown): string {
+    const id = randomUUID();
+    this.sendJson({
+      id,
+      protocolVersion: PROTOCOL_VERSION,
+      projectId: this.workspaceId,
+      senderId: this.agentId,
+      timestamp: new Date().toISOString(),
+      type,
+      payload,
+    });
+    return id;
   }
 
   public disconnect(): void {

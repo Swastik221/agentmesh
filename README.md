@@ -24,54 +24,42 @@ The thing that makes it more than a job queue: **agent A's output is agent B's i
 
 A demo tells you a workflow looks right. AgentMesh tells you which real backend state each step actually produced.
 
-## Live demo
+## Deployment status
 
-| Start here | What to try |
-| --- | --- |
-| [Workspace](https://YOUR-DEPLOY-URL/workspaces) | Create a real project, register a real agent, watch a real task get auto assigned by capability match |
-| [Task board](https://YOUR-DEPLOY-URL/workspace/:id) | Trigger a paid capability, watch it hit a real HTTP 402, get gated by human approval, then settle on Hedera Testnet |
-| [Sign in](https://YOUR-DEPLOY-URL/signin) | Real SIWE wallet auth, no simulated session behind this button |
+The web app has a Vercel deployment, but its production build currently has no `VITE_API_URL`, so it calls `http://localhost:3001` and sign in does not work for visitors. The server (Express, WebSocket, PostgreSQL) is not deployed anywhere yet. See [docs/ENGINEERING_AUDIT.md](docs/ENGINEERING_AUDIT.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
 
-The public API is available at `https://YOUR-API-URL`. Its `/health` endpoint reports real Postgres connectivity.
+## Try it locally: two developers, two agents
 
-## ETHGlobal judge guide
+1. Start PostgreSQL, then `pnpm install`, `cp .env.example .env`, apply migrations (see Getting started) and `pnpm dev`.
+2. Sign in at `http://localhost:5173/signin` with a wallet, create a project, and share its invite code with a teammate, who joins from **Workspaces → Join**.
+3. Each developer registers their own agent under **Agents** and chooses **Connect this agent** to get a short-lived connect token.
+4. Each runs their agent from their own machine:
 
-AgentMesh gives you two distinct, truthful ways to see it work.
+   ```bash
+   # receive and run tasks assigned to this agent
+   agentmesh connect  --workspace <project> --agent <agent> --connect-token <token> --url http://localhost:3001
+   # or: run your own agent CLI in a terminal connected to the workspace (private unless --share)
+   agentmesh terminal --workspace <project> --agent <agent> --connect-token <token> --url http://localhost:3001 --share -- claude
+   ```
 
-### 1. Browser demo (deterministic visual mode)
-
-- **UI access**: open `http://localhost:5173/canvas` and click **Run AgentMesh Demo** in the top navigation bar.
-- **API endpoint**: `POST /demo/run`, deterministic, mock settlement only, reports `isLive: false`.
-- **What it shows**: the complete 15 stage multi agent workflow, wallet auth, ENS identity, Agent A, task, policy evaluation, human approval, Hedera USDC payment, paid capability execution, artifact exchange, Agent B processing, final result.
-- **Hedera settlement boundary**: mocked in browser mode on purpose. Browser code never handles private keys or signs live transactions.
-
-### 2. Real blockchain proof (Hedera testnet USDC x402 execution)
-
-```bash
-pnpm demo:e2e:live
-```
-
-Executes a real on-chain transaction on Hedera Testnet, paying $0.001 USDC through x402 protocol v2, and prints a real Hedera transaction hash and explorer link so you can verify it yourself. Needs real Hedera testnet credentials to run.
-
-For a fully automated, mocked end to end run with no real keys needed:
-
-```bash
-pnpm demo:e2e
-```
+5. Before starting work, an agent (or you) runs `agentmesh context --workspace <project> --agent <agent> --connect-token <token> --files api/auth` to see who else is working on what, on which files, and what overlaps.
+6. In the browser, **Terminals** shows your own terminals and teammates' shared ones (read-only), and **Awareness** shows exactly what an agent sees.
 
 ## Status
 
-This is a working monorepo, not a finished product. Roughly:
+This is a working monorepo, not a finished product. See [docs/ENGINEERING_AUDIT.md](docs/ENGINEERING_AUDIT.md) for the detailed audit and [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for what is next.
 
 | Area | State |
 | --- | --- |
-| Server (Express + Prisma + `ws`) | Real backend APIs & WebSocket hub. |
-| Protocol package | Real. 28 message types, Zod validated. |
-| CLI agent connector | Real BYOA agent connector. |
-| Web app | Real REST + WS against the server (wallet -> SIWE -> project -> real agents -> x402). |
+| Server (Express + Prisma + `ws`) | Real backend APIs and WebSocket hub. Project roles (OWNER / ADMIN / MEMBER / VIEWER) enforced on member, policy and approval changes. |
+| Protocol package | Real, Zod validated. Core task/agent messages plus terminal and workspace-context messages. |
+| CLI | `connect` (run tasks), `terminal` (connect a local terminal), `context` (workspace awareness). Reconnects with a rotating resume token. |
+| Connected terminals | Private by default, read-only sharing enforced server-side, no remote input, output never persisted (bounded in-memory buffer), best-effort secret redaction. |
+| Agent awareness | Structured, queryable context: agents, owners, capabilities, tasks, dependencies, artifacts, worktrees, shared terminals and file/task overlaps. |
+| Web app | Real REST + WS. Task board, agents, terminals (xterm.js, read-only), awareness, files, activity, team. |
 | SIWE wallet auth | Real (`siwe` v3, httpOnly cookie sessions). |
-| ENS agent identity | Real resolution and reverse resolution via `viem` against a public RPC. |
-| x402 / Hedera payments | Real testnet settlement through the official facilitator. Hard refuses non testnet. |
+| ENS identity | Real forward/reverse resolution via `viem`; reverse records are forward-verified. Display identity, plus invite-by-ENS. |
+| x402 / Hedera payments | 402 challenge, server-side pricing and testnet guard are real. Settlement through the official facilitator is **not working as written** (fee payer), and the web UI cannot sign a payment. See the audit. |
 | Git worktree isolation | Real `git worktree` per execution, with symlink escape guards. |
 
 ## Repo layout
@@ -375,7 +363,10 @@ POST             /projects/:projectId/payments/requirement
 GET              /projects/:projectId/payments
 GET              /payments/:paymentId
 GET              /projects/:projectId/activity
-POST             /demo/run                                  deterministic, mock settlement only
+GET              /projects/:projectId/terminals             your sessions + shared ones
+GET              /projects/:projectId/terminals/:id/output  recent redacted output, if you may view it
+PATCH|DELETE     /projects/:projectId/terminals/:id         owner only: share / unshare / disconnect
+GET              /projects/:projectId/agents/:agentId/context  structured context an agent sees
 GET              /health                                     public, db connectivity
 ```
 
@@ -413,7 +404,7 @@ The guardrails are the interesting part:
 - **No fabricated success.** Settlement counts only if the facilitator returns a real transaction reference. A facilitator error is a controlled failure, never a fake settled state.
 - **No baked in account.** The payment receiver has no fallback, missing config throws at startup.
 
-The browser demo runs the full 15 stage orchestration with settlement mocked and reports that plainly, it cannot be coaxed into a real settlement. The live variant is a separate command that needs real Hedera credentials.
+Known gaps, verified in the audit: the requirement names the payment receiver as the fee payer, which the official Hedera facilitator rejects, so a standard x402 client cannot complete settlement; the web UI stops at the wallet-signing step; and there is no refund path if the agent is offline after payment. Tests mock the facilitator. Nothing in the product fabricates a settled payment.
 
 ## Execution isolation
 
@@ -425,31 +416,28 @@ Execution state transitions are a fixed table, QUEUED to RUNNING or CANCELLED, R
 
 ```bash
 pnpm --filter @agentmesh/cli build
-AGENTMESH_SESSION_ID=<session> npx agentmesh connect \
-  --workspace <projectId> --agent <agentId> --url http://localhost:3001
+agentmesh connect  -w <projectId> -a <agentId> --connect-token <token>             # run tasks for this agent
+agentmesh terminal -w <projectId> -a <agentId> --connect-token <token> [--share] -- claude
+agentmesh context  -w <projectId> -a <agentId> --connect-token <token> [--files a,b] [--json] [--tail <terminal-id>]
 ```
 
-The client handles the connection state machine, connecting, connected, registering, registered, exponential style reconnect, and the task loop, receive a task request, send accepted, run the adapter, stream progress, publish the artifact, send completed or failed.
+Credentials can also come from `AGENTMESH_WORKSPACE`, `AGENTMESH_AGENT`, `AGENTMESH_CONNECT_TOKEN` and `AGENTMESH_URL`.
 
-Two adapters ship, behind one interface:
+Every connection declares a role in its handshake: `executor` (the default, receives tasks), `terminal` or `observer`. Only executors receive tasks or make the agent count as online, so a terminal and a `context` query can run next to a working agent. The connect token from the UI lives ten minutes; each accepted handshake returns a rotating resume token so long sessions reconnect after a drop or a server restart.
 
-- **Mock adapter.** Returns a canned success. Used by tests and the default connect.
-- **Real adapter.** Actually writes files into the execution's worktree, inspects any dependency artifacts handed to it in the task metadata, runs the repo's typecheck and test scripts if present, and publishes an artifact recording modified files, verification results, and consumed artifacts.
+`connect` runs the task loop: receive a task request (with workspace context and dependency artifacts), send accepted, run the adapter, stream progress, publish artifacts, send completed or failed. Its prompt also offers `/who`, `/offers`, `/claim`, `/context`, `/tail` and `@agent` direct messages.
 
-Implement the adapter interface to plug in a real coding model.
+`terminal` runs your command in a real pseudo-terminal (via the system `script(1)`, no native dependency) in your own terminal. Your keyboard goes only to your process; output is mirrored to the workspace after best-effort secret redaction. Private unless `--share`; the owner can share, unshare or disconnect it from the web UI.
+
+`context` prints the structured workspace context, overlaps first. It is meant to be run by the coding agent itself before it starts.
+
+Two task adapters ship behind one interface: a mock adapter (canned success, `--mock`) and a real adapter that writes files into the execution worktree, runs the repo's checks and publishes an artifact.
 
 ## The web app
 
-React 19 and Vite, with an adapter layer that lets every component stay identical across two modes.
+React 19 and Vite against the real REST and WebSocket API: SIWE sign in with an injected wallet, workspaces (create, join by code, invitations), the canvas, and views for agents, tasks, terminals, awareness, files, activity and team. Realtime updates use one WebSocket per view with snapshot, sequenced deltas and resync.
 
-- **Demo**, the default, deterministic fixtures, local storage persistence, cross tab multiplayer, guided replay. Contacts nothing, no wallet, no chain, no server.
-- **Live.** Real REST and WebSocket. SIWE via an injected wallet provider, real projects, agents, tasks, executions, approvals, and artifacts.
-
-A single mode switch picks the active suite, so callers never need to know which one is running.
-
-Routes: the landing page, a real SIWE sign in entry, the guarded workspace canvas, an unguarded canvas, and demo only login, signup, onboarding, and workspaces pages.
-
-Live hooks: auth, projects, agents, tasks, executions, approvals, artifacts, workspace realtime (snapshot, delta, and resync), and backend health.
+**Terminals** lists your own terminals and teammates' shared ones and renders them read-only with xterm.js. **Awareness** shows the context an agent receives and checks a set of files for overlaps.
 
 ## Testing
 
@@ -458,11 +446,10 @@ pnpm test
 pnpm lint
 pnpm typecheck
 pnpm build
-pnpm demo:e2e
-pnpm demo:e2e:live
+pnpm demo:e2e   # mocked end-to-end flow test, no keys needed
 ```
 
-653 tests total, 435 server, 157 web, 57 protocol, 4 CLI. The server suite needs a live PostgreSQL database with migrations applied, it is integration heavy by design, real HTTP servers on ephemeral ports, real WebSocket clients, real git fixtures in temp directories.
+828 tests total, 580 server, 170 web, 69 protocol, 9 CLI. The server suite needs a live PostgreSQL database with migrations applied, it is integration heavy by design, real HTTP servers on ephemeral ports, real WebSocket clients, real git fixtures in temp directories.
 
 CI spins up Postgres, generates the Prisma client, runs migrations, then lint, typecheck, test, and build on every push and every pull request.
 

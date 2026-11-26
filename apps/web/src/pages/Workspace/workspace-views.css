@@ -662,3 +662,231 @@
   font-size: 12px;
   color: var(--canvas-red);
 }
+
+/* ---------------------------------------------------------------------------
+ * Connected terminals and agent awareness
+ * ------------------------------------------------------------------------- */
+
+.terminal-howto,
+.terminal-watch,
+.terminal-groups,
+.awareness-focus,
+.awareness-grid {
+  max-width: 1240px;
+  margin: 0 auto 22px;
+}
+
+.terminal-howto {
+  padding: 14px 18px;
+  border: 1px solid var(--canvas-line);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.terminal-howto summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.terminal-howto p {
+  color: var(--canvas-muted);
+  line-height: 1.55;
+}
+
+.terminal-howto__cmd {
+  display: block;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 35%);
+  font: 12px var(--am-font-mono);
+  white-space: nowrap;
+}
+
+.terminal-groups {
+  display: grid;
+  gap: 26px;
+}
+
+.terminal-groups h2 {
+  margin: 0 0 12px;
+}
+
+.terminal-list,
+.awareness-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 14px;
+}
+
+.terminal-card,
+.awareness-card {
+  padding: 16px 18px;
+  border: 1px solid var(--canvas-line);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 4%);
+  min-width: 0;
+}
+
+.terminal-card.is-watching {
+  border-color: var(--canvas-teal);
+}
+
+.terminal-card header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.terminal-card dl {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+}
+
+.terminal-card dl div {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.terminal-card dt {
+  color: var(--canvas-dim);
+}
+
+.terminal-card dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.terminal-card footer button,
+.awareness-focus > button[type='button'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--canvas-line-strong);
+  border-radius: 8px;
+  color: var(--canvas-copy);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.terminal-card footer button:disabled {
+  opacity: .5;
+  cursor: progress;
+}
+
+.terminal-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: 600 10px var(--am-font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  border: 1px solid var(--canvas-line);
+  color: var(--canvas-muted);
+}
+
+.terminal-pill--active { color: var(--canvas-green); border-color: var(--canvas-green); }
+.terminal-pill--disconnected { color: var(--canvas-amber); border-color: var(--canvas-amber); }
+.terminal-pill--shared { color: var(--canvas-cyan); border-color: var(--canvas-cyan); }
+.terminal-pill--private { color: var(--canvas-violet); border-color: var(--canvas-violet); }
+
+.terminal-watch {
+  overflow: hidden;
+  border: 1px solid var(--canvas-teal);
+  border-radius: 12px;
+  background: #07101e;
+}
+
+.terminal-watch__bar {
+  color: #d6e2f0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--canvas-line);
+  font: 12px var(--am-font-mono);
+}
+
+.terminal-watch__bar span {
+  color: #8fa3ba;
+}
+
+.terminal-watch__status {
+  margin-left: auto;
+  color: var(--canvas-amber) !important;
+}
+
+.terminal-viewer {
+  padding: 8px;
+  overflow-x: auto;
+}
+
+.awareness-focus {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) 1fr auto auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.awareness-focus select,
+.awareness-focus input {
+  width: 100%;
+}
+
+.awareness-card--wide {
+  grid-column: 1 / -1;
+}
+
+.awareness-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.awareness-card ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.awareness-muted {
+  color: var(--canvas-muted);
+}
+
+.awareness-task {
+  margin: 4px 0 0 16px;
+  color: var(--canvas-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .awareness-focus {
+    grid-template-columns: 1fr;
+  }
+}

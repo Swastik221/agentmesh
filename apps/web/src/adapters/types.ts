@@ -140,11 +140,6 @@ export interface FileItem {
   children?: FileItem[];
 }
 
-export interface TerminalSession {
-  sessionId: string;
-  agentId: string;
-  history: Array<{ id: string; kind: 'command' | 'output' | 'error' | 'success'; text: string }>;
-}
 
 /* =========================================================================
  * Adapter Interfaces
@@ -197,18 +192,6 @@ export interface FileAdapter {
   publishArtifact(workspaceId: string, artifact: Artifact): Promise<Artifact>;
 }
 
-export interface TerminalAdapter {
-  createSession(agentId: string): Promise<TerminalSession>;
-  executeCommand(
-    sessionId: string,
-    command: string,
-    context?: { workspaceId: string }
-  ): Promise<{
-    output: string[];
-    action?: 'connect' | 'status' | 'tasks' | 'claim' | 'publish' | 'approval' | 'clear' | 'unknown';
-    payload?: string;
-  }>;
-}
 
 export interface BrowserPreviewAdapter {
   getPreview(url: string): Promise<{ title: string; type: 'html' | 'json'; content: string }>;
