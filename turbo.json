@@ -2,6 +2,8 @@
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": [
     "DATABASE_URL",
+    "TEST_DATABASE_URL",
+    "AGENTMESH_TEST_ALLOW_NON_TEST_DATABASE",
     "NODE_ENV",
     "PORT",
     "WEB_ORIGIN",
