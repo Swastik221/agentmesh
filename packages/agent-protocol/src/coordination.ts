@@ -49,6 +49,40 @@ export const CoordinationMessageType = {
   TERMINAL_TAIL_REQUEST: 'terminal.tail.request',
   /** server → agent: that output. */
   TERMINAL_TAIL: 'terminal.tail',
+
+  // Structured agent-to-agent coordination (persisted, with delivery state).
+  /** agent → server: send a structured message to an agent or a task's agents. */
+  AGENT_COORDINATE: 'agent.coordinate',
+  /** server → sender: stored, with how many recipients it reached. */
+  AGENT_COORDINATE_ACCEPTED: 'agent.coordinate.accepted',
+  /** server → recipient: a message for you (live, or queued while you were away). */
+  AGENT_COORDINATE_DELIVERY: 'agent.coordinate.delivery',
+  /** recipient → server: mark a message handled. */
+  AGENT_COORDINATE_ACK: 'agent.coordinate.ack',
+  /** server → recipient: the acknowledgement was recorded. */
+  AGENT_COORDINATE_ACKED: 'agent.coordinate.acked',
+  /** agent → server: list my messages. */
+  AGENT_INBOX_REQUEST: 'agent.inbox.request',
+  /** server → agent: the inbox. */
+  AGENT_INBOX: 'agent.inbox',
+  /** agent → server: publish a structured handoff note on a task. */
+  HANDOFF_PUBLISH: 'handoff.publish',
+  /** server → agent: the handoff artifact (and the message that announced it). */
+  HANDOFF_PUBLISHED: 'handoff.published',
+  /** agent → server: one task with dependencies, artifacts, handoffs and overlaps. */
+  TASK_DETAILS_REQUEST: 'task.details.request',
+  TASK_DETAILS: 'task.details',
+  /** agent → server: one artifact including its payload. */
+  ARTIFACT_GET_REQUEST: 'artifact.get.request',
+  ARTIFACT_DETAILS: 'artifact.details',
+  /** agent → server: move a task assigned to this agent (never to COMPLETED). */
+  TASK_STATUS_UPDATE: 'task.status.update',
+  TASK_STATUS_UPDATED: 'task.status.updated',
+  /** agent → server: the files this agent is touching for one of its tasks. */
+  FILE_ACTIVITY_REPORT: 'file.activity.report',
+  FILE_ACTIVITY_RECORDED: 'file.activity.recorded',
+  /** server → relevant agents: something that affects your work changed. */
+  WORKSPACE_CONTEXT_CHANGED: 'workspace.context.changed',
 } as const;
 
 export type CoordinationMessageType =
@@ -169,6 +203,114 @@ export const terminalTailPayloadSchema = z.object({
   truncated: z.boolean(),
 });
 
+// ---------------------------------------------------------------------------
+// Structured agent coordination
+// ---------------------------------------------------------------------------
+
+/**
+ * Why one agent is talking to another. Every message is stored with its
+ * intent and delivery state, and recorded as workspace activity, so the
+ * humans can see what their agents agreed.
+ */
+export const agentIntentSchema = z.enum(['ASK', 'ANSWER', 'PROPOSE', 'ACKNOWLEDGE', 'HANDOFF', 'BLOCKED', 'CONFLICT']);
+export type AgentIntent = z.infer<typeof agentIntentSchema>;
+
+export const deliveryStateSchema = z.enum(['PENDING', 'DELIVERED', 'ACKNOWLEDGED']);
+export type DeliveryState = z.infer<typeof deliveryStateSchema>;
+
+/** Largest structured `data` attachment on a message, serialised. */
+export const AGENT_MESSAGE_MAX_DATA_BYTES = 16 * 1024;
+
+const shortText = z.string().trim().min(1).max(500);
+const textList = z.array(shortText).max(50).default([]);
+
+/**
+ * A handoff note: what the next agent needs to continue without asking. Stored
+ * as an artifact of type `handoff` on the task, so it goes through the same
+ * policy and review gates as any other artifact, and is returned in the
+ * context of agents whose work depends on that task.
+ */
+export const handoffNoteSchema = z
+  .object({
+    summary: z.string().trim().min(1).max(2000),
+    workCompleted: textList,
+    filesModified: z.array(z.string().trim().min(1).max(500)).max(200).default([]),
+    apiContracts: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(1).max(200),
+            description: z.string().trim().max(2000).optional(),
+            /** The contract itself: an OpenAPI fragment, a TypeScript type, an example request. */
+            spec: z.string().max(8000).optional(),
+          })
+          .strict(),
+      )
+      .max(20)
+      .default([]),
+    assumptions: textList,
+    decisions: textList,
+    openQuestions: textList,
+    dependencies: textList,
+    risks: textList,
+    validation: textList,
+    artifactRefs: z.array(z.string().trim().min(1).max(128)).max(50).default([]),
+  })
+  .strict();
+export type HandoffNote = z.infer<typeof handoffNoteSchema>;
+
+export const agentCoordinatePayloadSchema = z
+  .object({
+    /** One agent. Omit it and give `taskId` to address every agent on that task. */
+    recipientAgentId: idSchema.optional(),
+    taskId: idSchema.optional(),
+    intent: agentIntentSchema,
+    subject: z.string().trim().min(1).max(200),
+    body: z.string().trim().max(8000).default(''),
+    data: z.record(z.unknown()).optional(),
+    /** The message this one answers or acknowledges. */
+    inReplyTo: idSchema.optional(),
+  })
+  .strict()
+  .refine((p) => p.recipientAgentId || p.taskId, {
+    message: 'Address the message to an agent (recipientAgentId) or to a task (taskId)',
+  });
+
+export const agentMessageViewSchema = z.object({
+  messageId: idSchema,
+  intent: agentIntentSchema,
+  from: z.object({ agentId: idSchema, name: z.string() }),
+  recipientAgentId: idSchema,
+  taskId: idSchema.nullable(),
+  subject: z.string(),
+  body: z.string(),
+  data: z.record(z.unknown()).nullable(),
+  inReplyTo: idSchema.nullable(),
+  deliveryState: deliveryStateSchema,
+  createdAt: z.string(),
+});
+export type AgentMessageView = z.infer<typeof agentMessageViewSchema>;
+
+export const handoffViewSchema = z.object({
+  artifactId: idSchema,
+  taskId: idSchema,
+  taskTitle: z.string(),
+  from: z.object({ agentId: idSchema, name: z.string() }).nullable(),
+  status: z.string(),
+  createdAt: z.string(),
+  note: handoffNoteSchema,
+});
+export type HandoffView = z.infer<typeof handoffViewSchema>;
+
+export const contextChangeReasonSchema = z.enum([
+  'TASK_ASSIGNED',
+  'TASK_BLOCKED',
+  'ARTIFACT_PUBLISHED',
+  'HANDOFF',
+  'AGENT_DISCONNECTED',
+  'CONFLICT',
+]);
+
 /**
  * Structured, bounded picture of the workspace for one agent: who else is
  * here, what they are doing and where, and where that might collide with this
@@ -245,6 +387,10 @@ export const workspaceContextSchema = z.object({
   ),
   terminals: z.array(terminalSessionSummarySchema),
   decisions: z.array(z.object({ type: z.string(), title: z.string(), content: z.string() })),
+  /** Handoff notes on tasks this agent's work depends on, and recent ones in the project. */
+  handoffs: z.array(handoffViewSchema).default([]),
+  /** Messages to this agent it has not acknowledged yet. */
+  pendingMessages: z.number().int().nonnegative().default(0),
   overlaps: z.array(
     z.object({
       kind: z.enum(['FILE', 'TASK']),
@@ -278,6 +424,74 @@ export const coordinationMessageSchema = z.discriminatedUnion('type', [
   msg(CoordinationMessageType.WORKSPACE_CONTEXT, z.object({ context: workspaceContextSchema })),
   msg(CoordinationMessageType.TERMINAL_TAIL_REQUEST, terminalTailRequestPayloadSchema),
   msg(CoordinationMessageType.TERMINAL_TAIL, terminalTailPayloadSchema),
+  msg(CoordinationMessageType.AGENT_COORDINATE, agentCoordinatePayloadSchema),
+  msg(
+    CoordinationMessageType.AGENT_COORDINATE_ACCEPTED,
+    z.object({ messageIds: z.array(idSchema), delivered: z.number().int(), queued: z.number().int() }),
+  ),
+  msg(CoordinationMessageType.AGENT_COORDINATE_DELIVERY, agentMessageViewSchema),
+  msg(CoordinationMessageType.AGENT_COORDINATE_ACK, z.object({ messageId: idSchema }).strict()),
+  msg(CoordinationMessageType.AGENT_COORDINATE_ACKED, z.object({ messageId: idSchema })),
+  msg(
+    CoordinationMessageType.AGENT_INBOX_REQUEST,
+    z.object({ includeAcknowledged: z.boolean().optional(), limit: z.number().int().min(1).max(100).optional() }).strict(),
+  ),
+  msg(CoordinationMessageType.AGENT_INBOX, z.object({ messages: z.array(agentMessageViewSchema) })),
+  msg(
+    CoordinationMessageType.HANDOFF_PUBLISH,
+    z
+      .object({
+        taskId: idSchema,
+        name: z.string().trim().min(1).max(200).optional(),
+        note: handoffNoteSchema,
+        /** Also tell this agent directly. Agents on dependent tasks are always told. */
+        recipientAgentId: idSchema.optional(),
+      })
+      .strict(),
+  ),
+  msg(
+    CoordinationMessageType.HANDOFF_PUBLISHED,
+    z.object({ artifactId: idSchema, status: z.string(), notified: z.number().int() }),
+  ),
+  msg(CoordinationMessageType.TASK_DETAILS_REQUEST, z.object({ taskId: idSchema }).strict()),
+  msg(CoordinationMessageType.TASK_DETAILS, z.object({ task: z.record(z.unknown()) })),
+  msg(CoordinationMessageType.ARTIFACT_GET_REQUEST, z.object({ artifactId: idSchema }).strict()),
+  msg(CoordinationMessageType.ARTIFACT_DETAILS, z.object({ artifact: z.record(z.unknown()) })),
+  msg(
+    CoordinationMessageType.TASK_STATUS_UPDATE,
+    z
+      .object({
+        taskId: idSchema,
+        status: z.enum(['TODO', 'IN_PROGRESS', 'BLOCKED']),
+        reason: z.string().trim().max(1000).optional(),
+      })
+      .strict(),
+  ),
+  msg(CoordinationMessageType.TASK_STATUS_UPDATED, z.object({ taskId: idSchema, status: z.string() })),
+  msg(
+    CoordinationMessageType.FILE_ACTIVITY_REPORT,
+    z
+      .object({
+        taskId: idSchema,
+        filePaths: z.array(z.string().trim().min(1).max(500)).min(1).max(100),
+        note: z.string().trim().max(500).optional(),
+      })
+      .strict(),
+  ),
+  msg(
+    CoordinationMessageType.FILE_ACTIVITY_RECORDED,
+    z.object({ taskId: idSchema, filePaths: z.array(z.string()), overlaps: z.array(z.record(z.unknown())) }),
+  ),
+  msg(
+    CoordinationMessageType.WORKSPACE_CONTEXT_CHANGED,
+    z.object({
+      reason: contextChangeReasonSchema,
+      summary: z.string(),
+      taskId: idSchema.optional(),
+      artifactId: idSchema.optional(),
+      agentId: idSchema.optional(),
+    }),
+  ),
 ]);
 
 export type CoordinationMessage = z.infer<typeof coordinationMessageSchema>;

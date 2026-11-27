@@ -657,7 +657,7 @@ describe('PRD-59 Production Acceptance Integration Tests', () => {
       });
 
       await expect(
-        paymentService.processPaymentHeader(p.id, ownerUser.id, invalidHeader, requirement.requirement),
+        paymentService.processPaymentHeader(p.id, ownerUser.id, invalidHeader, requirement.requirement.paymentReference),
       ).rejects.toThrow();
     });
 
@@ -722,6 +722,7 @@ describe('PRD-59 Production Acceptance Integration Tests', () => {
 
       const invalidNetworkEnv = {
         NODE_ENV: 'production',
+        WEB_ORIGIN: 'https://app.example.test',
         DATABASE_URL: 'postgresql://localhost:5432/db',
         SIWE_DOMAIN: 'localhost',
         SIWE_URI: 'http://localhost:5173',
@@ -731,6 +732,11 @@ describe('PRD-59 Production Acceptance Integration Tests', () => {
       };
       expect(() => validateProductionConfig(invalidNetworkEnv)).toThrow('[ProductionConfigError]');
       expect(() => validateProductionConfig(invalidNetworkEnv)).toThrow('HEDERA_NETWORK');
+
+      // CORS, WebSocket origin checks and Secure cookies need an https origin.
+      expect(() =>
+        validateProductionConfig({ ...invalidNetworkEnv, HEDERA_NETWORK: 'hedera:testnet', WEB_ORIGIN: 'http://app.example.test' }),
+      ).toThrow('WEB_ORIGIN must be an https://');
     });
   });
 });

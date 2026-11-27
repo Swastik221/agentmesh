@@ -118,3 +118,21 @@ export const rejectApproval = async (
     next(error);
   }
 };
+
+/** POST /approvals/:approvalId/retry — re-run the action of an approval whose resume failed. */
+export const retryApprovalResume = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const actorUserId = req.auth?.userId;
+    if (!actorUserId) {
+      throw new UnauthorizedError('Authentication required');
+    }
+    const approval = await approvalService.retryResume(req.params.approvalId as string, actorUserId);
+    res.json(approval);
+  } catch (error) {
+    next(error);
+  }
+};

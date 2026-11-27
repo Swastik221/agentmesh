@@ -7,14 +7,7 @@ export interface NoteNodeData {
   onEdit?: (text: string) => void;
 }
 
-const DEFAULT_NOTE_TEXT = `PRD NOTES & DEMO SCRIPT:
-1. Connect demo wallet (0x1a2b… -> dev1.eth)
-2. Deploy local Orion agent (frontend/identity)
-3. Swastik joins with Vega (backend/solidity)
-4. Coordinator splits tasks on task board
-5. Claim AM-114 & AM-115
-6. Vega publishes payment-api.json
-7. Sign Web3 approval gate for deploy ($0.001 USDC)`;
+const DEFAULT_NOTE_TEXT = '';
 
 export function NoteNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as NoteNodeData;
@@ -50,7 +43,7 @@ export function NoteNode({ data, selected }: NodeProps) {
         className="product-note-node__textarea nodrag nowheel"
         value={content}
         onChange={(e) => handleChange(e.target.value)}
-        placeholder="Type workspace notes here..."
+        placeholder="A private note. It stays on this device and nobody else sees it."
       />
     </article>
   );

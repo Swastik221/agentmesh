@@ -9,6 +9,8 @@ import { AppError } from '../errors/app-error.js';
 import { logger } from '../lib/logger.js';
 import { terminalService } from '../terminals/terminal.service.js';
 import { workspaceContextService } from '../context/workspace-context.service.js';
+import { agentCoordinationService } from '../coordination/agent-coordination.service.js';
+import { ApprovalRequiredError } from '../errors/app-error.js';
 import type { ConnectionMetadata } from './websocket.types.js';
 
 /** How many recent message ids a connection remembers for duplicate detection. */
@@ -153,11 +155,101 @@ export async function handleCoordinationMessage(conn: ConnectionMetadata, raw: u
         return;
       }
 
+      case CoordinationMessageType.AGENT_COORDINATE: {
+        if (!requireAgent(conn)) return sendError(conn, 'UNAUTHORIZED', 'Only a connected agent can send coordination messages', correlationId);
+        const result = await agentCoordinationService.send(conn, message.payload, message.id);
+        sendFrame(conn, CoordinationMessageType.AGENT_COORDINATE_ACCEPTED, result, correlationId);
+        return;
+      }
+
+      case CoordinationMessageType.AGENT_COORDINATE_ACK: {
+        if (!requireAgent(conn)) return sendError(conn, 'UNAUTHORIZED', 'Only a connected agent can acknowledge messages', correlationId);
+        await agentCoordinationService.acknowledge(conn, message.payload.messageId);
+        sendFrame(conn, CoordinationMessageType.AGENT_COORDINATE_ACKED, { messageId: message.payload.messageId }, correlationId);
+        return;
+      }
+
+      case CoordinationMessageType.AGENT_INBOX_REQUEST: {
+        if (!requireAgent(conn)) return sendError(conn, 'UNAUTHORIZED', 'Only a connected agent has an inbox', correlationId);
+        const messages = await agentCoordinationService.inbox(conn, message.payload.includeAcknowledged, message.payload.limit);
+        sendFrame(conn, CoordinationMessageType.AGENT_INBOX, { messages }, correlationId);
+        return;
+      }
+
+      case CoordinationMessageType.HANDOFF_PUBLISH: {
+        if (!requireAgent(conn)) return sendError(conn, 'UNAUTHORIZED', 'Only a connected agent can publish a handoff', correlationId);
+        const result = await agentCoordinationService.publishHandoff(conn, message.payload, message.id);
+        sendFrame(conn, CoordinationMessageType.HANDOFF_PUBLISHED, result, correlationId);
+        return;
+      }
+
+      case CoordinationMessageType.TASK_DETAILS_REQUEST: {
+        if (!requireAgent(conn)) return sendError(conn, 'UNAUTHORIZED', 'Only a connected agent can read task details', correlationId);
+        const ctx = await workspaceContextService.buildForAgent(conn.projectId, conn.agentId, conn.userId, {
+          taskId: message.payload.taskId,
+        });
+        const task = ctx.tasks.find((t) => t.taskId === message.payload.taskId);
+        const detail = task ?? (await workspaceContextService.describeTask(conn.projectId, message.payload.taskId));
+        sendFrame(
+          conn,
+          CoordinationMessageType.TASK_DETAILS,
+          {
+            task: {
+              ...detail,
+              artifacts: ctx.artifacts.filter((a) => a.taskId === message.payload.taskId),
+              handoffs: ctx.handoffs.filter((h) => h.taskId === message.payload.taskId),
+              overlaps: ctx.overlaps,
+            },
+          },
+          correlationId,
+        );
+        return;
+      }
+
+      case CoordinationMessageType.ARTIFACT_GET_REQUEST: {
+        if (!requireAgent(conn)) return sendError(conn, 'UNAUTHORIZED', 'Only a connected agent can read artifacts', correlationId);
+        const artifact = await agentCoordinationService.artifactDetails(conn, message.payload.artifactId);
+        sendFrame(conn, CoordinationMessageType.ARTIFACT_DETAILS, { artifact }, correlationId);
+        return;
+      }
+
+      case CoordinationMessageType.TASK_STATUS_UPDATE: {
+        if (!requireAgent(conn)) return sendError(conn, 'UNAUTHORIZED', 'Only a connected agent can update its tasks', correlationId);
+        const status = await agentCoordinationService.updateOwnTaskStatus(
+          conn,
+          message.payload.taskId,
+          message.payload.status,
+          message.payload.reason,
+        );
+        sendFrame(conn, CoordinationMessageType.TASK_STATUS_UPDATED, { taskId: message.payload.taskId, status }, correlationId);
+        return;
+      }
+
+      case CoordinationMessageType.FILE_ACTIVITY_REPORT: {
+        if (!requireAgent(conn)) return sendError(conn, 'UNAUTHORIZED', 'Only a connected agent can report file activity', correlationId);
+        const result = await agentCoordinationService.reportFileActivity(conn, message.payload.taskId, message.payload.filePaths);
+        sendFrame(conn, CoordinationMessageType.FILE_ACTIVITY_RECORDED, { taskId: message.payload.taskId, ...result }, correlationId);
+        return;
+      }
+
       default:
         sendError(conn, 'UNEXPECTED_MESSAGE', `'${message.type}' is sent by the server, not to it`, correlationId);
         return;
     }
   } catch (err) {
+    if (err instanceof ApprovalRequiredError) {
+      sendFrame(
+        conn,
+        AgentMeshMessageType.ERROR,
+        {
+          code: 'APPROVAL_REQUIRED',
+          message: `${err.message}. A human must approve it in the workspace (approval ${err.approvalRequestId}).`,
+          details: { approvalRequestId: err.approvalRequestId },
+        },
+        correlationId,
+      );
+      return;
+    }
     if (err instanceof AppError) {
       sendError(conn, err.code, err.message, correlationId);
       return;

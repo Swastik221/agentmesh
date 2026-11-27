@@ -26,11 +26,15 @@ import { config } from './config/index.js';
 
 export const createApp = (): Express => {
   const app = express();
+  app.set('trust proxy', config.trustProxy);
+  app.disable('x-powered-by');
 
   app.use(
     cors({
       origin: config.webOrigin,
       credentials: true,
+      // The browser must be able to read the x402 requirement header.
+      exposedHeaders: ['X-Payment-Requirement', 'PAYMENT-REQUIRED', 'Retry-After'],
     }),
   );
   // Artifact payloads are capped at 512 KB, so 2 MB is ample for any real body.

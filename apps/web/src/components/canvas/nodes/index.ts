@@ -6,6 +6,7 @@ import { ArtifactNode } from './ArtifactNode';
 import { BrowserNode } from './BrowserNode';
 import { NoteNode } from './NoteNode';
 import { FileExplorerNode } from './FileExplorerNode';
+import { TerminalsNode } from './TerminalsNode';
 
 export const workspaceNodeTypes = {
   productAgent: AgentNode,
@@ -16,6 +17,7 @@ export const workspaceNodeTypes = {
   browser: BrowserNode,
   note: NoteNode,
   file: FileExplorerNode,
+  terminals: TerminalsNode,
 };
 
 export * from './AgentNode';
@@ -26,3 +28,4 @@ export * from './ArtifactNode';
 export * from './BrowserNode';
 export * from './NoteNode';
 export * from './FileExplorerNode';
+export * from './TerminalsNode';

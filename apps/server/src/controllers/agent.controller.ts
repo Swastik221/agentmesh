@@ -163,7 +163,8 @@ export const createAgentConnectToken = async (
     }
 
     const agentId = req.params.agentId as string;
-    const issued = await agentConnectTokenService.issue(agentId, actorUserId);
+    const purpose = req.body?.purpose === 'mcp' ? 'mcp' : 'connect';
+    const issued = await agentConnectTokenService.issue(agentId, actorUserId, purpose);
 
     res.status(201).json({
       token: issued.token,
@@ -171,6 +172,32 @@ export const createAgentConnectToken = async (
       projectId: issued.projectId,
       expiresAt: issued.expiresAt.toISOString(),
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /agents/:agentId/connect-tokens
+ *
+ * Revokes every credential the agent holds and closes its live connections,
+ * so a leaked or no-longer-wanted token stops working immediately.
+ */
+export const revokeAgentConnectTokens = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const actorUserId = req.auth?.userId;
+    if (!actorUserId) {
+      throw new UnauthorizedError();
+    }
+    const agentId = req.params.agentId as string;
+    const revoked = await agentConnectTokenService.revokeAll(agentId, actorUserId);
+    const { connectionManager } = await import('../websocket/connection.manager.js');
+    const closed = connectionManager.closeAgentConnections(agentId, 4003, 'Agent credentials revoked');
+    res.status(200).json({ revoked, disconnected: closed });
   } catch (error) {
     next(error);
   }

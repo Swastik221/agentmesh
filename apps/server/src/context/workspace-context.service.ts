@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import type { WorkspaceContext } from '@agentmesh/agent-protocol';
 import { prisma } from '../lib/prisma.js';
 import { connectionManager } from '../websocket/connection.manager.js';
@@ -35,7 +36,58 @@ export function pathsOverlap(a: string, b: string): boolean {
   return x === y || x.startsWith(`${y}/`) || y.startsWith(`${x}/`);
 }
 
+const taskInclude = {
+  responsibilities: { include: { agent: { select: { id: true, name: true } } } },
+  dependencies: {
+    include: {
+      dependsOnTask: { select: { id: true, title: true, status: true } },
+      artifact: { select: { id: true, name: true } },
+    },
+  },
+} as const;
+
+type TaskWithRelations = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
+
+/** One task as an agent sees it, with dependency satisfaction worked out. */
+export function toTaskView(t: TaskWithRelations): WorkspaceContext['tasks'][number] {
+  const dependsOn = t.dependencies.map((d) => {
+    const artifactDep = d.dependencyType === 'ARTIFACT_REQUIRED' || d.dependencyType.startsWith('ARTIFACT_REQUIRED:');
+    const satisfied = artifactDep
+      ? Boolean(d.artifactId && d.artifact)
+      : d.dependsOnTask
+        ? d.dependsOnTask.status === 'COMPLETED'
+        : Boolean(d.artifact);
+    return {
+      dependencyId: d.id,
+      type: d.dependencyType,
+      taskId: d.dependsOnTask?.id ?? null,
+      taskTitle: d.dependsOnTask?.title ?? null,
+      taskStatus: d.dependsOnTask?.status ?? null,
+      artifactId: d.artifact?.id ?? null,
+      artifactName: d.artifact?.name ?? null,
+      satisfied,
+    };
+  });
+  return {
+    taskId: t.id,
+    title: t.title,
+    status: t.status,
+    priority: t.priority,
+    filePaths: t.filePaths,
+    assignedAgents: t.responsibilities.map((r) => ({ agentId: r.agent.id, name: r.agent.name })),
+    dependsOn,
+    blocked: t.status === 'BLOCKED' || dependsOn.some((d) => !d.satisfied),
+    openOffer: Boolean(t.offerExpiresAt) && t.responsibilities.length === 0,
+  };
+}
+
 export class WorkspaceContextService {
+  /** One task in any status, for an agent asking about it directly. */
+  async describeTask(projectId: string, taskId: string): Promise<WorkspaceContext['tasks'][number] & { description: string }> {
+    const t = await prisma.task.findUnique({ where: { id: taskId }, include: taskInclude });
+    if (!t || t.projectId !== projectId) throw new NotFoundError('Task not found in this project');
+    return { ...toTaskView(t), description: t.description };
+  }
   /**
    * Builds the context `agentId` sees. `viewerUserId` is the user the agent
    * acts for (its owner); terminal visibility is decided for that user.
@@ -58,7 +110,8 @@ export class WorkspaceContextService {
     if (!project) throw new NotFoundError('Project not found');
     if (!self || self.projectId !== projectId) throw new NotFoundError('Agent not found in this project');
 
-    const [agents, tasks, artifacts, worktrees, decisions, terminals] = await Promise.all([
+    const { agentCoordinationService } = await import('../coordination/agent-coordination.service.js');
+    const [agents, tasks, artifacts, worktrees, decisions, terminals, handoffs, pendingMessages] = await Promise.all([
       prisma.agent.findMany({
         where: { projectId },
         include: {
@@ -73,15 +126,7 @@ export class WorkspaceContextService {
       }),
       prisma.task.findMany({
         where: { projectId, status: { in: [...ACTIVE_TASK_STATUSES] } },
-        include: {
-          responsibilities: { include: { agent: { select: { id: true, name: true } } } },
-          dependencies: {
-            include: {
-              dependsOnTask: { select: { id: true, title: true, status: true } },
-              artifact: { select: { id: true, name: true } },
-            },
-          },
-        },
+        include: taskInclude,
         orderBy: { updatedAt: 'desc' },
         take: LIMITS.tasks,
       }),
@@ -113,39 +158,11 @@ export class WorkspaceContextService {
         take: LIMITS.decisions,
       }),
       terminalService.listVisible(projectId, viewerUserId),
+      agentCoordinationService.handoffsFor(projectId, agentId),
+      agentCoordinationService.pendingCount(agentId, projectId),
     ]);
 
-    const taskViews = tasks.map((t) => {
-      const dependsOn = t.dependencies.map((d) => {
-        const artifactDep = d.dependencyType === 'ARTIFACT_REQUIRED' || d.dependencyType.startsWith('ARTIFACT_REQUIRED:');
-        const satisfied = artifactDep
-          ? Boolean(d.artifactId && d.artifact)
-          : d.dependsOnTask
-            ? d.dependsOnTask.status === 'COMPLETED'
-            : Boolean(d.artifact);
-        return {
-          dependencyId: d.id,
-          type: d.dependencyType,
-          taskId: d.dependsOnTask?.id ?? null,
-          taskTitle: d.dependsOnTask?.title ?? null,
-          taskStatus: d.dependsOnTask?.status ?? null,
-          artifactId: d.artifact?.id ?? null,
-          artifactName: d.artifact?.name ?? null,
-          satisfied,
-        };
-      });
-      return {
-        taskId: t.id,
-        title: t.title,
-        status: t.status,
-        priority: t.priority,
-        filePaths: t.filePaths,
-        assignedAgents: t.responsibilities.map((r) => ({ agentId: r.agent.id, name: r.agent.name })),
-        dependsOn,
-        blocked: t.status === 'BLOCKED' || dependsOn.some((d) => !d.satisfied),
-        openOffer: Boolean(t.offerExpiresAt) && t.responsibilities.length === 0,
-      };
-    });
+    const taskViews = tasks.map(toTaskView);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -193,6 +210,8 @@ export class WorkspaceContextService {
       })),
       terminals,
       decisions,
+      handoffs,
+      pendingMessages,
       overlaps: this.findOverlaps(agentId, taskViews, focus),
     };
   }

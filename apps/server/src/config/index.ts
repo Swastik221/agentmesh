@@ -36,6 +36,19 @@ export const config = {
   siweUri: process.env.SIWE_URI || webOrigin,
   siweChainId: parseInt(process.env.SIWE_CHAIN_ID || String(DEFAULT_SIWE_CHAIN_ID), 10),
   sessionMaxAgeMs: parseInt(process.env.SESSION_MAX_AGE_MS || '86400000', 10),
+  /**
+   * Express `trust proxy`: set TRUST_PROXY (e.g. "1" for one hop) when the
+   * server sits behind a load balancer, so rate limits key on the real client
+   * IP and secure cookies work. Unset means no proxy is trusted.
+   */
+  trustProxy: process.env.TRUST_PROXY ? (/^\d+$/.test(process.env.TRUST_PROXY) ? parseInt(process.env.TRUST_PROXY, 10) : process.env.TRUST_PROXY) : false,
+  /** Per-IP requests per minute on the endpoints that need a cap. */
+  rateLimits: {
+    nonce: parseInt(process.env.RATE_LIMIT_NONCE_PER_MIN || '60', 10),
+    verify: parseInt(process.env.RATE_LIMIT_VERIFY_PER_MIN || '30', 10),
+    tokens: parseInt(process.env.RATE_LIMIT_TOKENS_PER_MIN || '20', 10),
+    join: parseInt(process.env.RATE_LIMIT_JOIN_PER_MIN || '20', 10),
+  },
   maxArtifactPayloadBytes: parseInt(process.env.MAX_ARTIFACT_PAYLOAD_BYTES || '524288', 10), // 512KB
   maxArtifactsPerPage: parseInt(process.env.MAX_ARTIFACTS_PER_PAGE || '50', 10),
   maxDependencyTraversalDepth: parseInt(process.env.MAX_DEPENDENCY_TRAVERSAL_DEPTH || '10', 10),
@@ -71,6 +84,7 @@ export const config = {
 export const validateProductionConfig = (envRecord: Record<string, string | undefined> = process.env): void => {
   if (envRecord.NODE_ENV === 'production') {
     const requiredVars = [
+      'WEB_ORIGIN',
       'DATABASE_URL',
       'SIWE_DOMAIN',
       'SIWE_URI',
@@ -81,6 +95,12 @@ export const validateProductionConfig = (envRecord: Record<string, string | unde
     const missing = requiredVars.filter((key) => !envRecord[key] || envRecord[key]?.trim() === '');
     if (missing.length > 0) {
       throw new Error(`[ProductionConfigError] Production configuration error: Missing required production environment variables: ${missing.join(', ')}`);
+    }
+
+    // CORS, the WebSocket Origin check and the SIWE domain all derive from
+    // WEB_ORIGIN, and session cookies are Secure in production.
+    if (envRecord.WEB_ORIGIN && !/^https:\/\//.test(envRecord.WEB_ORIGIN)) {
+      throw new Error(`[ProductionConfigError] WEB_ORIGIN must be an https:// origin in production, got '${envRecord.WEB_ORIGIN}'.`);
     }
 
     if (envRecord.HEDERA_NETWORK && envRecord.HEDERA_NETWORK !== 'hedera:testnet') {

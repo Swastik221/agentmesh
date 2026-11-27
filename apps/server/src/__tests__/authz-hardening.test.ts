@@ -317,13 +317,6 @@ describe('Authorization hardening', () => {
         },
       });
 
-    const requirementFor = (ref: string) => ({
-      paymentReference: ref,
-      amount: PAYMENT_CONFIG.DEFAULT_ATOMIC_AMOUNT,
-      asset: PAYMENT_CONFIG.USDC_TOKEN_ID,
-      network: PAYMENT_CONFIG.NETWORK,
-      receiver: 'receiver',
-    });
 
     const header = JSON.stringify({ x402Version: 2, payload: {} });
 
@@ -334,7 +327,7 @@ describe('Authorization hardening', () => {
           projectA.id,
           owner.id,
           header,
-          requirementFor(victim.x402PaymentReference!) as never,
+          victim.x402PaymentReference!,
           agentA.id,
         ),
       ).rejects.toMatchObject({ statusCode: 403 });
@@ -347,7 +340,7 @@ describe('Authorization hardening', () => {
           projectA.id,
           member.id,
           header,
-          requirementFor(theirs.x402PaymentReference!) as never,
+          theirs.x402PaymentReference!,
           agentA.id,
         ),
       ).rejects.toMatchObject({ statusCode: 403 });
@@ -359,7 +352,7 @@ describe('Authorization hardening', () => {
         projectA.id,
         owner.id,
         header,
-        requirementFor(mine.x402PaymentReference!) as never,
+        mine.x402PaymentReference!,
         agentA.id,
       );
       expect(result.id).toBe(mine.id);

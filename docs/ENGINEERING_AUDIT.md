@@ -1,6 +1,6 @@
 # AgentMesh engineering audit
 
-Date: 2026-11-27. Branch: `feat/shared-canvas` (built on `fix/authz-hardening`, PR #76).
+Date: 2026-11-27. Originally written on `feat/shared-canvas`; statuses updated after the final sprint (`feat/final-sprint`). Evidence for the sprint's changes: [FINAL_SPRINT_STATUS.md](FINAL_SPRINT_STATUS.md).
 
 This audit covers the whole monorepo: server, web, CLI, protocol package, database, realtime layer, and the Web3 integrations (SIWE, ENS, Hedera x402). It was done by reading the code paths end to end, running every check the repository has, writing integration tests for the multi-user scenarios, and driving the real CLI and web app against an isolated server and database.
 
@@ -71,13 +71,13 @@ Packages:
 
 | ID | Finding | Type | Status |
 | --- | --- | --- | --- |
-| F-05 | **Hedera settlement cannot succeed through the official facilitator.** The requirement sets `extra.feePayer` to the payment receiver (`payments/x402.service.ts`); the installed `@x402/hedera` facilitator rejects any fee payer it does not manage (`fee_payer_not_managed_by_facilitator`). The 402 header also advertises non-standard fields. Confirmed against the installed library; not testable live here (no Hedera credentials). | Verified bug | Open |
-| F-06 | **Payment settles before the agent-online check.** If the agent is offline the execution fails, the payment stays bound to that failed execution, and there is no retry or refund path. | Verified bug | Open |
+| F-05 | **Hedera settlement cannot succeed through the official facilitator.** The requirement sets `extra.feePayer` to the payment receiver (`payments/x402.service.ts`); the installed `@x402/hedera` facilitator rejects any fee payer it does not manage (`fee_payer_not_managed_by_facilitator`). The 402 header also advertises non-standard fields. Confirmed against the installed library; not testable live here (no Hedera credentials). | Verified bug | Fixed in code (final sprint): fee payer from the facilitator's `/supported`, `payTo`/`maxTimeoutSeconds`/exact amount; contract-tested against the installed facilitator. Live testnet settlement not yet run (needs a funded payer). |
+| F-06 | **Payment settles before the agent-online check.** If the agent is offline the execution fails, the payment stays bound to that failed execution, and there is no retry or refund path. | Verified bug | Fixed (final sprint): availability checked before quoting and settling; failure after settlement flags `refundDue` for a manual refund. |
 | F-07 | **Client-chosen payment reference was not bound to its project/requester/agent**, so a known settled reference returned another project's execution output. | Verified bug | Fixed (PR #76) |
 | F-08 | **Task status could be set to anything by PATCH**, including completing a task waiting for approval. | Verified bug | Fixed (PR #76): hand-set PENDING_APPROVAL refused; leaving it only by cancelling; COMPLETED/CANCELLED final. |
 | F-09 | **Connect tokens expire after 10 minutes, breaking reconnect** for any long-lived connector. | Verified bug | Fixed (this branch): rotating 12-hour resume token returned on each accepted handshake; membership and ownership still re-checked on every handshake. |
-| F-10 | **Production web build points at `localhost:3001`.** The Vercel build has no `VITE_API_URL`; the server is not deployed. | Verified bug (deployment) | Open |
-| F-11 | **Web UI cannot pay.** `PaidCapabilityCard` stops at wallet signing, parses a base64 header as JSON, and CORS does not expose the header. | Verified bug | Open |
+| F-10 | **Production web build points at `localhost:3001`.** The Vercel build has no `VITE_API_URL`; the server is not deployed. | Verified bug (deployment) | Partly fixed (final sprint): deployment builds refuse to run without API URLs; misconfigured bundles show an error screen. Server still not deployed. |
+| F-11 | **Web UI cannot pay.** `PaidCapabilityCard` stops at wallet signing, parses a base64 header as JSON, and CORS does not expose the header. | Verified bug | Partly fixed (final sprint): header decoding, CORS exposure and honest UI. Browser-side Hedera signing still open. |
 | F-12 | **Task board and agent list unmounted on every refetch**, wiping in-progress UI state and flickering on teammates' changes. | Verified bug | Fixed (this branch) |
 | F-13 | **Canvas "terminal" was fake.** `TerminalNode` showed a hardcoded prompt; the terminal adapter threw. | Missing feature | Fixed (this branch): replaced by real connected terminals (section 6). |
 
@@ -87,28 +87,28 @@ Packages:
 | --- | --- | --- | --- |
 | F-14 | WebSocket upgrade had no Origin check; session ids accepted in the query string. | Potential risk | Fixed (PR #76): browser Origin must match `WEB_ORIGIN`; `?token=` refused in production. |
 | F-15 | No body/message size limits (10 MB JSON, 100 MB WS default). | Potential risk | Fixed (PR #76): 2 MB each. |
-| F-16 | No rate limiting anywhere (`/auth/nonce`, SIWE verify); expired SIWE nonces never deleted. | Missing feature | Open |
-| F-17 | Session ids are Prisma `cuid()`s stored in plaintext (connect tokens, by contrast, are hashed). | Potential risk | Open |
-| F-18 | Approval status and resumed action are not atomic: if the resume throws, the request stays APPROVED with nothing executed. | Verified bug | Open |
-| F-19 | Approvals and executions created by others do not appear live in the web UI (unhandled event types; polling only when non-empty). | Verified bug | Open |
-| F-20 | Logout does not leave protected pages; a 401 mid-session never redirects. | Verified bug | Open |
-| F-21 | Canvas tool dock adds node types the canvas cannot render; nodes reset on every data change; edges drawn from board to every agent regardless of assignment. | Verified bug | Open |
-| F-22 | Owner-only actions (join code, invite, approve own request) offered to plain members; the server refuses them correctly. | Verified bug (UX) | Open |
-| F-23 | One WebSocket per web view, so switching views makes presence flap for teammates. | Potential risk | Open |
+| F-16 | No rate limiting anywhere (`/auth/nonce`, SIWE verify); expired SIWE nonces never deleted. | Missing feature | Fixed (final sprint): per-IP rate limits on nonce, verify, token minting and join; expired credentials purged every 10 minutes. |
+| F-17 | Session ids are Prisma `cuid()`s stored in plaintext (connect tokens, by contrast, are hashed). | Potential risk | Fixed (final sprint): 256-bit tokens, only the SHA-256 hash stored. |
+| F-18 | Approval status and resumed action are not atomic: if the resume throws, the request stays APPROVED with nothing executed. | Verified bug | Fixed (final sprint): resume state recorded with the decision; explicit, race-safe retry; restart reconciliation. |
+| F-19 | Approvals and executions created by others do not appear live in the web UI (unhandled event types; polling only when non-empty). | Verified bug | Fixed (final sprint): approvals and executions refetch on realtime events. |
+| F-20 | Logout does not leave protected pages; a 401 mid-session never redirects. | Verified bug | Fixed (final sprint): logout, 401 and wallet changes end the session, close sockets and return to sign-in. |
+| F-21 | Canvas tool dock adds node types the canvas cannot render; nodes reset on every data change; edges drawn from board to every agent regardless of assignment. | Verified bug | Fixed (final sprint): nodes merge instead of reset, positions and private notes kept per device, edges only from real assignments, dock limited to renderable notes. |
+| F-22 | Owner-only actions (join code, invite, approve own request) offered to plain members; the server refuses them correctly. | Verified bug (UX) | Partly fixed (final sprint): header invite is owner-only. Team view still offers some manager actions to members (server refuses them). |
+| F-23 | One WebSocket per web view, so switching views makes presence flap for teammates. | Potential risk | Fixed (final sprint): one shared socket per workspace with linger across view switches. |
 | F-24 | ENS-based invite resolves through a single public RPC; a wrong resolution sends access to an unintended wallet. | Potential risk | Open |
-| F-25 | Payment replay under a *new* reference is prevented only by Hedera's duplicate-transaction rejection; `transactionReference` is not unique. | Potential risk | Open |
-| F-26 | Removing a member does not drop their open WebSocket connections or terminal subscriptions. | Potential risk | Open |
-| F-27 | The local test suite runs against `DATABASE_URL` and deletes all rows, so running tests wipes the developer's dev database. | Potential risk | Open |
+| F-25 | Payment replay under a *new* reference is prevented only by Hedera's duplicate-transaction rejection; `transactionReference` is not unique. | Potential risk | Fixed (final sprint): unique `transactionReference`; only server-issued, unexpired references settle. |
+| F-26 | Removing a member does not drop their open WebSocket connections or terminal subscriptions. | Potential risk | Fixed (final sprint): member removal closes their sockets, subscriptions and agents' connections; token revocation endpoint disconnects immediately. |
+| F-27 | The local test suite runs against `DATABASE_URL` and deletes all rows, so running tests wipes the developer's dev database. | Potential risk | Fixed (PR #78): tests use `<db>_test` and refuse any other database. |
 
 ### Low
 
 | ID | Finding | Type | Status |
 | --- | --- | --- | --- |
 | F-28 | README described a removed demo mode (`/demo/run`, "Run AgentMesh Demo", `pnpm demo:e2e:live` pointing at a deleted file) and placeholder deploy links. | Verified bug (docs) | Fixed (this branch) |
-| F-29 | Header "Presence" / "Notes" buttons dispatch events nothing listens to; `MultiplayerCursors` renders nothing. | Verified bug | Open |
+| F-29 | Header "Presence" / "Notes" buttons dispatch events nothing listens to; `MultiplayerCursors` renders nothing. | Verified bug | Fixed (final sprint): Presence opens Team, Notes adds a note, Sync replaced by a live connection indicator. |
 | F-30 | Dead code: `services/ws-client.ts` (wrong URL), `wallet.adapter.resolveEns` (no route), unused mock data in `data/workspace.ts`, file/browser-preview stub adapters. | Missing feature / cleanup | Open |
-| F-31 | Wallet `accountsChanged` clears client state but leaves the old server session valid. | Verified bug | Open |
-| F-32 | `x402ResourceServer` and `ExactHederaScheme` are constructed but never used. | Cleanup | Open |
+| F-31 | Wallet `accountsChanged` clears client state but leaves the old server session valid. | Verified bug | Fixed (final sprint): wallet switch or disconnect ends the server session. |
+| F-32 | `x402ResourceServer` and `ExactHederaScheme` are constructed but never used. | Cleanup | Fixed (final sprint): unused objects removed. |
 
 ## 4. Frontend ↔ backend integration
 

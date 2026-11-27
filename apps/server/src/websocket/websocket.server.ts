@@ -9,6 +9,7 @@ import {
 } from '@agentmesh/agent-protocol';
 import { handleCoordinationMessage } from './coordination.handler.js';
 import { terminalService } from '../terminals/terminal.service.js';
+import { agentCoordinationService } from '../coordination/agent-coordination.service.js';
 import { isExecutorConnection } from './connection.manager.js';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
@@ -411,6 +412,9 @@ export class AgentMeshWebSocketServer {
               payload: { connectionId: metadata.connectionId },
             });
             await this.broadcastAgentRoster(projectId);
+            if (connectionManager.getActiveAgentConnectionsCount(agentId) === 0) {
+              await agentCoordinationService.onAgentDisconnected(projectId, agentId);
+            }
           }
         } catch {
           // Best-effort activity during teardown.
@@ -653,6 +657,13 @@ export class AgentMeshWebSocketServer {
       const handshakeResult = await handshakeService.processHandshake(metadata, parsed);
       this.sendJson(metadata.socket, handshakeResult.message as unknown as WebSocketMessage);
 
+      // Messages other agents sent while this one was away.
+      if (handshakeResult.success && metadata.agentId) {
+        void agentCoordinationService.deliverPending(metadata).catch((err: unknown) => {
+          logger.error('[WebSocket] Delivering queued agent messages failed:', err);
+        });
+      }
+
       if (handshakeResult.success && metadata.agentId && isExecutorConnection(metadata)) {
         const presenceMsg = createWorkspacePresenceChangedMessage(
           {
@@ -781,6 +792,10 @@ export class AgentMeshWebSocketServer {
         // Agent-published artifacts enter the human review gate.
         const { taskService } = await import('../tasks/task.service.js');
         await taskService.markPendingApproval(metadata.projectId, taskId, metadata.agentId);
+
+        void agentCoordinationService
+          .onArtifactPublished(metadata.projectId, taskId, artifact.id, metadata.agentId)
+          .catch(() => {});
 
         this.sendJson(metadata.socket, {
           type: AgentMeshMessageType.ARTIFACT_CREATED,

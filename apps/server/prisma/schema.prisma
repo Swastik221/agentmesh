@@ -87,6 +87,7 @@ model Project {
   invitations        ProjectInvitation[]
   agentConnectTokens AgentConnectToken[]
   terminalSessions   TerminalSession[]
+  agentMessages      AgentMessage[]
 
   @@index([ownerId])
   @@map("projects")
@@ -156,6 +157,8 @@ model Agent {
   payments             Payment[]
   connectTokens        AgentConnectToken[]
   terminalSessions     TerminalSession[]
+  sentMessages         AgentMessage[]       @relation("AgentMessageSender")
+  receivedMessages     AgentMessage[]       @relation("AgentMessageRecipient")
 
   @@index([projectId])
   @@index([ownerId])
@@ -180,6 +183,10 @@ model AgentCapability {
 model AuthSession {
   id        String   @id @default(cuid())
   userId    String
+  /// SHA-256 of the cookie token. The token itself is never stored, so a
+  /// database read cannot be replayed as a login. Null on rows created before
+  /// hashing, which can no longer be used.
+  tokenHash String?  @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
 
@@ -496,20 +503,28 @@ enum ApprovalStatus {
 }
 
 model ApprovalRequest {
-  id                String         @id @default(cuid())
+  id                String               @id @default(cuid())
   projectId         String
   policyId          String?
   requestedByUserId String
   agentId           String?
   action            String
   idempotencyKey    String?
-  status            ApprovalStatus @default(PENDING)
+  status            ApprovalStatus       @default(PENDING)
   reason            String?
   metadata          Json?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
   resolvedAt        DateTime?
   resolvedByUserId  String?
+  /// Outcome of re-running the blocked action after approval. Recorded
+  /// alongside the decision so an approval can never silently stand without
+  /// its action, and a failed resume can be retried explicitly.
+  resumeStatus      ApprovalResumeStatus @default(NOT_APPLICABLE)
+  resumeError       String?
+  resumeResultId    String?
+  resumeAttempts    Int                  @default(0)
+  resumedAt         DateTime?
 
   project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   policy          Policy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
@@ -547,7 +562,9 @@ model Payment {
   receiverAddress      String
   status               PaymentStatus @default(REQUIRED)
   x402PaymentReference String?       @unique
-  transactionReference String?
+  /// The Hedera transaction that settled it. Unique: one on-chain transfer
+  /// can never pay for two payment requests.
+  transactionReference String?       @unique
   executionId          String?
   metadata             Json?
   createdAt            DateTime      @default(now())
@@ -629,4 +646,58 @@ model TerminalSession {
   @@index([ownerUserId])
   @@index([agentId])
   @@map("terminal_sessions")
+}
+
+enum AgentMessageIntent {
+  ASK
+  ANSWER
+  PROPOSE
+  ACKNOWLEDGE
+  HANDOFF
+  BLOCKED
+  CONFLICT
+}
+
+enum AgentMessageDeliveryState {
+  PENDING
+  DELIVERED
+  ACKNOWLEDGED
+}
+
+/// A structured agent-to-agent message. One row per recipient. Stored so a
+/// message to an offline agent is delivered when it reconnects, and so the
+/// exchange stays auditable.
+model AgentMessage {
+  id               String                    @id @default(cuid())
+  projectId        String
+  senderAgentId    String
+  recipientAgentId String
+  taskId           String?
+  intent           AgentMessageIntent
+  subject          String
+  body             String
+  data             Json?
+  inReplyToId      String?
+  /// The sender's envelope id: a resend of the same message is not stored twice.
+  clientMessageId  String
+  deliveryState    AgentMessageDeliveryState @default(PENDING)
+  deliveredAt      DateTime?
+  acknowledgedAt   DateTime?
+  createdAt        DateTime                  @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sender    Agent   @relation("AgentMessageSender", fields: [senderAgentId], references: [id], onDelete: Cascade)
+  recipient Agent   @relation("AgentMessageRecipient", fields: [recipientAgentId], references: [id], onDelete: Cascade)
+
+  @@unique([senderAgentId, clientMessageId, recipientAgentId])
+  @@index([recipientAgentId, deliveryState])
+  @@index([projectId, createdAt])
+  @@map("agent_messages")
+}
+
+enum ApprovalResumeStatus {
+  NOT_APPLICABLE
+  PENDING
+  DONE
+  FAILED
 }

@@ -113,6 +113,40 @@ export class ConnectionManager {
     this.connections.delete(connectionId);
   }
 
+  /** Closes every connection of an agent (any role). Returns how many were open. */
+  closeAgentConnections(agentId: string, code: number, reason: string): number {
+    let count = 0;
+    for (const conn of [...this.connections.values()]) {
+      if (conn.agentId !== agentId) continue;
+      count += 1;
+      try {
+        conn.socket.close(code, reason);
+      } catch {
+        conn.socket.terminate();
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Closes a user's browser connections to a project, and the connections of
+   * agents they own there: used when their membership is removed, so access
+   * ends now rather than at their next reconnect.
+   */
+  closeUserProjectConnections(projectId: string, userId: string, code: number, reason: string): number {
+    let count = 0;
+    for (const conn of [...this.connections.values()]) {
+      if (conn.projectId !== projectId || conn.userId !== userId) continue;
+      count += 1;
+      try {
+        conn.socket.close(code, reason);
+      } catch {
+        conn.socket.terminate();
+      }
+    }
+    return count;
+  }
+
   getConnection(connectionId: string): ConnectionMetadata | undefined {
     return this.connections.get(connectionId);
   }

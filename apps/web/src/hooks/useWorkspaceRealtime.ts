@@ -65,7 +65,12 @@ export interface RealtimeDeltaEvent {
   fields?: Record<string, unknown>;
 }
 
-export type RealtimeConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
+/**
+ * `revoked`: the server closed the connection because access was withdrawn
+ * (membership removed, credentials revoked, or the session is no longer
+ * valid). The hub stops reconnecting; the UI should send the user elsewhere.
+ */
+export type RealtimeConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'revoked';
 
 export interface UseWorkspaceRealtimeResult {
   status: RealtimeConnectionStatus;
@@ -89,6 +94,15 @@ export interface RealtimeFrame {
 
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 10000;
+/**
+ * How long a workspace connection stays open after its last subscriber goes
+ * away. Switching between workspace views unmounts one view and mounts the
+ * next; without this the socket would close and reopen, and teammates would
+ * see this user flicker offline and online.
+ */
+const LINGER_MS = 5000;
+/** Server close codes that mean "you no longer have access": do not reconnect. */
+const ACCESS_LOST_CODES = new Set([4001, 4003]);
 
 export interface UseWorkspaceRealtimeCallbacks {
   /** A single change landed, in server-broadcast order. */
@@ -107,6 +121,249 @@ export interface UseWorkspaceRealtimeCallbacks {
   onMessage?: (frame: RealtimeFrame) => void;
 }
 
+interface Subscriber {
+  callbacks: { current: UseWorkspaceRealtimeCallbacks | undefined };
+  setStatus: (s: RealtimeConnectionStatus) => void;
+  setSequence: (n: number) => void;
+}
+
+/**
+ * One WebSocket per workspace, shared by every component that subscribes to
+ * it. Owns the connection lifecycle (backoff, sequencing, gap detection,
+ * resync) and fans each frame out to its subscribers.
+ */
+class WorkspaceRealtimeHub {
+  private socket: WebSocket | null = null;
+  private subscribers = new Set<Subscriber>();
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private lingerTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
+  private currentSeq = 0;
+  private resyncPending = false;
+  private closed = false;
+  status: RealtimeConnectionStatus = 'disconnected';
+
+  constructor(
+    readonly projectId: string,
+    private readonly onDispose: (hub: WorkspaceRealtimeHub) => void,
+  ) {}
+
+  subscribe(sub: Subscriber): () => void {
+    if (this.lingerTimer) {
+      clearTimeout(this.lingerTimer);
+      this.lingerTimer = null;
+    }
+    this.subscribers.add(sub);
+    sub.setStatus(this.status);
+    sub.setSequence(this.currentSeq);
+    if (!this.socket && !this.reconnectTimer && this.status !== 'revoked') this.connect();
+    return () => {
+      this.subscribers.delete(sub);
+      if (this.subscribers.size === 0) {
+        this.lingerTimer = setTimeout(() => this.dispose(), LINGER_MS);
+      }
+    };
+  }
+
+  send(type: string, payload: unknown): boolean {
+    const ws = this.socket;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    ws.send(
+      JSON.stringify({
+        id: crypto.randomUUID(),
+        protocolVersion: PROTOCOL_VERSION,
+        projectId: this.projectId,
+        senderId: 'user-client',
+        timestamp: new Date().toISOString(),
+        type,
+        payload,
+      }),
+    );
+    return true;
+  }
+
+  dispose(): void {
+    this.closed = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.lingerTimer) clearTimeout(this.lingerTimer);
+    if (this.socket) {
+      this.socket.onclose = null;
+      this.socket.onerror = null;
+      this.socket.close();
+      this.socket = null;
+    }
+    this.setStatus('disconnected');
+    this.onDispose(this);
+  }
+
+  private setStatus(status: RealtimeConnectionStatus): void {
+    this.status = status;
+    for (const s of this.subscribers) s.setStatus(status);
+  }
+
+  private setSequence(seq: number): void {
+    this.currentSeq = seq;
+    for (const s of this.subscribers) s.setSequence(seq);
+  }
+
+  private emit<K extends keyof UseWorkspaceRealtimeCallbacks>(
+    key: K,
+    ...args: Parameters<NonNullable<UseWorkspaceRealtimeCallbacks[K]>>
+  ): void {
+    for (const s of [...this.subscribers]) {
+      const fn = s.callbacks.current?.[key] as ((...a: unknown[]) => void) | undefined;
+      try {
+        fn?.(...args);
+      } catch (err) {
+        console.error('[realtime] subscriber failed', err);
+      }
+    }
+  }
+
+  private requestResync(ws: WebSocket, lastKnownSequence: number, reason: 'SEQUENCE_GAP' | 'RECONNECT') {
+    // Hand-built: the protocol package's builder imports Node's `crypto`,
+    // which Vite externalizes for the browser.
+    this.resyncPending = true;
+    ws.send(
+      JSON.stringify({
+        id: crypto.randomUUID(),
+        protocolVersion: PROTOCOL_VERSION,
+        projectId: this.projectId,
+        senderId: 'user-client',
+        timestamp: new Date().toISOString(),
+        type: AgentMeshMessageType.WORKSPACE_RESYNC_REQUEST,
+        payload: { lastKnownSequence, reason },
+      }),
+    );
+  }
+
+  private connect(): void {
+    if (this.closed) return;
+    this.reconnectTimer = null;
+    this.setStatus(this.reconnectAttempts > 0 ? 'reconnecting' : 'connecting');
+
+    const base = envConfig.wsUrl.replace(/\/$/, '');
+    const ws = new WebSocket(`${base}/ws?projectId=${encodeURIComponent(this.projectId)}&clientType=user`);
+    this.socket = ws;
+
+    ws.onopen = () => {
+      this.reconnectAttempts = 0;
+      this.setStatus('connected');
+      // The server sends a fresh snapshot on every new connection.
+    };
+
+    ws.onmessage = (event: MessageEvent) => {
+      let data: { type?: string; payload?: unknown };
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (!data || typeof data.type !== 'string') return;
+
+      switch (data.type) {
+        case AgentMeshMessageType.WORKSPACE_SNAPSHOT: {
+          const payload = data.payload as { sequence?: number };
+          this.resyncPending = false;
+          this.setSequence(payload.sequence ?? 0);
+          this.emit('onResync');
+          return;
+        }
+        case AgentMeshMessageType.WORKSPACE_RESYNC_REQUIRED: {
+          const payload = data.payload as { sequence?: number };
+          if (typeof payload.sequence === 'number') this.setSequence(payload.sequence);
+          return;
+        }
+        case AgentMeshMessageType.WORKSPACE_DELTA: {
+          const payload = data.payload as { sequence: number; changes: RealtimeDeltaEvent[] };
+          if (typeof payload.sequence !== 'number' || !Array.isArray(payload.changes)) return;
+          if (payload.sequence <= this.currentSeq) return; // duplicate or already applied
+          if (payload.sequence > this.currentSeq + 1) {
+            if (!this.resyncPending) this.requestResync(ws, this.currentSeq, 'SEQUENCE_GAP');
+            return;
+          }
+          this.resyncPending = false;
+          this.setSequence(payload.sequence);
+          for (const change of payload.changes) this.emit('onDelta', change);
+          return;
+        }
+        case AgentMeshMessageType.WORKSPACE_PRESENCE_CHANGED:
+          // Every presence change also arrives as a sequenced `presence`
+          // delta; forwarding this too made every subscriber refetch twice.
+          return;
+        default:
+          this.emit('onMessage', data as RealtimeFrame);
+          return;
+      }
+    };
+
+    ws.onclose = (event: CloseEvent) => {
+      this.socket = null;
+      if (this.closed) return;
+      if (ACCESS_LOST_CODES.has(event.code)) {
+        this.setStatus('revoked');
+        return;
+      }
+      this.setStatus('reconnecting');
+      this.reconnectAttempts += 1;
+      const delay = Math.min(RECONNECT_BASE_DELAY_MS * 2 ** (this.reconnectAttempts - 1), RECONNECT_MAX_DELAY_MS);
+      this.reconnectTimer = setTimeout(() => this.connect(), delay);
+    };
+
+    ws.onerror = () => {
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+    };
+  }
+}
+
+const hubs = new Map<string, WorkspaceRealtimeHub>();
+
+function hubFor(projectId: string): WorkspaceRealtimeHub {
+  let hub = hubs.get(projectId);
+  if (!hub) {
+    hub = new WorkspaceRealtimeHub(projectId, (h) => {
+      if (hubs.get(h.projectId) === h) hubs.delete(h.projectId);
+    });
+    hubs.set(projectId, hub);
+  }
+  return hub;
+}
+
+/**
+ * Non-React subscription to a workspace's shared stream; the hook below is a
+ * thin wrapper over it. Returns an unsubscribe function.
+ */
+export function subscribeWorkspaceRealtime(
+  projectId: string,
+  subscriber: {
+    callbacks?: UseWorkspaceRealtimeCallbacks;
+    onStatus?: (status: RealtimeConnectionStatus) => void;
+    onSequence?: (sequence: number) => void;
+  },
+): { unsubscribe: () => void; send: (type: string, payload: unknown) => boolean } {
+  const hub = hubFor(projectId);
+  const unsubscribe = hub.subscribe({
+    callbacks: { current: subscriber.callbacks },
+    setStatus: subscriber.onStatus ?? (() => {}),
+    setSequence: subscriber.onSequence ?? (() => {}),
+  });
+  return { unsubscribe, send: (type, payload) => hub.send(type, payload) };
+}
+
+/** Closes every workspace connection now. Call on sign-out. */
+export function closeAllWorkspaceRealtime(): void {
+  for (const hub of [...hubs.values()]) hub.dispose();
+}
+
+/** Number of open workspace hubs; for tests. */
+export function openWorkspaceRealtimeCount(): number {
+  return hubs.size;
+}
+
+/**
+ * Subscribes to the workspace's shared realtime stream. Any number of
+ * components may call this for the same workspace; they share one socket.
+ */
 export function useWorkspaceRealtime(
   projectId: string | null,
   callbacks?: UseWorkspaceRealtimeCallbacks,
@@ -115,183 +372,24 @@ export function useWorkspaceRealtime(
   const [sequence, setSequence] = useState(0);
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
-  const socketRef = useRef<WebSocket | null>(null);
-
-  const send = useCallback(
-    (type: string, payload: unknown): boolean => {
-      const ws = socketRef.current;
-      if (!projectId || !ws || ws.readyState !== WebSocket.OPEN) return false;
-      ws.send(
-        JSON.stringify({
-          id: crypto.randomUUID(),
-          protocolVersion: PROTOCOL_VERSION,
-          projectId,
-          senderId: 'user-client',
-          timestamp: new Date().toISOString(),
-          type,
-          payload,
-        }),
-      );
-      return true;
-    },
-    [projectId],
-  );
 
   useEffect(() => {
     if (!projectId) {
       setStatus('disconnected');
       return;
     }
-
-    let active = true;
-    let socket: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let reconnectAttempts = 0;
-    let currentSeq = 0;
-    let resyncPending = false;
-
-    const requestResync = (ws: WebSocket, lastKnownSequence: number, reason: 'SEQUENCE_GAP' | 'RECONNECT') => {
-      // Not using createWorkspaceResyncRequestMessage from @agentmesh/agent-protocol
-      // here: its builder module imports Node's `crypto` directly, which Vite
-      // externalizes for the browser, so calling it throws inside this
-      // onmessage handler (silently, since nothing here was catching it) and
-      // the request never gets built, let alone sent. Confirmed live: no
-      // resync.request ever reached the server until this was hand-built
-      // instead. The envelope itself is otherwise exactly what that builder
-      // would produce; only the browser-unsafe id generation is avoided.
-      const msg = {
-        id: crypto.randomUUID(),
-        protocolVersion: PROTOCOL_VERSION,
-        projectId,
-        senderId: 'user-client',
-        timestamp: new Date().toISOString(),
-        type: AgentMeshMessageType.WORKSPACE_RESYNC_REQUEST,
-        payload: { lastKnownSequence, reason },
-      };
-      resyncPending = true;
-      ws.send(JSON.stringify(msg));
-    };
-
-    const connect = () => {
-      if (!active) return;
-      setStatus(reconnectAttempts > 0 ? 'reconnecting' : 'connecting');
-
-      const base = envConfig.wsUrl.replace(/\/$/, '');
-      const url = `${base}/ws?projectId=${encodeURIComponent(projectId)}&clientType=user`;
-      const ws = new WebSocket(url);
-      socket = ws;
-      socketRef.current = ws;
-
-      ws.onopen = () => {
-        if (!active) return;
-        reconnectAttempts = 0;
-        setStatus('connected');
-        // No resync.request needed here: the server sends a fresh snapshot
-        // unconditionally on every new connection, this one included.
-      };
-
-      ws.onmessage = (event: MessageEvent) => {
-        if (!active) return;
-        let data: { type?: string; payload?: unknown };
-        try {
-          data = JSON.parse(event.data);
-        } catch {
-          return;
-        }
-        if (!data || typeof data.type !== 'string') return;
-
-        switch (data.type) {
-          case AgentMeshMessageType.WORKSPACE_SNAPSHOT: {
-            const payload = data.payload as { sequence?: number };
-            currentSeq = payload.sequence ?? 0;
-            resyncPending = false;
-            setSequence(currentSeq);
-            callbacksRef.current?.onResync?.();
-            return;
-          }
-
-          case AgentMeshMessageType.WORKSPACE_RESYNC_REQUIRED: {
-            // The server sends a fresh snapshot right after this, which will
-            // re-baseline the sequence on its own; adopt the number here too
-            // so nothing in between reads as a gap.
-            const payload = data.payload as { sequence?: number };
-            if (typeof payload.sequence === 'number') {
-              currentSeq = payload.sequence;
-              setSequence(currentSeq);
-            }
-            return;
-          }
-
-          case AgentMeshMessageType.WORKSPACE_DELTA: {
-            const payload = data.payload as { sequence: number; changes: RealtimeDeltaEvent[] };
-            if (typeof payload.sequence !== 'number' || !Array.isArray(payload.changes)) return;
-
-            if (payload.sequence <= currentSeq) {
-              return; // duplicate or already-applied delta
-            }
-            if (payload.sequence > currentSeq + 1) {
-              // One resync request in flight is enough: two deltas can each
-              // observe the same gap before the first reply lands (confirmed
-              // live), and firing a second is pure waste, not a correctness
-              // issue on its own, since a replayed duplicate is still caught
-              // by the check above once the first reply has landed.
-              if (!resyncPending) requestResync(ws, currentSeq, 'SEQUENCE_GAP');
-              return;
-            }
-
-            currentSeq = payload.sequence;
-            resyncPending = false;
-            setSequence(currentSeq);
-            for (const change of payload.changes) {
-              callbacksRef.current?.onDelta?.(change);
-            }
-            return;
-          }
-
-          case AgentMeshMessageType.WORKSPACE_PRESENCE_CHANGED: {
-            const payload = data.payload as { entityType: 'user' | 'agent'; entityId: string; status: string };
-            callbacksRef.current?.onDelta?.({
-              entity: 'presence',
-              entityId: payload.entityId,
-              operation: 'updated',
-              fields: { entityType: payload.entityType, status: payload.status },
-            });
-            return;
-          }
-
-          default:
-            callbacksRef.current?.onMessage?.(data as RealtimeFrame);
-            return;
-        }
-      };
-
-      ws.onclose = () => {
-        if (!active) return;
-        socket = null;
-        setStatus('reconnecting');
-        reconnectAttempts += 1;
-        const delay = Math.min(RECONNECT_BASE_DELAY_MS * 2 ** (reconnectAttempts - 1), RECONNECT_MAX_DELAY_MS);
-        reconnectTimer = setTimeout(connect, delay);
-      };
-
-      ws.onerror = () => {
-        if (ws.readyState === WebSocket.OPEN) ws.close();
-      };
-    };
-
-    connect();
-
+    const hub = hubFor(projectId);
+    const unsubscribe = hub.subscribe({ callbacks: callbacksRef, setStatus, setSequence });
     return () => {
-      active = false;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (socket) {
-        socket.onclose = null;
-        socket.onerror = null;
-        socket.close();
-      }
+      unsubscribe();
       setStatus('disconnected');
     };
   }, [projectId]);
+
+  const send = useCallback(
+    (type: string, payload: unknown): boolean => (projectId ? (hubs.get(projectId)?.send(type, payload) ?? false) : false),
+    [projectId],
+  );
 
   return { status, sequence, send };
 }

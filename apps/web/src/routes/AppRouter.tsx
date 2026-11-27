@@ -3,6 +3,9 @@ import { RotateCcw } from 'lucide-react';
 import { authSessionService } from '../services/auth-session';
 import { SignInPage } from '../pages/SignIn/SignInPage';
 import { WorkspacesPage } from '../pages/Workspace/WorkspacesPage';
+import { SESSION_ENDED_EVENT } from '../services/api-client';
+import { closeAllWorkspaceRealtime } from '../hooks/useWorkspaceRealtime';
+import { isMisconfiguredDeployment } from '../config/env';
 
 const CanvasApp = lazy(() => import('../App'));
 const LandingPage = lazy(() => import('../features/landing/LandingPage'));
@@ -97,9 +100,21 @@ function RouterContent() {
     };
     document.addEventListener('click', handleLinkClick);
 
+    // Session over (signed out, wallet changed, or a 401): leave protected
+    // pages and drop live connections. A 401 remembers where the user was.
+    const onSessionEnded = (e: Event) => {
+      closeAllWorkspaceRealtime();
+      const reason = (e as CustomEvent<{ reason?: string }>).detail?.reason;
+      const here = location.pathname + location.search;
+      if (here.startsWith('/signin') || here === '/' || here.startsWith('/landing')) return;
+      navigate(reason === 'expired' ? `/signin?next=${encodeURIComponent(here)}` : '/signin');
+    };
+    window.addEventListener(SESSION_ENDED_EVENT, onSessionEnded);
+
     return () => {
       window.removeEventListener('popstate', update);
       document.removeEventListener('click', handleLinkClick);
+      window.removeEventListener(SESSION_ENDED_EVENT, onSessionEnded);
     };
   }, []);
 
@@ -127,6 +142,15 @@ function RouterContent() {
 }
 
 export function AppRouter() {
+  if (isMisconfiguredDeployment()) {
+    return (
+      <div className="demo-not-found" role="alert">
+        <h1>This deployment is not connected to a server</h1>
+        <p>It was built without VITE_API_URL and VITE_WS_URL, so it does not know where the AgentMesh API is.</p>
+        <p>Set both to the server's public https:// and wss:// URLs and rebuild. See docs/DEPLOYMENT.md.</p>
+      </div>
+    );
+  }
   return (
     <Suspense fallback={<div className="demo-route-loading" role="status">Loading AgentMesh…</div>}>
       <RouterContent />

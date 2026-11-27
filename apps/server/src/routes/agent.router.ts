@@ -8,7 +8,10 @@ import {
   deleteAgent,
   getAgentIdentity,
   createAgentConnectToken,
+  revokeAgentConnectTokens,
 } from '../controllers/agent.controller.js';
+import { rateLimit } from '../middleware/rate-limit.js';
+import { config } from '../config/index.js';
 
 const router: Router = Router();
 
@@ -25,6 +28,11 @@ router.delete('/agents/:agentId', deleteAgent);
 router.get('/agents/:agentId/identity', getAgentIdentity);
 
 // Short-lived credential a BYOA agent process uses to open its WebSocket.
-router.post('/agents/:agentId/connect-token', createAgentConnectToken);
+router.post(
+  '/agents/:agentId/connect-token',
+  rateLimit({ name: 'connect token', windowMs: 60_000, max: config.rateLimits.tokens }),
+  createAgentConnectToken,
+);
+router.delete('/agents/:agentId/connect-tokens', revokeAgentConnectTokens);
 
 export default router;

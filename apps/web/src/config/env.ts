@@ -20,6 +20,18 @@ const getEnvVar = (key: string, defaultValue: string): string => {
   return defaultValue;
 };
 
+/**
+ * True for a production bundle built without an API URL. It would otherwise
+ * talk to localhost from every visitor's browser; the router shows a clear
+ * "misconfigured" screen instead.
+ */
+export const isMisconfiguredDeployment = (): boolean =>
+  typeof import.meta !== 'undefined' &&
+  Boolean(import.meta.env?.PROD) &&
+  !import.meta.env?.VITE_API_URL &&
+  typeof location !== 'undefined' &&
+  !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+
 export const envConfig: EnvConfig = {
   get apiUrl(): string {
     return getEnvVar('VITE_API_URL', 'http://localhost:3001');

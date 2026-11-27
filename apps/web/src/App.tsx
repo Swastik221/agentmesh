@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/navigation/Sidebar';
 import { OverviewPage } from './pages/Overview/OverviewPage';
@@ -7,6 +7,9 @@ import { navItems } from './data/workspace';
 import type { SectionId } from './types';
 import { ActivityView, AgentsView, FilesView, TasksView, TeamView } from './pages/Workspace/WorkspaceViews';
 import { AwarenessView, TerminalsView } from './pages/Workspace/CanvasViews';
+import { useWorkspaceRealtime } from './hooks/useWorkspaceRealtime';
+import { currentProjectId } from './utils/currentProjectId';
+import { navigate } from './routes/AppRouter';
 import { WorkspaceScenery } from './components/canvas/WorkspaceScenery';
 import './features/workspace/scenery.css';
 import './pages/Workspace/workspace-views.css';
@@ -18,6 +21,33 @@ export function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const activeLabel = navItems.find((item) => item.id === activeSection)?.label ?? 'Overview';
+  const projectId = currentProjectId();
+
+  // Holds the workspace's shared realtime connection open for as long as the
+  // workspace is on screen, so switching views never reconnects (and never
+  // makes this user flicker offline for teammates).
+  const { status: realtimeStatus } = useWorkspaceRealtime(projectId);
+
+  // The server closed the connection because access was withdrawn (removed
+  // from the workspace): leave it.
+  useEffect(() => {
+    if (realtimeStatus === 'revoked') navigate('/workspaces?notice=access-removed');
+  }, [realtimeStatus]);
+
+  // Other parts of the UI (canvas nodes, header) ask to open a section.
+  useEffect(() => {
+    const open = (e: Event) => {
+      const section = (e as CustomEvent<SectionId>).detail;
+      if (navItems.some((item) => item.id === section)) setActiveSection(section);
+    };
+    window.addEventListener('agentmesh:open-section', open);
+    return () => window.removeEventListener('agentmesh:open-section', open);
+  }, []);
+
+  // A different workspace starts on its overview.
+  useEffect(() => {
+    setActiveSection('overview');
+  }, [projectId]);
 
   return (
     <div

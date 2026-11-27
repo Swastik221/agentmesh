@@ -7,7 +7,6 @@ import {
 } from 'react';
 import { LocateFixed } from 'lucide-react';
 import {
-  addEdge,
   Background,
   Controls,
   MarkerType,
@@ -15,12 +14,11 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
-  ConnectionMode,
   useNodesState,
   useReactFlow,
-  type Connection,
   type Edge,
   type Node,
+  type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -41,7 +39,9 @@ import { currentProjectId } from '../../utils/currentProjectId';
 import { authSessionService } from '../../services/auth-session';
 import { useAgents } from '../../hooks/useAgents';
 import { useTasks } from '../../hooks/useTasks';
-import { useWorkspaceRealtime } from '../../hooks/useWorkspaceRealtime';
+import { useWorkspaceRealtime, type RealtimeFrame } from '../../hooks/useWorkspaceRealtime';
+import { listTerminalSessions, type LiveTerminalSession } from '../../adapters/live/terminal.adapter';
+import { CoordinationMessageType } from '@agentmesh/agent-protocol';
 
 const edgeTypes = {
   protocol: ProtocolEdge,
@@ -58,6 +58,37 @@ const edgeBase = {
   },
   style: { stroke: '#177E89', strokeWidth: 1.8 },
 };
+
+type Positions = Record<string, { x: number; y: number }>;
+interface LocalNote {
+  id: string;
+  text: string;
+  position: { x: number; y: number };
+}
+
+/** Per-viewer layout: where you dragged things, and your private notes. Device-local by design. */
+const layoutKey = (projectId: string | null) => `agentmesh:canvas-layout:${projectId ?? 'none'}`;
+function loadLayout(projectId: string | null): { positions: Positions; notes: LocalNote[] } {
+  try {
+    const raw = localStorage.getItem(layoutKey(projectId));
+    if (raw) {
+      const parsed = JSON.parse(raw) as { positions?: Positions; notes?: LocalNote[] };
+      return { positions: parsed.positions ?? {}, notes: parsed.notes ?? [] };
+    }
+  } catch {
+    // Storage blocked or corrupt: fall back to the default layout.
+  }
+  return { positions: {}, notes: [] };
+}
+function saveLayout(projectId: string | null, layout: { positions: Positions; notes: LocalNote[] }): void {
+  try {
+    localStorage.setItem(layoutKey(projectId), JSON.stringify(layout));
+  } catch {
+    // Best effort.
+  }
+}
+
+const ACTIVE_TASK = new Set(['TODO', 'IN_PROGRESS', 'PENDING_APPROVAL', 'BLOCKED']);
 
 function WorkspaceCanvasInner() {
   const projectId = currentProjectId();
@@ -99,6 +130,24 @@ function WorkspaceCanvasInner() {
   const [agentLogs, setAgentLogs] = useState<Record<string, string[]>>({});
   const MAX_AGENT_LOG_LINES = 20;
 
+  // Connected terminals you may see (yours + shared), kept live by
+  // terminal.session.changed frames on the shared workspace socket.
+  const [terminals, setTerminals] = useState<LiveTerminalSession[]>([]);
+  const viewerId = authSessionService.getCurrentUser()?.id ?? null;
+  const loadTerminals = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      setTerminals(await listTerminalSessions(projectId));
+    } catch {
+      // The node shows the last known list; the Terminals view surfaces errors.
+    }
+  }, [projectId]);
+  useEffect(() => {
+    void loadTerminals();
+  }, [loadTerminals]);
+  const loadTerminalsRef = useRef(loadTerminals);
+  loadTerminalsRef.current = loadTerminals;
+
   useWorkspaceRealtime(
     projectId,
     useMemo(
@@ -123,9 +172,19 @@ function WorkspaceCanvasInner() {
         onResync: () => {
           void refetchAgentsRef.current();
           void refetchTasksRef.current();
+          void loadTerminalsRef.current();
+        },
+        onMessage: (frame: RealtimeFrame) => {
+          if (frame.type !== CoordinationMessageType.TERMINAL_SESSION_CHANGED) return;
+          const session = (frame.payload as { session: LiveTerminalSession }).session;
+          setTerminals((prev) => {
+            const visible = session.status !== 'CLOSED' && (session.visibility === 'SHARED' || session.owner.userId === viewerId);
+            const rest = prev.filter((t) => t.terminalId !== session.terminalId);
+            return visible ? [session, ...rest] : rest;
+          });
         },
       }),
-      [],
+      [viewerId],
     ),
   );
 
@@ -166,7 +225,7 @@ function WorkspaceCanvasInner() {
       type: 'productTasks',
       position: { x: 370, y: 180 },
       data: {
-        tasks: liveTasks.map((task) => toBoardTask(task, now)),
+        tasks: liveTasks.map((task) => toBoardTask(task, now, liveTasks)),
         candidates,
         onCreateOffer: async (title: string, offerSeconds: number) => {
           await createOffer({ title, offerSeconds });
@@ -186,46 +245,114 @@ function WorkspaceCanvasInner() {
       },
     }));
 
-    return [coordinatorNode, tasksNode, ...agentNodes];
-  }, [liveAgents, liveTasks, createOffer, claimOffer, candidates, now, viewerUserId, agentLogs]);
-
-  const initialEdges = useMemo<Edge[]>(() => {
-    const edges: Edge[] = [
-      {
-        ...edgeBase,
-        id: 'coordinator-tasks',
-        source: 'coordinator',
-        target: 'tasks',
-        label: 'TASK_PROPOSAL',
-        data: { protocolType: 'TASK_PROPOSAL' },
+    const terminalsNode: Node = {
+      id: 'terminals',
+      type: 'terminals',
+      position: { x: 900, y: 180 },
+      data: {
+        sessions: terminals,
+        viewerUserId,
+        onOpen: () => window.dispatchEvent(new CustomEvent('agentmesh:open-section', { detail: 'terminals' })),
       },
-    ];
+    };
 
-    liveAgents.forEach((agent) => {
-      edges.push({
+    return [coordinatorNode, tasksNode, terminalsNode, ...agentNodes];
+  }, [liveAgents, liveTasks, createOffer, claimOffer, candidates, now, viewerUserId, agentLogs, terminals]);
+
+  // Edges are drawn only for relationships that exist in the data: an agent
+  // is linked to the board when it actually holds active work there.
+  const initialEdges = useMemo<Edge[]>(() => {
+    const held = new Map<string, number>();
+    for (const task of liveTasks) {
+      if (!ACTIVE_TASK.has(task.status)) continue;
+      for (const r of task.responsibilities ?? []) held.set(r.agentId, (held.get(r.agentId) ?? 0) + 1);
+    }
+    return liveAgents
+      .filter((agent) => held.has(agent.id))
+      .map((agent) => ({
         ...edgeBase,
         id: `tasks-${agent.id}`,
         source: 'tasks',
         target: agent.id,
-        label: 'TASK_ASSIGNED',
+        label: `${held.get(agent.id)} active task${held.get(agent.id) === 1 ? '' : 's'}`,
         style: { stroke: '#2F7D5C', strokeWidth: 1.8 },
-        data: { protocolType: 'TASK_CLAIMED' },
-      });
-    });
+        data: { protocolType: 'TASK_ASSIGNED' },
+      }));
+  }, [liveAgents, liveTasks]);
 
-    return edges;
-  }, [liveAgents]);
+  const layoutRef = useRef(loadLayout(projectId));
+  useEffect(() => {
+    layoutRef.current = loadLayout(projectId);
+  }, [projectId]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialNodes);
+  const noteNode = useCallback(
+    (note: LocalNote): Node => ({
+      id: note.id,
+      type: 'note',
+      position: note.position,
+      data: {
+        text: note.text,
+        onEdit: (text: string) => {
+          const layout = layoutRef.current;
+          layout.notes = layout.notes.map((n) => (n.id === note.id ? { ...n, text } : n));
+          saveLayout(projectId, layout);
+        },
+      },
+    }),
+    [projectId],
+  );
+
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
 
+  // Merge fresh data into the existing nodes instead of replacing them: keep
+  // where the viewer dragged things (and their selection), keep their notes.
   useEffect(() => {
-    setNodes(initialNodes);
-  }, [initialNodes, setNodes]);
+    setNodes((prev) => {
+      const byId = new Map(prev.map((n) => [n.id, n]));
+      const saved = layoutRef.current.positions;
+      const dataNodes = initialNodes.map((n) => {
+        const existing = byId.get(n.id);
+        return {
+          ...n,
+          position: existing?.position ?? saved[n.id] ?? n.position,
+          selected: existing?.selected,
+        };
+      });
+      const notes = layoutRef.current.notes.map((note) => {
+        const existing = byId.get(note.id);
+        return existing ? { ...noteNode(note), position: existing.position, selected: existing.selected } : noteNode(note);
+      });
+      return [...dataNodes, ...notes];
+    });
+  }, [initialNodes, setNodes, noteNode]);
 
   useEffect(() => {
     setEdges(initialEdges);
   }, [initialEdges, setEdges]);
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange<Node>[]) => {
+      onNodesChangeBase(changes);
+      let dirty = false;
+      const layout = layoutRef.current;
+      for (const change of changes) {
+        if (change.type === 'position' && change.position && change.dragging === false) {
+          if (layout.notes.some((n) => n.id === change.id)) {
+            layout.notes = layout.notes.map((n) => (n.id === change.id ? { ...n, position: change.position! } : n));
+          } else {
+            layout.positions[change.id] = change.position;
+          }
+          dirty = true;
+        } else if (change.type === 'remove' && layout.notes.some((n) => n.id === change.id)) {
+          layout.notes = layout.notes.filter((n) => n.id !== change.id);
+          dirty = true;
+        }
+      }
+      if (dirty) saveLayout(projectId, layout);
+    },
+    [onNodesChangeBase, projectId],
+  );
 
   const nodesRef = useRef<Node[]>(nodes);
   nodesRef.current = nodes;
@@ -234,38 +361,24 @@ function WorkspaceCanvasInner() {
 
   const { fitView } = useReactFlow();
 
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      setEdges((eds) => addEdge({ ...connection, ...edgeBase }, eds));
-    },
-    [setEdges],
-  );
-
   const handleToolAdd = useCallback(
     (toolType: DockToolType) => {
-      const id = `${toolType}-${Date.now()}`;
-      const title = toolType === 'file' ? 'Project File' : 'Project Note';
-      const text = toolType === 'file' ? '// Workspace file' : 'Add your project notes here...';
-
-      const newNode: Node = {
-        id,
-        type: 'utility',
-        position: { x: 300, y: 300 },
-        data: {
-          kind: toolType,
-          title,
-          text,
-          onEdit: (updatedText: string) => {
-            setNodes((nds) =>
-              nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, text: updatedText } } : n)),
-            );
-          },
-        },
-      };
-      setNodes((nds) => [...nds, newNode]);
+      if (toolType !== 'note') return;
+      const note: LocalNote = { id: `note-${Date.now()}`, text: '', position: { x: 300, y: 300 } };
+      const layout = layoutRef.current;
+      layout.notes = [...layout.notes, note];
+      saveLayout(projectId, layout);
+      setNodes((nds) => [...nds, noteNode(note)]);
     },
-    [setNodes],
+    [projectId, setNodes, noteNode],
   );
+
+  // The sidebar's Notes item asks for a note.
+  useEffect(() => {
+    const add = () => handleToolAdd('note');
+    window.addEventListener('agentmesh:add-note', add);
+    return () => window.removeEventListener('agentmesh:add-note', add);
+  }, [handleToolAdd]);
 
   return (
     <div className="workspace-canvas-container">
@@ -295,8 +408,7 @@ function WorkspaceCanvasInner() {
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          connectionMode={ConnectionMode.Loose}
+          nodesConnectable={false}
           fitView
           fitViewOptions={{ padding: 0.3 }}
         >

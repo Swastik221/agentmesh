@@ -3,6 +3,8 @@ import { SiweMessage } from 'siwe';
 import { getAddress } from 'viem';
 import { authSessionService } from '../services/auth-session';
 import { resetInvalidatedProjects } from '../utils/projectSelection';
+import { SESSION_ENDED_EVENT } from '../services/api-client';
+import { closeAllWorkspaceRealtime } from './useWorkspaceRealtime';
 
 export interface AuthUser {
   id: string;
@@ -119,7 +121,16 @@ export function useAuth() {
 
     const handleAccountsChanged = (accounts: unknown) => {
       const accList = accounts as string[];
+      // The session belongs to the wallet that signed in. If the wallet goes
+      // away or switches account, end it on the server too: otherwise the
+      // cookie keeps acting as the old wallet while the UI shows the new one.
+      const endServerSession = () => {
+        void authSessionService.logout().catch(() => {});
+        closeAllWorkspaceRealtime();
+        window.dispatchEvent(new CustomEvent(SESSION_ENDED_EVENT, { detail: { reason: 'wallet-changed' } }));
+      };
       if (!accList || accList.length === 0 || !accList[0]) {
+        if (user) endServerSession();
         setConnectedAddress(null);
         setUser(null);
         setStatus('disconnected');
@@ -127,8 +138,8 @@ export function useAuth() {
       } else {
         const newAddress = getAddress(accList[0]);
         setConnectedAddress(newAddress);
-        // If current authenticated user address doesn't match new wallet address, invalidate session state
         if (user && user.walletAddress && user.walletAddress.toLowerCase() !== newAddress.toLowerCase()) {
+          endServerSession();
           setUser(null);
           setStatus('connected_unauthenticated');
         }
@@ -312,6 +323,8 @@ export function useAuth() {
       setStatus('disconnected');
       setError(null);
       resetInvalidatedProjects();
+      closeAllWorkspaceRealtime();
+      window.dispatchEvent(new CustomEvent(SESSION_ENDED_EVENT, { detail: { reason: 'signed-out' } }));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Logout failed';
       setError(`LOGOUT_FAILED: ${msg}`);
